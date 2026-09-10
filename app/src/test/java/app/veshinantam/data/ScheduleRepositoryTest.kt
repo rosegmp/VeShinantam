@@ -116,8 +116,8 @@ class ScheduleRepositoryTest {
         assertEquals("PRESET:${PresetCatalog.VERSION}", plan.schedule.sourceType)
         assertEquals("1", plan.schedule.chazarahDayOffsets)
         assertEquals(false, plan.schedule.repeatsAnnually)
-        assertEquals("Chullin 131", plan.tasks.first().labelEnglish)
-        assertEquals("חולין דף קלא.", plan.tasks.first().labelHebrew)
+        assertEquals("Chullin 133", plan.tasks.first().labelEnglish)
+        assertEquals("חולין דף קלג.", plan.tasks.first().labelHebrew)
         assertEquals(2, plan.learningCount)
         assertEquals(2, plan.reviewCount)
 

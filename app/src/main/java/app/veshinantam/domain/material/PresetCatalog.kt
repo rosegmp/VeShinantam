@@ -22,9 +22,9 @@ data class PresetProgram(
 
 /** Bundled reference-only preset catalog. It contains no sefer text. */
 object PresetCatalog {
-    const val BUNDLED_VERSION = "2026.09.09-7"
-    const val BUNDLED_SEQUENCE = 7L
-    val bundledPositionAsOf: LocalDate = LocalDate.of(2026, 9, 8)
+    const val BUNDLED_VERSION = "2026.09.10-8"
+    const val BUNDLED_SEQUENCE = 8L
+    val bundledPositionAsOf: LocalDate = LocalDate.of(2026, 9, 10)
     private data class ActiveUpdate(val version: String, val sequence: Long, val positionAsOf: LocalDate, val programs: List<PresetProgram>)
     @Volatile private var activeUpdate: ActiveUpdate? = null
 
@@ -72,6 +72,9 @@ object PresetCatalog {
         }
     }
     private val yerushalmiUnits by lazy { MaterialCatalog.yerushalmi.flatMap(MaterialCatalog::yerushalmiUnits) }
+    private val yerushalmiSchottensteinUnits by lazy {
+        MaterialCatalog.yerushalmiSchottenstein.flatMap(MaterialCatalog::yerushalmiUnits)
+    }
     private val rambamThreeChapterUnits by lazy {
         MaterialCatalog.rambam.flatMap { section ->
             when (section.english) {
@@ -110,10 +113,10 @@ object PresetCatalog {
 
     private val bundledPrograms: List<PresetProgram> by lazy {
         listOf(
-            program("daf-yomi-bavli", "Daf Yomi Bavli", "דף יומי בבלי", MaterialType.DAF, 1, everyDay, dafUnits, "Chullin 131"),
-            program("oraysa", "Oraysa", "אורייתא", MaterialType.AMUD, 1, sundayThroughThursday, oraysaAmudUnits, "Yevamos 104a"),
-            program("amud-yomi", "Amud Yomi", "עמוד יומי", MaterialType.AMUD, 1, everyDay, amudUnits, "Yoma 68a"),
-            program("mishnah-yomis", "Mishnah Yomis", "משנה יומית", MaterialType.MISHNAH, 2, everyDay, mishnahUnits, "Kelim 29:6"),
+            program("daf-yomi-bavli", "Daf Yomi Bavli", "דף יומי בבלי", MaterialType.DAF, 1, everyDay, dafUnits, "Chullin 133"),
+            program("oraysa", "Oraysa", "אורייתא", MaterialType.AMUD, 1, sundayThroughThursday, oraysaAmudUnits, "Yevamos 105a"),
+            program("amud-yomi", "Dirshu Amud Yomi", "דרשו עמוד יומי", MaterialType.AMUD, 1, everyDay, amudUnits, "Yoma 69a"),
+            program("mishnah-yomis", "Mishnah Yomis", "משנה יומית", MaterialType.MISHNAH, 2, everyDay, mishnahUnits, "Kelim 30:2"),
             program(
                 "dirshu-mishnah-berurah",
                 "Dirshu Mishnah Berurah",
@@ -122,31 +125,35 @@ object PresetCatalog {
                 1,
                 sundayThroughThursday,
                 mishnahBerurahPages,
-                "Mishnah Berurah, chelek 5 page 6a",
+                "Mishnah Berurah, chelek 5 page 7a",
             ),
             program(
-                "daf-yomi-yerushalmi", "Daf Yomi Yerushalmi", "דף יומי ירושלמי", MaterialType.DAF, 1,
-                everyDay, yerushalmiUnits, "Yerushalmi Shevuos 13", yerushalmiFastDays,
+                "yerushalmi-yomi-vilna", "Yerushalmi Yomi (Vilna)", "ירושלמי יומי (וילנא)", MaterialType.DAF, 1,
+                everyDay, yerushalmiUnits, "Yerushalmi Shevuos 15", yerushalmiFastDays,
+            ),
+            program(
+                "yerushalmi-yomi-schottenstein", "Yerushalmi Yomi (Schottenstein)", "ירושלמי יומי (שוטנשטיין)", MaterialType.DAF, 1,
+                everyDay, yerushalmiSchottensteinUnits, "Yerushalmi Yevamos 33",
             ),
             program(
                 "rambam-three-chapters", "Rambam – Three Chapters Daily", "רמב״ם – שלושה פרקים ליום",
-                MaterialType.PEREK, 3, everyDay, rambamThreeChapterUnits, "Rambam, Other Sources of Defilement 3",
+                MaterialType.PEREK, 3, everyDay, rambamThreeChapterUnits, "Rambam, Other Sources of Defilement 9",
             ),
             program(
                 "chofetz-chaim", "Chofetz Chaim Yomi", "חפץ חיים יומי", MaterialType.CUSTOM_UNIT, 1, everyDay,
-                MaterialCatalog.chofetzChaimUnits, "Chofetz Chaim, Tziyurim 4-5",
+                MaterialCatalog.chofetzChaimUnits, "Chofetz Chaim, Tziyurim 8-9",
             ),
             program(
                 "tehillim-monthly", "Monthly Tehillim", "תהילים חודשי", MaterialType.PEREK, 1, everyDay,
-                MaterialCatalog.monthlyTehillimUnits, "Tehillim 119:97-176",
+                MaterialCatalog.monthlyTehillimUnits, "Tehillim 120-134",
             ),
             program(
                 "hachzek-pele-yoetz", "Hachzek Pele Yoetz", "חזק פלא יועץ", MaterialType.CUSTOM_UNIT, 1,
-                sundayThroughFriday, hachzekPeleYoetzUnits, "Pele Yoetz, Day 101", hachzekPeleYoetzReviewDates,
+                sundayThroughFriday, hachzekPeleYoetzUnits, "Pele Yoetz, Day 103", hachzekPeleYoetzReviewDates,
             ),
             program(
                 "kitzur-yomi", "Kitzur Shulchan Aruch Yomi", "קיצור שולחן ערוך יומי", MaterialType.CUSTOM_UNIT, 1,
-                everyDay, KitzurYomiData.units, "Kitzur Shulchan Aruch 131:10-16",
+                everyDay, KitzurYomiData.units, "Kitzur Shulchan Aruch 133:1-8",
             ),
         )
     }
@@ -196,7 +203,10 @@ object PresetCatalog {
             "mishnah-yomis" -> MaterialCatalog.mishnah
                 .firstOrNull { program.currentReference.english.startsWith("${it.english} ") }
                 ?.let { "${it.english} " }
-            "daf-yomi-yerushalmi" -> MaterialCatalog.yerushalmi
+            "yerushalmi-yomi-vilna" -> MaterialCatalog.yerushalmi
+                .firstOrNull { program.currentReference.english.startsWith("Yerushalmi ${it.english} ") }
+                ?.let { "Yerushalmi ${it.english} " }
+            "yerushalmi-yomi-schottenstein" -> MaterialCatalog.yerushalmiSchottenstein
                 .firstOrNull { program.currentReference.english.startsWith("Yerushalmi ${it.english} ") }
                 ?.let { "Yerushalmi ${it.english} " }
             else -> null

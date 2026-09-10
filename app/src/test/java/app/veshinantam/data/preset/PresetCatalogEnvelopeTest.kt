@@ -24,7 +24,7 @@ class PresetCatalogEnvelopeTest {
         val positions = PresetCatalog.programs.associate { program ->
             program.id to program.units[(program.currentIndex + 1).coerceAtMost(program.units.lastIndex)].english
         }
-        val envelope = signedEnvelope(keyPair, 8, "2026.09.10-8", LocalDate.parse("2026-09-09"), positions)
+        val envelope = signedEnvelope(keyPair, 9, "2026.09.11-9", LocalDate.parse("2026-09-11"), positions)
 
         val verified = PresetCatalogEnvelope.verifyAndDecode(
             envelope,
@@ -32,9 +32,9 @@ class PresetCatalogEnvelopeTest {
         )
         PresetCatalog.applyVerifiedUpdate(verified.version, verified.sequence, verified.positionAsOf, verified.currentReferences)
 
-        assertEquals(8, PresetCatalog.activeSequence)
-        assertEquals("2026.09.10-8", PresetCatalog.VERSION)
-        assertEquals(LocalDate.parse("2026-09-09"), PresetCatalog.positionAsOf)
+        assertEquals(9, PresetCatalog.activeSequence)
+        assertEquals("2026.09.11-9", PresetCatalog.VERSION)
+        assertEquals(LocalDate.parse("2026-09-11"), PresetCatalog.positionAsOf)
         assertEquals(positions, PresetCatalog.programs.associate { it.id to it.currentReference.english })
     }
 
@@ -42,9 +42,9 @@ class PresetCatalogEnvelopeTest {
     fun `tampered payload is rejected before parsing`() {
         val keyPair = KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair()
         val positions = PresetCatalog.programs.associate { it.id to it.currentReference.english }
-        val valid = JSONObject(signedEnvelope(keyPair, 8, "version-8", LocalDate.parse("2026-09-09"), positions))
+        val valid = JSONObject(signedEnvelope(keyPair, 9, "version-9", LocalDate.parse("2026-09-11"), positions))
         val payload = String(Base64.getDecoder().decode(valid.getString("payload")), StandardCharsets.UTF_8)
-            .replace("version-8", "version-9")
+            .replace("version-9", "version-10")
         valid.put("payload", Base64.getEncoder().encodeToString(payload.toByteArray(StandardCharsets.UTF_8)))
 
         assertThrows(IllegalArgumentException::class.java) {
@@ -58,19 +58,19 @@ class PresetCatalogEnvelopeTest {
         val positions = PresetCatalog.programs.dropLast(1).associate { it.id to it.currentReference.english }
 
         assertThrows(IllegalArgumentException::class.java) {
-            PresetCatalog.validateVerifiedUpdate("version-8", 8, LocalDate.parse("2026-09-09"), positions)
+            PresetCatalog.validateVerifiedUpdate("version-9", 9, LocalDate.parse("2026-09-11"), positions)
         }
     }
 
     @Test
     fun `catalog sequence cannot roll back active data`() {
         val positions = PresetCatalog.programs.associate { it.id to it.currentReference.english }
-        PresetCatalog.applyVerifiedUpdate("version-8", 8, LocalDate.parse("2026-09-09"), positions)
+        PresetCatalog.applyVerifiedUpdate("version-9", 9, LocalDate.parse("2026-09-11"), positions)
 
         assertThrows(IllegalArgumentException::class.java) {
-            PresetCatalog.applyVerifiedUpdate("older", 7, LocalDate.parse("2026-09-08"), positions)
+            PresetCatalog.applyVerifiedUpdate("older", 8, LocalDate.parse("2026-09-10"), positions)
         }
-        assertEquals(8, PresetCatalog.activeSequence)
+        assertEquals(9, PresetCatalog.activeSequence)
     }
 
     private fun signedEnvelope(

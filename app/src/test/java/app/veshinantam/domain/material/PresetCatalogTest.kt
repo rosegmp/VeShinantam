@@ -10,7 +10,8 @@ class PresetCatalogTest {
         assertEquals(
             listOf(
                 "daf-yomi-bavli", "oraysa", "amud-yomi", "mishnah-yomis", "dirshu-mishnah-berurah",
-                "daf-yomi-yerushalmi", "rambam-three-chapters", "chofetz-chaim", "tehillim-monthly",
+                "yerushalmi-yomi-vilna", "yerushalmi-yomi-schottenstein",
+                "rambam-three-chapters", "chofetz-chaim", "tehillim-monthly",
                 "hachzek-pele-yoetz",
                 "kitzur-yomi",
             ),
@@ -18,11 +19,11 @@ class PresetCatalogTest {
         )
         assertEquals(
             listOf(
-                "Chullin 131", "Yevamos 104a", "Yoma 68a", "Kelim 29:6", "Mishnah Berurah, chelek 5 page 6a",
-                "Yerushalmi Shevuos 13", "Rambam, Other Sources of Defilement 3",
-                "Chofetz Chaim, Tziyurim 4-5", "Tehillim 119:97-176",
-                "Pele Yoetz, Day 101",
-                "Kitzur Shulchan Aruch 131:10-16",
+                "Chullin 133", "Yevamos 105a", "Yoma 69a", "Kelim 30:2", "Mishnah Berurah, chelek 5 page 7a",
+                "Yerushalmi Shevuos 15", "Yerushalmi Yevamos 33", "Rambam, Other Sources of Defilement 9",
+                "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134",
+                "Pele Yoetz, Day 103",
+                "Kitzur Shulchan Aruch 133:1-8",
             ),
             PresetCatalog.programs.map { it.currentReference.english },
         )
@@ -69,7 +70,7 @@ class PresetCatalogTest {
 
         assertEquals(PresetCatalog.positionAsOf, PresetCatalog.scheduledDate(dafYomi, dafYomi.currentIndex))
         assertEquals(PresetCatalog.positionAsOf.minusDays(1), PresetCatalog.scheduledDate(dafYomi, dafYomi.currentIndex - 1))
-        assertEquals(PresetCatalog.positionAsOf.minusDays(5), PresetCatalog.scheduledDate(oraysa, oraysa.currentIndex - 3))
+        assertEquals(PresetCatalog.positionAsOf.minusDays(3), PresetCatalog.scheduledDate(oraysa, oraysa.currentIndex - 3))
         assertEquals(PresetCatalog.positionAsOf.minusDays(1), PresetCatalog.scheduledDate(mishnahYomis, mishnahYomis.currentIndex - 1))
         assertEquals(PresetCatalog.positionAsOf.minusDays(1), PresetCatalog.scheduledDate(mishnahYomis, mishnahYomis.currentIndex - 2))
     }
@@ -98,37 +99,52 @@ class PresetCatalogTest {
     }
 
     @Test
+    fun `Dirshu Amud Yomi is anchored to Yoma 69a on September 10 2026`() {
+        val dirshu = PresetCatalog.programs.first { it.id == "amud-yomi" }
+
+        assertEquals("Dirshu Amud Yomi", dirshu.nameEnglish)
+        assertEquals("Yoma 69a", dirshu.currentReference.english)
+        assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.positionAsOf)
+    }
+
+    @Test
     fun `new daily programs use their standard pace and cycle structure`() {
-        val yerushalmi = PresetCatalog.programs.first { it.id == "daf-yomi-yerushalmi" }
+        val yerushalmiVilna = PresetCatalog.programs.first { it.id == "yerushalmi-yomi-vilna" }
+        val yerushalmiSchottenstein = PresetCatalog.programs.first { it.id == "yerushalmi-yomi-schottenstein" }
         val rambam = PresetCatalog.programs.first { it.id == "rambam-three-chapters" }
         val chofetzChaim = PresetCatalog.programs.first { it.id == "chofetz-chaim" }
         val tehillim = PresetCatalog.programs.first { it.id == "tehillim-monthly" }
         val peleYoetz = PresetCatalog.programs.first { it.id == "hachzek-pele-yoetz" }
         val kitzurYomi = PresetCatalog.programs.first { it.id == "kitzur-yomi" }
 
-        assertEquals(1, yerushalmi.dailyQuantity)
-        assertEquals(1554, yerushalmi.units.size)
-        assertTrue(PresetCatalog.positionAsOf.plusDays(13) in yerushalmi.excludedDates)
+        assertEquals("Yerushalmi Yomi (Vilna)", yerushalmiVilna.nameEnglish)
+        assertEquals(1, yerushalmiVilna.dailyQuantity)
+        assertEquals(1554, yerushalmiVilna.units.size)
+        assertTrue(PresetCatalog.positionAsOf.plusDays(11) in yerushalmiVilna.excludedDates)
+        assertEquals("Yerushalmi Yomi (Schottenstein)", yerushalmiSchottenstein.nameEnglish)
+        assertEquals(1, yerushalmiSchottenstein.dailyQuantity)
+        assertEquals(2094, yerushalmiSchottenstein.units.size)
+        assertTrue(yerushalmiSchottenstein.excludedDates.isEmpty())
         assertEquals(3, rambam.dailyQuantity)
         assertEquals(1017, rambam.units.size)
         assertTrue(rambam.units.any { it.english.endsWith("Leavened and Unleavened Bread 8-9") })
         assertEquals(1, chofetzChaim.dailyQuantity)
-        assertEquals("חפץ חיים, ציורים ד–ה", chofetzChaim.currentReference.hebrew)
+        assertEquals("חפץ חיים, ציורים ח–ט", chofetzChaim.currentReference.hebrew)
         assertEquals(29, tehillim.units.size)
         assertEquals("Tehillim 140-150", tehillim.units.last().english)
-        assertEquals("תהילים קיט:צז–קעו", tehillim.currentReference.hebrew)
+        assertEquals("תהילים קכ–קלד", tehillim.currentReference.hebrew)
         assertEquals(1, peleYoetz.dailyQuantity)
         assertEquals(245, peleYoetz.units.size)
-        assertEquals("פלא יועץ, יום קא", peleYoetz.currentReference.hebrew)
+        assertEquals("פלא יועץ, יום קג", peleYoetz.currentReference.hebrew)
         assertEquals(java.time.LocalDate.of(2026, 5, 12), PresetCatalog.scheduledDate(peleYoetz, 0))
-        assertEquals(java.time.LocalDate.of(2026, 9, 8), PresetCatalog.scheduledDate(peleYoetz, 100))
+        assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.scheduledDate(peleYoetz, 102))
         assertTrue(java.time.DayOfWeek.SATURDAY !in peleYoetz.selectedWeekdays)
         assertTrue(java.time.LocalDate.of(2026, 9, 21) in peleYoetz.excludedDates)
         assertEquals(354, kitzurYomi.units.size)
         assertEquals("Kitzur Shulchan Aruch 1:1-4", kitzurYomi.units.first().english)
-        assertEquals("קיצור שולחן ערוך קלא:י-טז", kitzurYomi.currentReference.hebrew)
+        assertEquals("קיצור שולחן ערוך קלג:א-ח", kitzurYomi.currentReference.hebrew)
         assertEquals("Kitzur Shulchan Aruch 100:17-E", kitzurYomi.units.last().english)
         assertEquals(java.time.LocalDate.of(2025, 10, 16), PresetCatalog.scheduledDate(kitzurYomi, 0))
-        assertEquals(java.time.LocalDate.of(2026, 9, 8), PresetCatalog.scheduledDate(kitzurYomi, kitzurYomi.currentIndex))
+        assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.scheduledDate(kitzurYomi, kitzurYomi.currentIndex))
     }
 }
