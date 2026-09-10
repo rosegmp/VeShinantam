@@ -1,0 +1,63 @@
+{
+  "format": "app.veshinantam.backup",
+  "version": 2,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "schedules": [
+    {
+      "id": "legacy-schedule",
+      "nameEnglish": "Yevamos",
+      "nameHebrew": "יבמות",
+      "kind": "CUSTOM",
+      "sourceType": "GEMARA",
+      "materialType": "AMUD",
+      "presetId": null,
+      "startDate": "2025-11-26",
+      "targetDate": "2026-12-01",
+      "dailyQuantity": 1,
+      "selectedWeekdays": "SUNDAY,MONDAY",
+      "chazarahDayOffsets": "1,7,30,90",
+      "repeatsAnnually": true,
+      "officialOraysaChazarah": true,
+      "missedWorkBehavior": "SHIFT_FORWARD",
+      "state": "ACTIVE",
+      "generationRevision": 2,
+      "createdAt": "2025-11-01T12:00:00Z"
+    }
+  ],
+  "exclusions": [
+    { "scheduleId": "legacy-schedule", "date": "2025-12-25" }
+  ],
+  "tasks": [
+    {
+      "id": "legacy-task",
+      "stableKey": "learning:1",
+      "scheduleId": "legacy-schedule",
+      "type": "LEARNING",
+      "labelEnglish": "Yevamos 2a",
+      "labelHebrew": "יבמות ב.",
+      "materialType": "AMUD",
+      "quantity": 1.0,
+      "plannedDate": "2025-11-26",
+      "originalLearningDate": "2025-11-26",
+      "reviewIdentity": null,
+      "generationRevision": 2,
+      "completedAt": "2025-11-26T14:00:00Z",
+      "completionLocalDate": "2025-11-26",
+      "completionZoneId": "America/New_York"
+    }
+  ],
+  "goals": [
+    { "kind": "STREAK", "target": 30.0 }
+  ],
+  "preferences": {
+    "appLanguage": "HEBREW",
+    "sefarimLanguage": "BOTH",
+    "primaryCalendar": "HEBREW",
+    "defaultChazarahOffsets": [1, 7, 30, 90],
+    "reminderEnabled": true,
+    "reminderHour": 19,
+    "reminderMinute": 15,
+    "todaySortOrder": "REFERENCE_ASCENDING",
+    "automaticPresetUpdates": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "format": "app.veshinantam.backup",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "schedules": [],
+  "exclusions": [],
+  "tasks": [],
+  "goals": [],
+  "preferences": {
+    "appLanguage": "ENGLISH",
+    "sefarimLanguage": "BOTH",
+    "primaryCalendar": "GREGORIAN",
+    "defaultChazarahOffsets": [1, 7, 30, 90],
+    "reminderEnabled": false,
+    "reminderHour": 20,
+    "reminderMinute": 0,
+    "todaySortOrder": "SCHEDULED_FIRST"
+  }
+}
