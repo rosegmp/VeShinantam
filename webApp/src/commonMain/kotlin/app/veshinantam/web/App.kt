@@ -35,17 +35,22 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -147,10 +152,13 @@ private data class ScheduleDraft(
 
 @Composable
 fun WebApp(store: BrowserStore, todayIso: String) {
+    val initialImportResult = remember { store.consumeBackupImport() }
     var appState by remember { mutableStateOf(store.load()) }
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
+    var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
+    var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
     val hebrew = appState.language == "he"
 
     fun update(transform: (WebAppState) -> WebAppState) {
@@ -191,6 +199,8 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onExportBackup = { store.exportBackup(appState) },
+                                onImportBackup = store::requestBackupImport,
                             )
                         }
                     } else {
@@ -233,6 +243,8 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onExportBackup = { store.exportBackup(appState) },
+                                onImportBackup = store::requestBackupImport,
                             )
                         }
                     }
@@ -307,6 +319,42 @@ fun WebApp(store: BrowserStore, todayIso: String) {
             },
         )
     }
+
+    pendingRestore?.let { restored ->
+        AlertDialog(
+            onDismissRequest = { pendingRestore = null },
+            icon = { Icon(Icons.Default.UploadFile, null, tint = DeepBlue) },
+            title = { Text(if (hebrew) "לשחזר את הגיבוי?" else "Restore this backup?") },
+            text = {
+                Text(
+                    if (hebrew) "הגיבוי מכיל ${restored.schedules.size} תוכניות ו־${restored.tasks.size} משימות. הנתונים הנוכחיים במכשיר זה יוחלפו."
+                    else "This backup contains ${restored.schedules.size} schedules and ${restored.tasks.size} tasks. It will replace the current data on this device.",
+                )
+            },
+            confirmButton = {
+                Button(onClick = { update { restored }; pendingRestore = null }) {
+                    Text(if (hebrew) "שחזר גיבוי" else "Restore backup")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingRestore = null }) { Text(if (hebrew) "ביטול" else "Cancel") }
+            },
+        )
+    }
+
+    if (showInvalidBackup) {
+        AlertDialog(
+            onDismissRequest = { showInvalidBackup = false },
+            title = { Text(if (hebrew) "לא ניתן לקרוא את הגיבוי" else "Backup couldn’t be read") },
+            text = {
+                Text(
+                    if (hebrew) "בחר קובץ גיבוי תקין של VeShinantam בגודל של עד 2MB. הנתונים הנוכחיים לא השתנו."
+                    else "Choose a valid VeShinantam backup file up to 2 MB. Your current data was not changed.",
+                )
+            },
+            confirmButton = { Button(onClick = { showInvalidBackup = false }) { Text(if (hebrew) "אישור" else "OK") } },
+        )
+    }
 }
 
 @Composable
@@ -361,7 +409,10 @@ private fun AppContent(
     onArchiveSchedule: (String) -> Unit,
     onRestoreSchedule: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
 ) {
+    var showDataMenu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 13.dp),
@@ -373,6 +424,24 @@ private fun AppContent(
                 Icon(Icons.Default.Language, null, tint = DeepBlue)
             }
             Text(if (hebrew) "EN" else "עברית", color = DeepBlue, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Box {
+                IconButton(
+                    onClick = { showDataMenu = true },
+                    modifier = Modifier.semantics { contentDescription = if (hebrew) "גיבוי ושחזור" else "Backup and restore" },
+                ) { Icon(Icons.Default.MoreVert, null, tint = DeepBlue) }
+                DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (hebrew) "ייצוא גיבוי" else "Export backup") },
+                        leadingIcon = { Icon(Icons.Default.Download, null) },
+                        onClick = { showDataMenu = false; onExportBackup() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (hebrew) "שחזור מגיבוי" else "Restore from backup") },
+                        leadingIcon = { Icon(Icons.Default.UploadFile, null) },
+                        onClick = { showDataMenu = false; onImportBackup() },
+                    )
+                }
+            }
         }
         HorizontalDivider(color = Color(0xFFE4E7EC))
         when (destination) {
