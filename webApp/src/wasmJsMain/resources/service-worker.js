@@ -1,4 +1,4 @@
-const CACHE = 'veshinantam-web-v3';
+const CACHE = 'veshinantam-web-v4';
 const SHELL = ['./', './index.html', './veshinantam.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {

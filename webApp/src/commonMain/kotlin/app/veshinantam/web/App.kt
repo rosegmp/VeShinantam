@@ -60,6 +60,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -75,6 +76,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,9 @@ import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.LearningPlanner
 import app.veshinantam.shared.LearningTask
 import app.veshinantam.shared.LearningTaskType
+import app.veshinantam.web.generated.resources.NotoSansHebrew
+import app.veshinantam.web.generated.resources.Res
+import org.jetbrains.compose.resources.Font
 
 private val DeepBlue = Color(0xFF173B67)
 private val DeepBlueContainer = Color(0xFFDCE9FF)
@@ -90,6 +95,34 @@ private val WarmGold = Color(0xFFC59636)
 private val AppBackground = Color(0xFFF7F8FC)
 private val MutedInk = Color(0xFF5C6370)
 private val SuccessGreen = Color(0xFF2E6E55)
+
+@Composable
+private fun appTypography(): Typography {
+    val fontFamily = FontFamily(
+        Font(Res.font.NotoSansHebrew, FontWeight.Normal),
+        Font(Res.font.NotoSansHebrew, FontWeight.Medium),
+        Font(Res.font.NotoSansHebrew, FontWeight.SemiBold),
+        Font(Res.font.NotoSansHebrew, FontWeight.Bold),
+    )
+    val base = Typography()
+    return base.copy(
+        displayLarge = base.displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = base.displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = base.displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = base.headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = base.headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = base.headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = base.titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = base.titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = base.titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = base.bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = base.bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = base.bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = base.labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = base.labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = base.labelSmall.copy(fontFamily = fontFamily),
+    )
+}
 
 private enum class Destination(val en: String, val he: String, val icon: ImageVector) {
     TODAY("Today", "היום", Icons.Default.Today),
@@ -121,7 +154,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-        MaterialTheme {
+        MaterialTheme(typography = appTypography()) {
             Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
                 BoxWithConstraints {
                     val desktop = maxWidth >= 880.dp
