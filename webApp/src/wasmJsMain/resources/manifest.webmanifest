@@ -1,0 +1,13 @@
+{
+  "name": "VeShinantam",
+  "short_name": "VeShinantam",
+  "description": "Private, offline-first Torah learning and chazarah planning.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F7F8FC",
+  "theme_color": "#173B67",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

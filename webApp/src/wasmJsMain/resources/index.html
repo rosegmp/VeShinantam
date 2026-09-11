@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B67">
+  <meta name="description" content="Private, offline-first Torah learning and chazarah planning.">
+  <title>VeShinantam</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f7f8fc; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    canvas { outline: none; }
+  </style>
+</head>
+<body>
+  <script src="veshinantam.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) { refreshing = true; window.location.reload(); }
+      });
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+
+    const modelContext = document.modelContext;
+    if (modelContext?.registerTool) {
+      const readState = () => JSON.parse(localStorage.getItem('veshinantam.web.v1') || '{"tasks":[]}');
+      Promise.resolve(modelContext.registerTool({
+        name: 'list_due_learning_tasks',
+        title: 'List due learning tasks',
+        description: 'List the Torah learning and chazarah tasks currently stored on this device.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute() {
+          const state = readState();
+          return { tasks: (state.tasks || []).map(task => ({
+            id: task.id,
+            reference: task.referenceEnglish,
+            type: task.type,
+            dueDate: task.dueDate,
+            completed: task.completed
+          })) };
+        }
+      })).catch(() => {});
+
+      Promise.resolve(modelContext.registerTool({
+        name: 'set_learning_task_completion',
+        title: 'Set learning task completion',
+        description: 'Mark one locally stored learning or chazarah task complete or incomplete and refresh the visible app.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            taskId: { type: 'string' },
+            completed: { type: 'boolean' }
+          },
+          required: ['taskId', 'completed'],
+          additionalProperties: false
+        },
+        annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute(input) {
+          if (!input || typeof input.taskId !== 'string' || typeof input.completed !== 'boolean') {
+            throw new Error('taskId and completed are required');
+          }
+          const state = readState();
+          const task = (state.tasks || []).find(candidate => candidate.id === input.taskId);
+          if (!task) throw new Error('Task not found');
+          task.completed = input.completed;
+          localStorage.setItem('veshinantam.web.v1', JSON.stringify(state));
+          setTimeout(() => window.location.reload(), 150);
+          return { taskId: task.id, completed: task.completed };
+        }
+      })).catch(() => {});
+    }
+  </script>
+</body>
+</html>

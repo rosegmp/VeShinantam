@@ -14,7 +14,8 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // Kotlin/Wasm adds its Node.js distribution repository while configuring browser tooling.
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
     repositories {
         google()
         mavenCentral()
@@ -22,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "VeShinantam"
-include(":app")
+include(":app", ":shared", ":webApp")

@@ -1,5 +1,6 @@
 *.iml
 .gradle/
+.kotlin/
 .idea/
 local.properties
 build/
@@ -7,6 +8,10 @@ captures/
 .externalNativeBuild/
 .cxx/
 app/build/
+shared/build/
+webApp/build/
+webApp/.kotlin/
+dist/
 artifacts/
 *.jks
 *.keystore
