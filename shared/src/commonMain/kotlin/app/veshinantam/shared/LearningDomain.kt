@@ -7,7 +7,10 @@ data class LearningSchedule(
     val name: String,
     val material: String,
     val pace: Int,
+    val weekdays: Set<Int> = (0..6).toSet(),
+    val chazarahOffsets: List<Int> = listOf(1, 7),
     val active: Boolean = true,
+    val archived: Boolean = false,
 )
 
 data class LearningTask(
@@ -57,6 +60,81 @@ object LearningPlanner {
         dueDate = date,
         type = LearningTaskType.LEARNING,
     )
+
+    fun generatePlan(
+        schedule: LearningSchedule,
+        startDate: String,
+        startingReferenceEnglish: String,
+        startingReferenceHebrew: String,
+        assignmentCount: Int = 14,
+    ): List<LearningTask> {
+        val firstDate = IsoDate.parse(startDate) ?: return emptyList()
+        val eligibleWeekdays = schedule.weekdays.ifEmpty { (0..6).toSet() }
+        val learning = buildList {
+            var date = firstDate
+            var assignment = 1
+            while (size < assignmentCount) {
+                if (GregorianCalendar.dayOfWeek(date.year, date.month, date.day) in eligibleWeekdays) {
+                    val range = if (schedule.pace <= 1) "$assignment" else "$assignment–${assignment + schedule.pace - 1}"
+                    add(
+                        LearningTask(
+                            id = "${schedule.id}-learning-$assignment",
+                            scheduleId = schedule.id,
+                            referenceEnglish = "$startingReferenceEnglish $range".trim(),
+                            referenceHebrew = "$startingReferenceHebrew $range".trim(),
+                            dueDate = date.toString(),
+                            type = LearningTaskType.LEARNING,
+                        ),
+                    )
+                    assignment += schedule.pace
+                }
+                date = date.plusDays(1)
+            }
+        }
+        val reviews = learning.flatMapIndexed { learningIndex, task ->
+            schedule.chazarahOffsets.distinct().filter { it > 0 }.mapIndexed { reviewIndex, offset ->
+                var reviewDate = IsoDate.parse(task.dueDate)!!.plusDays(offset)
+                while (GregorianCalendar.dayOfWeek(reviewDate.year, reviewDate.month, reviewDate.day) !in eligibleWeekdays) {
+                    reviewDate = reviewDate.plusDays(1)
+                }
+                task.copy(
+                    id = "${schedule.id}-review-$learningIndex-$reviewIndex",
+                    dueDate = reviewDate.toString(),
+                    type = LearningTaskType.CHAZARAH,
+                )
+            }
+        }
+        return learning + reviews
+    }
+}
+
+data class IsoDate(val year: Int, val month: Int, val day: Int) {
+    override fun toString(): String =
+        "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+
+    fun plusDays(count: Int): IsoDate {
+        var result = this
+        repeat(count.coerceAtLeast(0)) {
+            result = if (result.day < GregorianCalendar.daysInMonth(result.year, result.month)) {
+                result.copy(day = result.day + 1)
+            } else if (result.month < 12) {
+                IsoDate(result.year, result.month + 1, 1)
+            } else {
+                IsoDate(result.year + 1, 1, 1)
+            }
+        }
+        return result
+    }
+
+    companion object {
+        fun parse(value: String): IsoDate? {
+            val parts = value.split("-").mapNotNull { it.toIntOrNull() }
+            if (parts.size != 3 || parts[1] !in 1..12 || parts[2] !in 1..daysInMonthSafe(parts[0], parts[1])) return null
+            return IsoDate(parts[0], parts[1], parts[2])
+        }
+
+        private fun daysInMonthSafe(year: Int, month: Int) = GregorianCalendar.daysInMonth(year, month)
+    }
 }
 
 data class MonthCell(val day: Int?, val isoDate: String?)
@@ -88,7 +166,7 @@ object GregorianCalendar {
     private fun isLeapYear(year: Int) = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 
     // 0 = Sunday. Sakamoto's algorithm is deterministic and needs no platform date API.
-    private fun dayOfWeek(yearValue: Int, month: Int, day: Int): Int {
+    fun dayOfWeek(yearValue: Int, month: Int, day: Int): Int {
         val offsets = intArrayOf(0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4)
         val year = if (month < 3) yearValue - 1 else yearValue
         return (year + year / 4 - year / 100 + year / 400 + offsets[month - 1] + day) % 7

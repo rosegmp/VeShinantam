@@ -30,11 +30,14 @@ import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,6 +45,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +57,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -93,6 +98,16 @@ private enum class Destination(val en: String, val he: String, val icon: ImageVe
     PROGRESS("Progress", "התקדמות", Icons.Default.Insights),
 }
 
+private data class ScheduleDraft(
+    val name: String,
+    val material: String,
+    val referenceEnglish: String,
+    val referenceHebrew: String,
+    val pace: Int,
+    val weekdays: Set<Int>,
+    val chazarahOffsets: List<Int>,
+)
+
 @Composable
 fun WebApp(store: BrowserStore, todayIso: String) {
     var appState by remember { mutableStateOf(store.load()) }
@@ -128,6 +143,12 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                     }
                                 },
                                 onCreate = { showCreate = true },
+                                onSetScheduleActive = { scheduleId, active ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
+                                },
+                                onArchiveSchedule = { scheduleId ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = false, archived = true) else it }) }
+                                },
                             )
                         }
                     } else {
@@ -160,6 +181,12 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                     }
                                 },
                                 onCreate = { showCreate = true },
+                                onSetScheduleActive = { scheduleId, active ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
+                                },
+                                onArchiveSchedule = { scheduleId ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = false, archived = true) else it }) }
+                                },
                             )
                         }
                     }
@@ -172,16 +199,31 @@ fun WebApp(store: BrowserStore, todayIso: String) {
         CreateScheduleDialog(
             hebrew = hebrew,
             onDismiss = { showCreate = false },
-            onCreate = { name, material, english, hebrewReference ->
+            onCreate = { draft ->
                 val id = "schedule-${appState.schedules.size + 1}"
-                val task = LearningPlanner.createFirstAssignment(id, material, english, hebrewReference, todayIso)
+                val schedule = StoredSchedule(
+                    id = id,
+                    name = draft.name,
+                    material = draft.material,
+                    pace = draft.pace,
+                    weekdays = draft.weekdays,
+                    chazarahOffsets = draft.chazarahOffsets,
+                )
+                val generatedTasks = LearningPlanner.generatePlan(
+                    schedule = schedule.domain(),
+                    startDate = todayIso,
+                    startingReferenceEnglish = draft.referenceEnglish,
+                    startingReferenceHebrew = draft.referenceHebrew,
+                ).map { task ->
+                    StoredTask(
+                        task.id, task.scheduleId, task.referenceEnglish, task.referenceHebrew,
+                        task.dueDate, task.type.name, task.completed,
+                    )
+                }
                 update { state ->
                     state.copy(
-                        schedules = state.schedules + StoredSchedule(id, name, material, 1),
-                        tasks = state.tasks + StoredTask(
-                            task.id, task.scheduleId, task.referenceEnglish, task.referenceHebrew,
-                            task.dueDate, task.type.name, task.completed,
-                        ),
+                        schedules = state.schedules + schedule,
+                        tasks = state.tasks + generatedTasks,
                     )
                 }
                 destination = Destination.TODAY
@@ -239,6 +281,8 @@ private fun AppContent(
     onLanguage: () -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
+    onSetScheduleActive: (String, Boolean) -> Unit,
+    onArchiveSchedule: (String) -> Unit,
 ) {
     Column(modifier.fillMaxSize()) {
         Row(
@@ -256,7 +300,7 @@ private fun AppContent(
         when (destination) {
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate)
             Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew)
-            Destination.SCHEDULES -> SchedulesScreen(state, hebrew, onCreate)
+            Destination.SCHEDULES -> SchedulesScreen(state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule)
             Destination.PROGRESS -> ProgressScreen(state, hebrew)
         }
     }
@@ -264,7 +308,8 @@ private fun AppContent(
 
 @Composable
 private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onToggle: (String) -> Unit, onCreate: () -> Unit) {
-    val tasks = LearningPlanner.tasksForDate(state.tasks.map { it.domain() }, today)
+    val activeScheduleIds = state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
+    val tasks = LearningPlanner.tasksForDate(state.tasks.map { it.domain() }.filter { it.scheduleId in activeScheduleIds }, today)
     val progress = LearningPlanner.progress(tasks)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -303,7 +348,7 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
         if (tasks.isEmpty()) {
             item { EmptyToday(hebrew, onCreate) }
         } else {
-            state.schedules.forEach { schedule ->
+            state.schedules.filter { it.active && !it.archived }.forEach { schedule ->
                 val scheduleTasks = tasks.filter { it.scheduleId == schedule.id }
                 if (scheduleTasks.isNotEmpty()) {
                     item {
@@ -423,12 +468,19 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean) {
 }
 
 @Composable
-private fun SchedulesScreen(state: WebAppState, hebrew: Boolean, onCreate: () -> Unit) {
+private fun SchedulesScreen(
+    state: WebAppState,
+    hebrew: Boolean,
+    onCreate: () -> Unit,
+    onSetActive: (String, Boolean) -> Unit,
+    onArchive: (String) -> Unit,
+) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (hebrew) "תוכניות הלימוד שלך" else "Your learning plans", color = DeepBlue, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
-                Text(if (hebrew) "${state.schedules.size} תוכניות פעילות" else "${state.schedules.size} active schedules", color = MutedInk)
+                val activeCount = state.schedules.count { it.active && !it.archived }
+                Text(if (hebrew) "$activeCount תוכניות פעילות" else "$activeCount active schedules", color = MutedInk)
             }
             Button(onClick = onCreate) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(7.dp)); Text(if (hebrew) "הוסף" else "Add") }
         }
@@ -437,16 +489,39 @@ private fun SchedulesScreen(state: WebAppState, hebrew: Boolean, onCreate: () ->
             items(state.schedules, key = { it.id }) { schedule ->
                 val scheduleTasks = state.tasks.filter { it.scheduleId == schedule.id }
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = DeepBlueContainer, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(48.dp)) {
-                            Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = DeepBlue) }
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(color = if (schedule.archived) Color(0xFFE8E9ED) else DeepBlueContainer, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(48.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = if (schedule.archived) MutedInk else DeepBlue) }
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(schedule.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                val stateLabel = when {
+                                    schedule.archived -> if (hebrew) "בארכיון" else "Archived"
+                                    !schedule.active -> if (hebrew) "מושהה" else "Paused"
+                                    else -> if (hebrew) "פעיל" else "Active"
+                                }
+                                Text("${schedule.material} · ${if (hebrew) "${schedule.pace} ליום" else "${schedule.pace} per day"} · $stateLabel", color = MutedInk, fontSize = 14.sp)
+                            }
+                            Text("${scheduleTasks.count { it.completed }}/${scheduleTasks.size}", color = SuccessGreen, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(schedule.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text("${schedule.material} · ${if (hebrew) "${schedule.pace} ליום" else "${schedule.pace} per day"}", color = MutedInk, fontSize = 14.sp)
+                        if (!schedule.archived) {
+                            Spacer(Modifier.height(14.dp))
+                            HorizontalDivider(color = Color(0xFFEEF0F4))
+                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onSetActive(schedule.id, !schedule.active) }) {
+                                    Icon(if (schedule.active) Icons.Default.Pause else Icons.Default.PlayArrow, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (schedule.active) { if (hebrew) "השהה" else "Pause" } else { if (hebrew) "המשך" else "Resume" })
+                                }
+                                TextButton(onClick = { onArchive(schedule.id) }) {
+                                    Icon(Icons.Default.Archive, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "העבר לארכיון" else "Archive")
+                                }
+                            }
                         }
-                        Text("${scheduleTasks.count { it.completed }}/${scheduleTasks.size}", color = SuccessGreen, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -489,25 +564,85 @@ private fun ProgressMetric(label: String, value: String) {
 }
 
 @Composable
-private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreate: (String, String, String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var material by remember { mutableStateOf("") }
-    var english by remember { mutableStateOf("") }
-    var hebrewReference by remember { mutableStateOf("") }
+private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
+    val presets = listOf(
+        listOf("Daf Yomi Bavli", "Gemara", "Berachos", "ברכות", "1"),
+        listOf("Mishnah Yomis", "Mishnah", "Peah", "פאה", "2"),
+        listOf("Rambam Yomi", "Mishneh Torah", "Mishneh Torah", "משנה תורה", "1"),
+        listOf(if (hebrew) "מותאם אישית" else "Custom", "", "", "", "1"),
+    )
+    var selectedPreset by remember { mutableStateOf(0) }
+    var name by remember { mutableStateOf(presets[0][0]) }
+    var material by remember { mutableStateOf(presets[0][1]) }
+    var english by remember { mutableStateOf(presets[0][2]) }
+    var hebrewReference by remember { mutableStateOf(presets[0][3]) }
+    var paceText by remember { mutableStateOf(presets[0][4]) }
+    var weekdays by remember { mutableStateOf((0..6).toSet()) }
+    var chazarahEnabled by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (hebrew) "תוכנית לימוד חדשה" else "New learning schedule", color = DeepBlue) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (hebrew) "המשימה הראשונה תתווסף להיום. ניתן לסמן אותה מיד." else "Your first assignment will be added for today and ready to check off.", color = MutedInk)
+                Text(if (hebrew) "בחר מחזור או בנה תוכנית אישית. ייווצרו 14 ימי לימוד קרובים." else "Choose a cycle or build a custom plan. We’ll create the next 14 learning days.", color = MutedInk)
+                Text(if (hebrew) "תוכנית" else "Program", fontWeight = FontWeight.Bold, color = DeepBlue)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    presets.forEachIndexed { index, preset ->
+                        FilterChip(
+                            selected = selectedPreset == index,
+                            onClick = {
+                                selectedPreset = index
+                                name = preset[0]
+                                material = preset[1]
+                                english = preset[2]
+                                hebrewReference = preset[3]
+                                paceText = preset[4]
+                            },
+                            label = { Text(preset[0]) },
+                        )
+                    }
+                }
                 OutlinedTextField(name, { name = it }, label = { Text(if (hebrew) "שם התוכנית" else "Schedule name") }, singleLine = true)
                 OutlinedTextField(material, { material = it }, label = { Text(if (hebrew) "ספר או נושא" else "Sefer or topic") }, singleLine = true)
-                OutlinedTextField(english, { english = it }, label = { Text(if (hebrew) "מראה מקום באנגלית" else "English reference") }, singleLine = true)
-                OutlinedTextField(hebrewReference, { hebrewReference = it }, label = { Text(if (hebrew) "מראה מקום בעברית" else "Hebrew reference") }, singleLine = true)
+                OutlinedTextField(english, { english = it }, label = { Text(if (hebrew) "נקודת התחלה באנגלית" else "English starting reference") }, singleLine = true)
+                OutlinedTextField(hebrewReference, { hebrewReference = it }, label = { Text(if (hebrew) "נקודת התחלה בעברית" else "Hebrew starting reference") }, singleLine = true)
+                OutlinedTextField(paceText, { value -> paceText = value.filter(Char::isDigit).take(2) }, label = { Text(if (hebrew) "יחידות ליום" else "Units per learning day") }, singleLine = true)
+                Text(if (hebrew) "ימי לימוד" else "Learning days", fontWeight = FontWeight.Bold, color = DeepBlue)
+                val dayLabels = if (hebrew) listOf("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳") else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    dayLabels.forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = index in weekdays,
+                            onClick = {
+                                weekdays = if (index in weekdays && weekdays.size > 1) weekdays - index else weekdays + index
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (hebrew) "חזרה מובנית" else "Built-in chazarah", fontWeight = FontWeight.Bold)
+                        Text(if (hebrew) "אחרי יום ואחרי שבעה ימים" else "Review after 1 and 7 days", color = MutedInk, fontSize = 13.sp)
+                    }
+                    Switch(checked = chazarahEnabled, onCheckedChange = { chazarahEnabled = it })
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onCreate(name.trim(), material.trim(), english.trim(), hebrewReference.trim()) }, enabled = name.isNotBlank() && material.isNotBlank()) {
+            Button(
+                onClick = {
+                    onCreate(
+                        ScheduleDraft(
+                            name.trim(), material.trim(), english.trim(), hebrewReference.trim(),
+                            paceText.toIntOrNull()?.coerceIn(1, 20) ?: 1,
+                            weekdays,
+                            if (chazarahEnabled) listOf(1, 7) else emptyList(),
+                        ),
+                    )
+                },
+                enabled = name.isNotBlank() && material.isNotBlank() && english.isNotBlank() && paceText.toIntOrNull() != null,
+            ) {
                 Text(if (hebrew) "צור תוכנית" else "Create schedule")
             }
         },

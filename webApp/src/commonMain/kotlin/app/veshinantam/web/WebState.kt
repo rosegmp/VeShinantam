@@ -11,9 +11,12 @@ data class StoredSchedule(
     val name: String,
     val material: String,
     val pace: Int,
+    val weekdays: Set<Int> = (0..6).toSet(),
+    val chazarahOffsets: List<Int> = listOf(1, 7),
     val active: Boolean = true,
+    val archived: Boolean = false,
 ) {
-    fun domain() = LearningSchedule(id, name, material, pace, active)
+    fun domain() = LearningSchedule(id, name, material, pace, weekdays, chazarahOffsets, active, archived)
 }
 
 @Serializable

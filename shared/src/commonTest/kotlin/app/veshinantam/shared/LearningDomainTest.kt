@@ -20,4 +20,19 @@ class LearningDomainTest {
         assertEquals(2, cells.indexOfFirst { it.day == 1 })
         assertEquals(30, cells.count { it.day != null })
     }
+
+    @Test
+    fun generatedPlanSkipsUnselectedDaysAndAddsReviews() {
+        val schedule = LearningSchedule(
+            id = "s",
+            name = "Plan",
+            material = "Gemara",
+            pace = 1,
+            weekdays = setOf(0, 1, 2, 3, 4, 5),
+            chazarahOffsets = listOf(1),
+        )
+        val tasks = LearningPlanner.generatePlan(schedule, "2026-09-11", "Berachos", "ברכות", assignmentCount = 2)
+        assertEquals(listOf("2026-09-11", "2026-09-13"), tasks.filter { it.type == LearningTaskType.LEARNING }.map { it.dueDate })
+        assertEquals(4, tasks.size)
+    }
 }
