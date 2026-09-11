@@ -131,6 +131,8 @@ private enum class Destination(val en: String, val he: String, val icon: ImageVe
     PROGRESS("Progress", "התקדמות", Icons.Default.Insights),
 }
 
+private enum class CalendarTaskFilter { ALL, LEARNING, CHAZARAH }
+
 private data class ScheduleDraft(
     val name: String,
     val material: String,
@@ -332,7 +334,7 @@ private fun AppContent(
         HorizontalDivider(color = Color(0xFFE4E7EC))
         when (destination) {
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate)
-            Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew)
+            Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew, onToggle)
             Destination.SCHEDULES -> SchedulesScreen(state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule)
             Destination.PROGRESS -> ProgressScreen(state, hebrew)
         }
@@ -454,18 +456,43 @@ private fun EmptyToday(hebrew: Boolean, onCreate: () -> Unit) {
 }
 
 @Composable
-private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean) {
+private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, onToggle: (String) -> Unit) {
     val todayParts = today.split("-").mapNotNull { it.toIntOrNull() }
     var year by remember { mutableStateOf(todayParts.getOrElse(0) { 2026 }) }
     var month by remember { mutableStateOf(todayParts.getOrElse(1) { 9 }) }
+    var selectedDate by remember { mutableStateOf(today) }
+    var selectedScheduleId by remember { mutableStateOf<String?>(null) }
+    var taskFilter by remember { mutableStateOf(CalendarTaskFilter.ALL) }
     val cells = GregorianCalendar.monthCells(year, month)
+    val selectedTasks = state.tasks.asSequence()
+        .filter { it.dueDate == selectedDate }
+        .filter { selectedScheduleId == null || it.scheduleId == selectedScheduleId }
+        .filter {
+            taskFilter == CalendarTaskFilter.ALL ||
+                (taskFilter == CalendarTaskFilter.LEARNING && it.type == LearningTaskType.LEARNING.name) ||
+                (taskFilter == CalendarTaskFilter.CHAZARAH && it.type == LearningTaskType.CHAZARAH.name)
+        }
+        .map { it.domain() }
+        .toList()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { GregorianCalendar.previous(year, month).also { year = it.first; month = it.second } }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month") }
+                    IconButton(onClick = {
+                        GregorianCalendar.previous(year, month).also {
+                            year = it.first
+                            month = it.second
+                            selectedDate = isoDate(year, month, 1)
+                        }
+                    }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, if (hebrew) "החודש הקודם" else "Previous month") }
                     Text(monthName(month, hebrew) + " $year", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                    IconButton(onClick = { GregorianCalendar.next(year, month).also { year = it.first; month = it.second } }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month") }
+                    IconButton(onClick = {
+                        GregorianCalendar.next(year, month).also {
+                            year = it.first
+                            month = it.second
+                            selectedDate = isoDate(year, month, 1)
+                        }
+                    }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, if (hebrew) "החודש הבא" else "Next month") }
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth()) {
@@ -479,15 +506,28 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean) {
                         week.forEach { cell ->
                             val taskCount = state.tasks.count { it.dueDate == cell.isoDate }
                             val isToday = cell.isoDate == today
+                            val isSelected = cell.isoDate == selectedDate
                             Box(
                                 Modifier.weight(1f).height(58.dp).padding(3.dp)
-                                    .background(if (isToday) DeepBlueContainer else Color.Transparent, RoundedCornerShape(12.dp))
-                                    .then(if (taskCount > 0 && !isToday) Modifier.border(1.dp, Color(0xFFDDE1E8), RoundedCornerShape(12.dp)) else Modifier),
+                                    .background(
+                                        when {
+                                            isSelected -> DeepBlue
+                                            isToday -> DeepBlueContainer
+                                            else -> Color.Transparent
+                                        },
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .then(if (taskCount > 0 && !isToday && !isSelected) Modifier.border(1.dp, Color(0xFFDDE1E8), RoundedCornerShape(12.dp)) else Modifier)
+                                    .clickable(enabled = cell.day != null) { cell.isoDate?.let { selectedDate = it } },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (cell.day != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(cell.day.toString(), color = if (isToday) DeepBlue else Color(0xFF333841), fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal)
-                                    if (taskCount > 0) Box(Modifier.padding(top = 4.dp).size(6.dp).background(WarmGold, CircleShape))
+                                    Text(
+                                        cell.day.toString(),
+                                        color = if (isSelected) Color.White else if (isToday) DeepBlue else Color(0xFF333841),
+                                        fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                    if (taskCount > 0) Box(Modifier.padding(top = 4.dp).size(6.dp).background(if (isSelected) Color.White else WarmGold, CircleShape))
                                 }
                             }
                         }
@@ -497,8 +537,65 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean) {
         }
         Spacer(Modifier.height(16.dp))
         Text(if (hebrew) "הנקודה הזהובה מסמנת יום עם לימוד מתוכנן." else "A gold dot marks a day with scheduled learning.", color = MutedInk, fontSize = 14.sp)
+        Spacer(Modifier.height(20.dp))
+        Text(friendlyDate(selectedDate, hebrew), color = DeepBlue, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Spacer(Modifier.height(12.dp))
+        Text(if (hebrew) "תוכנית" else "Schedule", color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = selectedScheduleId == null,
+                onClick = { selectedScheduleId = null },
+                label = { Text(if (hebrew) "הכול" else "All") },
+            )
+            state.schedules.forEach { schedule ->
+                FilterChip(
+                    selected = selectedScheduleId == schedule.id,
+                    onClick = { selectedScheduleId = schedule.id },
+                    label = { Text(schedule.name) },
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            CalendarTaskFilter.entries.forEach { filter ->
+                val label = when (filter) {
+                    CalendarTaskFilter.ALL -> if (hebrew) "כל המשימות" else "All tasks"
+                    CalendarTaskFilter.LEARNING -> if (hebrew) "לימוד חדש" else "New learning"
+                    CalendarTaskFilter.CHAZARAH -> if (hebrew) "חזרה" else "Chazarah"
+                }
+                FilterChip(selected = taskFilter == filter, onClick = { taskFilter = filter }, label = { Text(label) })
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (selectedTasks.isEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                Text(
+                    if (hebrew) "אין משימות מתוכננות ליום זה." else "No tasks are scheduled for this day.",
+                    modifier = Modifier.fillMaxWidth().padding(22.dp),
+                    color = MutedInk,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            state.schedules.forEach { schedule ->
+                val scheduleTasks = selectedTasks.filter { it.scheduleId == schedule.id }
+                if (scheduleTasks.isNotEmpty()) {
+                    Text(schedule.name, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 8.dp, bottom = 7.dp))
+                    TaskGroup(
+                        title = if (hebrew) "משימות היום" else "Day’s tasks",
+                        tasks = scheduleTasks,
+                        hebrew = hebrew,
+                        onToggle = onToggle,
+                    )
+                }
+            }
+        }
     }
 }
+
+private fun isoDate(year: Int, month: Int, day: Int): String =
+    "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
 @Composable
 private fun SchedulesScreen(
