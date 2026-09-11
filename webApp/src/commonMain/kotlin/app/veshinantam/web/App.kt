@@ -336,7 +336,7 @@ private fun AppContent(
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate)
             Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew, onToggle)
             Destination.SCHEDULES -> SchedulesScreen(state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule)
-            Destination.PROGRESS -> ProgressScreen(state, hebrew)
+            Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
         }
     }
 }
@@ -660,8 +660,12 @@ private fun SchedulesScreen(
 }
 
 @Composable
-private fun ProgressScreen(state: WebAppState, hebrew: Boolean) {
-    val progress = LearningPlanner.progress(state.tasks.map { it.domain() })
+private fun ProgressScreen(state: WebAppState, today: String, hebrew: Boolean) {
+    val domainTasks = state.tasks.map { it.domain() }
+    val progress = LearningPlanner.progress(domainTasks)
+    val streak = LearningPlanner.scheduledDayStreak(domainTasks, today)
+    val workload = LearningPlanner.upcomingWorkload(domainTasks, today)
+    val maximumWorkload = workload.maxOfOrNull { it.total }?.coerceAtLeast(1) ?: 1
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text(if (hebrew) "ההתקדמות שלך" else "Your progress", color = DeepBlue, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(18.dp))
@@ -679,7 +683,61 @@ private fun ProgressScreen(state: WebAppState, hebrew: Boolean) {
             ProgressMetric(if (hebrew) "לימוד חדש" else "New learning", progress.learningCompleted.toString())
             ProgressMetric(if (hebrew) "חזרות" else "Chazarah", progress.chazarahCompleted.toString())
             ProgressMetric(if (hebrew) "תוכניות פעילות" else "Active schedules", state.schedules.count { it.active }.toString())
+            ProgressMetric(if (hebrew) "רצף ימי לימוד" else "Scheduled-day streak", streak.toString())
         }
+        Spacer(Modifier.height(24.dp))
+        Text(if (hebrew) "עומס החזרות הקרוב" else "Upcoming workload", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Spacer(Modifier.height(10.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                workload.forEach { day ->
+                    Column {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(friendlyDate(day.date, hebrew), modifier = Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (hebrew) "${day.learning} לימוד · ${day.chazarah} חזרה" else "${day.learning} learning · ${day.chazarah} chazarah",
+                                color = MutedInk,
+                                fontSize = 13.sp,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { day.total.toFloat() / maximumWorkload },
+                            modifier = Modifier.fillMaxWidth().height(7.dp),
+                            color = if (day.chazarah > day.learning) WarmGold else DeepBlue,
+                            trackColor = Color(0xFFE8EBF1),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(if (hebrew) "לפי תוכנית" else "By schedule", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            state.schedules.forEach { schedule ->
+                val scheduleProgress = LearningPlanner.progress(domainTasks.filter { it.scheduleId == schedule.id })
+                Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(schedule.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Text(schedule.material, color = MutedInk, fontSize = 14.sp)
+                            }
+                            Text("${scheduleProgress.completed}/${scheduleProgress.total}", color = SuccessGreen, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            progress = { scheduleProgress.fraction },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = WarmGold,
+                            trackColor = Color(0xFFE8EBF1),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

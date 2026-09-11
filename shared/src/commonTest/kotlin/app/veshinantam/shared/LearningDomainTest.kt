@@ -35,4 +35,32 @@ class LearningDomainTest {
         assertEquals(listOf("2026-09-11", "2026-09-13"), tasks.filter { it.type == LearningTaskType.LEARNING }.map { it.dueDate })
         assertEquals(4, tasks.size)
     }
+
+    @Test
+    fun streakSkipsAnUnfinishedCurrentDayButStopsAtEarlierMissedWork() {
+        val tasks = listOf(
+            LearningTask("1", "s", "A", "א", "2026-09-08", LearningTaskType.LEARNING, false),
+            LearningTask("2", "s", "B", "ב", "2026-09-09", LearningTaskType.LEARNING, true),
+            LearningTask("3", "s", "C", "ג", "2026-09-10", LearningTaskType.CHAZARAH, true),
+            LearningTask("4", "s", "D", "ד", "2026-09-11", LearningTaskType.LEARNING, false),
+        )
+        assertEquals(2, LearningPlanner.scheduledDayStreak(tasks, "2026-09-11"))
+    }
+
+    @Test
+    fun upcomingWorkloadCountsOnlyIncompleteTasksByType() {
+        val tasks = listOf(
+            LearningTask("1", "s", "A", "א", "2026-09-11", LearningTaskType.LEARNING, false),
+            LearningTask("2", "s", "B", "ב", "2026-09-11", LearningTaskType.CHAZARAH, false),
+            LearningTask("3", "s", "C", "ג", "2026-09-11", LearningTaskType.CHAZARAH, true),
+            LearningTask("4", "s", "D", "ד", "2026-09-12", LearningTaskType.CHAZARAH, false),
+        )
+        assertEquals(
+            listOf(
+                DailyWorkload("2026-09-11", learning = 1, chazarah = 1),
+                DailyWorkload("2026-09-12", learning = 0, chazarah = 1),
+            ),
+            LearningPlanner.upcomingWorkload(tasks, "2026-09-11", days = 2),
+        )
+    }
 }

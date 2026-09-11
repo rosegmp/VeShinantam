@@ -33,6 +33,14 @@ data class LearningProgress(
     val percent: Int get() = (fraction * 100).toInt()
 }
 
+data class DailyWorkload(
+    val date: String,
+    val learning: Int,
+    val chazarah: Int,
+) {
+    val total: Int get() = learning + chazarah
+}
+
 object LearningPlanner {
     fun progress(tasks: List<LearningTask>): LearningProgress = LearningProgress(
         completed = tasks.count { it.completed },
@@ -45,6 +53,29 @@ object LearningPlanner {
         tasks.filter { it.dueDate <= date }.sortedWith(
             compareBy<LearningTask> { it.completed }.thenBy { it.dueDate }.thenBy { it.type.ordinal },
         )
+
+    fun scheduledDayStreak(tasks: List<LearningTask>, today: String): Int {
+        val groups = tasks.filter { it.dueDate <= today }.groupBy { it.dueDate }.entries.sortedByDescending { it.key }
+        var streak = 0
+        for ((date, dayTasks) in groups) {
+            if (date == today && dayTasks.any { !it.completed }) continue
+            if (dayTasks.all { it.completed }) streak++ else break
+        }
+        return streak
+    }
+
+    fun upcomingWorkload(tasks: List<LearningTask>, startDate: String, days: Int = 7): List<DailyWorkload> {
+        val start = IsoDate.parse(startDate) ?: return emptyList()
+        return (0 until days.coerceAtLeast(0)).map { offset ->
+            val date = start.plusDays(offset).toString()
+            val due = tasks.filter { it.dueDate == date && !it.completed }
+            DailyWorkload(
+                date = date,
+                learning = due.count { it.type == LearningTaskType.LEARNING },
+                chazarah = due.count { it.type == LearningTaskType.CHAZARAH },
+            )
+        }
+    }
 
     fun createFirstAssignment(
         scheduleId: String,
