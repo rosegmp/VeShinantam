@@ -34,11 +34,13 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -148,6 +150,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
     var appState by remember { mutableStateOf(store.load()) }
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
+    var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
     val hebrew = appState.language == "he"
 
     fun update(transform: (WebAppState) -> WebAppState) {
@@ -184,6 +187,10 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                 onArchiveSchedule = { scheduleId ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = false, archived = true) else it }) }
                                 },
+                                onRestoreSchedule = { scheduleId ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
+                                },
+                                onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                             )
                         }
                     } else {
@@ -222,6 +229,10 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                 onArchiveSchedule = { scheduleId ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = false, archived = true) else it }) }
                                 },
+                                onRestoreSchedule = { scheduleId ->
+                                    update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
+                                },
+                                onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                             )
                         }
                     }
@@ -235,7 +246,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
             hebrew = hebrew,
             onDismiss = { showCreate = false },
             onCreate = { draft ->
-                val id = "schedule-${appState.schedules.size + 1}"
+                val id = nextScheduleId(appState.schedules)
                 val schedule = StoredSchedule(
                     id = id,
                     name = draft.name,
@@ -263,6 +274,36 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                 }
                 destination = Destination.TODAY
                 showCreate = false
+            },
+        )
+    }
+
+    schedulePendingDelete?.let { schedule ->
+        AlertDialog(
+            onDismissRequest = { schedulePendingDelete = null },
+            icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFF9B2C2C)) },
+            title = { Text(if (hebrew) "למחוק את התוכנית?" else "Delete this schedule?") },
+            text = {
+                Text(
+                    if (hebrew) "התוכנית ${schedule.name} וכל משימות הלימוד והחזרה שלה יימחקו לצמיתות מהמכשיר הזה."
+                    else "${schedule.name} and all of its learning and chazarah tasks will be permanently removed from this device.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        update { state ->
+                            state.copy(
+                                schedules = state.schedules.filterNot { it.id == schedule.id },
+                                tasks = state.tasks.filterNot { it.scheduleId == schedule.id },
+                            )
+                        }
+                        schedulePendingDelete = null
+                    },
+                ) { Text(if (hebrew) "מחק לצמיתות" else "Delete permanently") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { schedulePendingDelete = null }) { Text(if (hebrew) "ביטול" else "Cancel") }
             },
         )
     }
@@ -318,6 +359,8 @@ private fun AppContent(
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
     onArchiveSchedule: (String) -> Unit,
+    onRestoreSchedule: (String) -> Unit,
+    onRequestDelete: (String) -> Unit,
 ) {
     Column(modifier.fillMaxSize()) {
         Row(
@@ -335,7 +378,9 @@ private fun AppContent(
         when (destination) {
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate)
             Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew, onToggle)
-            Destination.SCHEDULES -> SchedulesScreen(state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule)
+            Destination.SCHEDULES -> SchedulesScreen(
+                state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete,
+            )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
         }
     }
@@ -597,6 +642,11 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
 private fun isoDate(year: Int, month: Int, day: Int): String =
     "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
+private fun nextScheduleId(schedules: List<StoredSchedule>): String {
+    val largest = schedules.mapNotNull { it.id.removePrefix("schedule-").toIntOrNull() }.maxOrNull() ?: 0
+    return "schedule-${largest + 1}"
+}
+
 @Composable
 private fun SchedulesScreen(
     state: WebAppState,
@@ -604,6 +654,8 @@ private fun SchedulesScreen(
     onCreate: () -> Unit,
     onSetActive: (String, Boolean) -> Unit,
     onArchive: (String) -> Unit,
+    onRestore: (String) -> Unit,
+    onRequestDelete: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -615,6 +667,16 @@ private fun SchedulesScreen(
             Button(onClick = onCreate) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(7.dp)); Text(if (hebrew) "הוסף" else "Add") }
         }
         Spacer(Modifier.height(20.dp))
+        if (state.schedules.isEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = DeepBlue, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text(if (hebrew) "עדיין אין תוכניות לימוד" else "No learning schedules yet", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    TextButton(onClick = onCreate) { Text(if (hebrew) "צור תוכנית" else "Create a schedule") }
+                }
+            }
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(state.schedules, key = { it.id }) { schedule ->
                 val scheduleTasks = state.tasks.filter { it.scheduleId == schedule.id }
@@ -649,6 +711,21 @@ private fun SchedulesScreen(
                                     Icon(Icons.Default.Archive, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
                                     Text(if (hebrew) "העבר לארכיון" else "Archive")
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.height(14.dp))
+                            HorizontalDivider(color = Color(0xFFEEF0F4))
+                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onRestore(schedule.id) }) {
+                                    Icon(Icons.Default.Unarchive, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "שחזר" else "Restore")
+                                }
+                                TextButton(onClick = { onRequestDelete(schedule.id) }) {
+                                    Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(19.dp), tint = Color(0xFF9B2C2C))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "מחק" else "Delete", color = Color(0xFF9B2C2C))
                                 }
                             }
                         }
