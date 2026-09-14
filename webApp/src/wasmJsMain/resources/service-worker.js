@@ -1,4 +1,4 @@
-const CACHE = 'veshinantam-web-v9';
+const CACHE = 'veshinantam-web-v10';
 const SHELL = ['./', './index.html', './veshinantam.js', './supabase-config.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {

@@ -58,6 +58,6 @@ See `docs/RELEASE.md` for release-key setup, signed builds, verification, and pr
 - `app/src/test` — pure JVM scheduling tests
 - `app/src/androidTest` — dependency-free on-device migration and end-to-end data-path smoke tests
 - `scripts` — device smoke and reproducible release packaging
-- `docs` — product specification, wireframes, and roadmap
+- `docs` — product specification, wireframes, Android roadmap, [web parity roadmap](docs/WEB_PARITY_ROADMAP.md), and [parity matrix](docs/WEB_PARITY_MATRIX.md)
 
 No code or assets are shared with any other project.

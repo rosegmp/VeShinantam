@@ -1,12 +1,13 @@
 # VeShinantam — Product specification
 
-Status: implementation baseline for the native Android MVP  
-Platform: Android, private distribution, single user, fully local  
+Status: implementation baseline for Android and web
+
+Platforms: Android and Compose Multiplatform Web, single-user and offline-first
 Package: `app.veshinantam`
 
 ## 1. Product intent
 
-VeShinantam helps one person plan Torah learning and chazarah, see exactly what is due, and mark each obligation complete. It deliberately avoids accounts, synchronization, social mechanics, messaging, rankings, leader dashboards, and embedded sefer text.
+VeShinantam helps one person plan Torah learning and chazarah, see exactly what is due, and mark each obligation complete. An optional account synchronizes that person's data across their devices while each device remains useful offline. The product deliberately avoids social mechanics, messaging, rankings, leader dashboards, and embedded sefer text.
 
 Success means that the app remains dependable without a network connection, makes both today's work and future workload legible, preserves history when plans change, and works naturally in English, Hebrew, LTR, RTL, light mode, dark mode, large text, and TalkBack.
 
@@ -15,7 +16,7 @@ Success means that the app remains dependable without a network connection, make
 1. **The plan is trustworthy.** Dates are deterministic, based on local calendar dates rather than elapsed hours. A new task day begins at local midnight and uses the phone's current time zone.
 2. **Every obligation is explicit.** New learning and every chazarah occurrence are separate tasks with their own completion state. There is no bulk-complete action.
 3. **History does not move.** Completed tasks remain unchanged when a schedule is edited. Only unfinished future work is regenerated.
-4. **Offline is normal.** Creation, planning, completion, history, reminders, widgets, PDF generation, backup, and restore use on-device data. Network access is optional and limited to preset-data updates.
+4. **Offline is normal.** Creation, planning, completion, history, reminders, widgets, PDF generation, backup, and restore use on-device data. Network access is optional and used for account sync and preset-data updates.
 5. **Structured Torah references remain bilingual.** Preset and structured references supplied by the app show English and Hebrew together. User-entered schedule names and custom unit labels are single-field values entered in either language and displayed verbatim.
 6. **Calm, native presentation.** Material 3 behavior and accessibility come first. Deep blue and restrained warm-gold details provide identity without ornament competing with the work.
 
@@ -31,7 +32,7 @@ An individual maintaining one or more parallel learning programs, who may join a
 
 ### Explicitly out of scope
 
-- Accounts, cloud sync, multi-device conflict resolution
+- Shared/family accounts, collaboration, or social synchronization
 - Groups, leaderboards, rankings, messaging, social sharing
 - Notes, recall ratings, partial credit, elapsed-time tracking
 - Actual Gemara, Mishnah, halachah, or other sefer text

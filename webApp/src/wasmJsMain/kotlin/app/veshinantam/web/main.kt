@@ -21,11 +21,18 @@ private class LocalBrowserStore(private val today: String) : BrowserStore {
     }
 
     override fun save(state: WebAppState) {
-        writeLocalStorage(StorageKey, json.encodeToString(state))
+        writeBrowserState(json.encodeToString(state))
     }
 
+    override fun currentInstant(): String = currentIsoInstant()
+    override fun currentZoneId(): String = browserTimeZone()
+
     override fun exportBackup(state: WebAppState) {
-        downloadTextFile("veshinantam-backup-$today.json", backupJson.encodeToString(WebBackup(state = state)))
+        val now = currentIsoInstant()
+        downloadTextFile(
+            "veshinantam-backup-$today.json",
+            backupJson.encodeToString(WebBackup(state = state, canonical = state.toCanonical(now, today))),
+        )
     }
 
     override fun requestBackupImport() {
@@ -62,8 +69,8 @@ private class SupabaseCloudAccount : CloudAccount {
 private external fun readLocalStorage(key: String): String?
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("(key, value) => window.localStorage.setItem(key, value)")
-private external fun writeLocalStorage(key: String, value: String)
+@JsFun("(value) => window.veshinantamPersistState(value)")
+private external fun writeBrowserState(value: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(key) => window.sessionStorage.getItem(key)")
@@ -138,6 +145,14 @@ private external fun cloudSignOut()
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => new Date().toISOString().slice(0, 10)")
 private external fun currentIsoDate(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => new Date().toISOString()")
+private external fun currentIsoInstant(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'")
+private external fun browserTimeZone(): String
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {

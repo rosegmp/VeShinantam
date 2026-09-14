@@ -91,9 +91,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.veshinantam.shared.GregorianCalendar
+import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.LearningPlanner
 import app.veshinantam.shared.LearningTask
 import app.veshinantam.shared.LearningTaskType
+import app.veshinantam.shared.SharedMaterialUnit
+import app.veshinantam.shared.SharedScheduleEngine
+import app.veshinantam.shared.SharedScheduleRules
 import app.veshinantam.web.generated.resources.NotoSansHebrew
 import app.veshinantam.web.generated.resources.Res
 import org.jetbrains.compose.resources.Font
@@ -170,6 +174,23 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
         store.save(appState)
     }
 
+    fun toggleTask(state: WebAppState, taskId: String): WebAppState {
+        val now = store.currentInstant()
+        val zone = store.currentZoneId()
+        return state.copy(tasks = state.tasks.map { task ->
+            if (task.id != taskId) task else {
+                val complete = !task.completed
+                task.copy(
+                    completed = complete,
+                    completedAt = now.takeIf { complete },
+                    completionLocalDate = todayIso.takeIf { complete },
+                    completionZoneId = zone.takeIf { complete },
+                    updatedAt = now,
+                )
+            }
+        })
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(typography = appTypography()) {
             Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
@@ -185,13 +206,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
-                                onToggle = { taskId ->
-                                    update { state ->
-                                        state.copy(tasks = state.tasks.map { task ->
-                                            if (task.id == taskId) task.copy(completed = !task.completed) else task
-                                        })
-                                    }
-                                },
+                                onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
@@ -230,13 +245,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
-                                onToggle = { taskId ->
-                                    update { state ->
-                                        state.copy(tasks = state.tasks.map { task ->
-                                            if (task.id == taskId) task.copy(completed = !task.completed) else task
-                                        })
-                                    }
-                                },
+                                onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
@@ -273,15 +282,40 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                     weekdays = draft.weekdays,
                     chazarahOffsets = draft.chazarahOffsets,
                 )
-                val generatedTasks = LearningPlanner.generatePlan(
-                    schedule = schedule.domain(),
-                    startDate = todayIso,
-                    startingReferenceEnglish = draft.referenceEnglish,
-                    startingReferenceHebrew = draft.referenceHebrew,
-                ).map { task ->
+                val engine = SharedScheduleEngine()
+                val rules = SharedScheduleRules(schedule.weekdays)
+                val units = (1..(14 * schedule.pace)).map { ordinal ->
+                    SharedMaterialUnit(
+                        id = "$id-unit-$ordinal",
+                        ordinal = ordinal,
+                        labelEnglish = "${draft.referenceEnglish} $ordinal".trim(),
+                        labelHebrew = "${draft.referenceHebrew} $ordinal".trim(),
+                    )
+                }
+                val learningTasks = engine.generateByDailyQuantity(
+                    units = units,
+                    startDate = requireNotNull(IsoDate.parse(todayIso)),
+                    unitsPerDay = schedule.pace,
+                    rules = rules,
+                )
+                val plannedTasks = learningTasks + engine.generateChazarah(
+                    learningTasks = learningTasks,
+                    dayOffsets = schedule.chazarahOffsets,
+                    repeatsAnnually = false,
+                    rules = rules,
+                    annualReviewsThroughYear = requireNotNull(IsoDate.parse(todayIso)).year,
+                )
+                val generatedTasks = plannedTasks.mapIndexed { index, task ->
                     StoredTask(
-                        task.id, task.scheduleId, task.referenceEnglish, task.referenceHebrew,
-                        task.dueDate, task.type.name, task.completed,
+                        id = "$id-${task.type.name.lowercase()}-${index + 1}",
+                        scheduleId = id,
+                        referenceEnglish = task.material.labelEnglish,
+                        referenceHebrew = task.material.labelHebrew,
+                        dueDate = task.plannedDate.toString(),
+                        type = task.type.name,
+                        stableKey = task.stableKey,
+                        originalLearningDate = task.originalLearningDate.toString(),
+                        reviewIdentity = task.reviewIdentity,
                     )
                 }
                 update { state ->

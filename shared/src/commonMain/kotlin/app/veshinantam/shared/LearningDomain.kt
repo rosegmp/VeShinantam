@@ -139,13 +139,14 @@ object LearningPlanner {
     }
 }
 
-data class IsoDate(val year: Int, val month: Int, val day: Int) {
+data class IsoDate(val year: Int, val month: Int, val day: Int) : Comparable<IsoDate> {
     override fun toString(): String =
         "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
     fun plusDays(count: Int): IsoDate {
+        if (count < 0) return minusDays(-count)
         var result = this
-        repeat(count.coerceAtLeast(0)) {
+        repeat(count) {
             result = if (result.day < GregorianCalendar.daysInMonth(result.year, result.month)) {
                 result.copy(day = result.day + 1)
             } else if (result.month < 12) {
@@ -156,6 +157,25 @@ data class IsoDate(val year: Int, val month: Int, val day: Int) {
         }
         return result
     }
+
+    fun minusDays(count: Int): IsoDate {
+        if (count < 0) return plusDays(-count)
+        var result = this
+        repeat(count) {
+            result = when {
+                result.day > 1 -> result.copy(day = result.day - 1)
+                result.month > 1 -> {
+                    val month = result.month - 1
+                    IsoDate(result.year, month, GregorianCalendar.daysInMonth(result.year, month))
+                }
+                else -> IsoDate(result.year - 1, 12, 31)
+            }
+        }
+        return result
+    }
+
+    override operator fun compareTo(other: IsoDate): Int =
+        compareValuesBy(this, other, IsoDate::year, IsoDate::month, IsoDate::day)
 
     companion object {
         fun parse(value: String): IsoDate? {

@@ -19,6 +19,48 @@
   <script>
     (() => {
       const STATE_KEY = 'veshinantam.web.v1';
+      const DATABASE_NAME = 'veshinantam';
+      const STORE_NAME = 'app_state';
+      let database = null;
+
+      const writeIndexedState = (value) => {
+        if (!database) return;
+        try {
+          database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(value, 'state');
+        } catch (_) { /* The local mirror remains available for this session. */ }
+      };
+
+      window.veshinantamPersistState = (value) => {
+        localStorage.setItem(STATE_KEY, value);
+        writeIndexedState(value);
+      };
+
+      window.veshinantamStorageReady = new Promise((resolve) => {
+        if (!('indexedDB' in window)) { resolve(); return; }
+        const request = indexedDB.open(DATABASE_NAME, 1);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
+        };
+        request.onerror = () => resolve();
+        request.onsuccess = () => {
+          database = request.result;
+          const transaction = database.transaction(STORE_NAME, 'readonly');
+          const read = transaction.objectStore(STORE_NAME).get('state');
+          read.onerror = () => resolve();
+          read.onsuccess = () => {
+            const indexedState = typeof read.result === 'string' ? read.result : null;
+            const legacyState = localStorage.getItem(STATE_KEY);
+            if (indexedState) localStorage.setItem(STATE_KEY, indexedState);
+            else if (legacyState) writeIndexedState(legacyState);
+            resolve();
+          };
+        };
+      });
+    })();
+  </script>
+  <script>
+    (() => {
+      const STATE_KEY = 'veshinantam.web.v1';
       const SESSION_KEY = 'veshinantam.supabase.session.v1';
       const REVISION_KEY = 'veshinantam.supabase.revision.v1';
       const STATUS_KEY = 'veshinantam.supabase.status.v1';
@@ -158,7 +200,7 @@
           const conflict = JSON.parse(localStorage.getItem(CONFLICT_KEY) || 'null');
           if (!conflict) throw new Error('No pending conflict.');
           if (choice === 'cloud') {
-            localStorage.setItem(STATE_KEY, JSON.stringify(conflict.payload));
+            window.veshinantamPersistState(JSON.stringify(conflict.payload));
             localStorage.setItem(REVISION_KEY, String(conflict.revision));
             localStorage.removeItem(CONFLICT_KEY);
             setStatus('Cloud copy restored on this device.');
@@ -177,7 +219,13 @@
       };
     })();
   </script>
-  <script src="veshinantam.js"></script>
+  <script>
+    window.veshinantamStorageReady.finally(() => {
+      const application = document.createElement('script');
+      application.src = 'veshinantam.js';
+      document.body.appendChild(application);
+    });
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
       let refreshing = false;
@@ -230,7 +278,7 @@
           const task = (state.tasks || []).find(candidate => candidate.id === input.taskId);
           if (!task) throw new Error('Task not found');
           task.completed = input.completed;
-          localStorage.setItem('veshinantam.web.v1', JSON.stringify(state));
+          window.veshinantamPersistState(JSON.stringify(state));
           setTimeout(() => window.location.reload(), 150);
           return { taskId: task.id, completed: task.completed };
         }
