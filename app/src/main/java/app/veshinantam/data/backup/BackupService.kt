@@ -2,6 +2,7 @@ package app.veshinantam.data.backup
 
 import android.content.Context
 import android.net.Uri
+import app.veshinantam.data.readAtMost
 import app.veshinantam.data.ScheduleDefaultsSettings
 import app.veshinantam.data.local.ProgressGoalEntity
 import app.veshinantam.data.local.ScheduleDao
@@ -57,7 +58,7 @@ class BackupService(
 
     suspend fun restore(uri: Uri): BackupSummary {
         val text = context.contentResolver.openInputStream(uri)?.use { input ->
-            val bytes = input.readNBytes(MAX_BACKUP_BYTES + 1)
+            val bytes = input.readAtMost(MAX_BACKUP_BYTES + 1)
             if (bytes.size > MAX_BACKUP_BYTES) throw BackupException("The backup file is too large.")
             bytes.toString(Charsets.UTF_8)
         } ?: throw BackupException("The selected backup file could not be opened.")

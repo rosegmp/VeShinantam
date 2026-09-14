@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.veshinantam.BuildConfig
+import app.veshinantam.data.readAtMost
 import app.veshinantam.domain.material.PresetCatalog
 import java.io.File
 import java.io.FileOutputStream
@@ -118,7 +119,7 @@ class PresetCatalogUpdateClient(
                 val declaredLength = connection.contentLengthLong
                 if (declaredLength > MAX_DOWNLOAD_BYTES) return save(PresetUpdateResult.INVALID_CATALOG)
                 connection.inputStream.use { input ->
-                    val bytes = input.readNBytes(MAX_DOWNLOAD_BYTES + 1)
+                    val bytes = input.readAtMost(MAX_DOWNLOAD_BYTES + 1)
                     if (bytes.size > MAX_DOWNLOAD_BYTES) return save(PresetUpdateResult.INVALID_CATALOG)
                     bytes.toString(StandardCharsets.UTF_8)
                 }
