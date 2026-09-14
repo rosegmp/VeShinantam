@@ -45,5 +45,7 @@ class CanonicalAndroidMapperTest {
         assertEquals(3, exported.schedules.single().generationRevision)
         assertEquals("America/New_York", exported.tasks.single().completionZoneId)
         assertEquals(listOf(1, 7, 30), exported.schedules.single().chazarahDayOffsets)
+        assertEquals(schedule, CanonicalAndroidMapper.schedule(exported.schedules.single()))
+        assertEquals(task, CanonicalAndroidMapper.task(exported.tasks.single()))
     }
 }

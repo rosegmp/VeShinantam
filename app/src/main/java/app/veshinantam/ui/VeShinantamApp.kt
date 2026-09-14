@@ -275,6 +275,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
                         presetUpdateState = presetUpdateSettings.read()
                         ReminderScheduler.sync(context.applicationContext, reminderPreference)
                         app.veshinantam.widget.WidgetUpdater.enqueueImmediate(context.applicationContext)
+                        accountService.scheduleAutomaticSync()
                         if (appLanguage != oldLanguage) AppLocale.apply(context, appLanguage)
                         BackupNotice(restored = true, summary = summary)
                     },
@@ -316,6 +317,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
                 selectedLanguage = appLanguage,
                 onLanguageSelected = { language ->
                     languageSettings.save(language)
+                    accountService.scheduleAutomaticSync()
                     appLanguage = language
                     AppLocale.apply(context, language)
                 },
@@ -352,9 +354,17 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
                     onSync = {
                         accountBusy = true
                         coroutineScope.launch {
+                            val oldLanguage = appLanguage
                             withContext(Dispatchers.IO) { accountService.sync() }
+                            reminderPreference = reminderSettings.read()
+                            appLanguage = languageSettings.read()
+                            sefarimLanguage = languageSettings.readSefarimLanguage()
+                            primaryCalendar = languageSettings.readPrimaryCalendar()
+                            defaultChazarahOffsets = scheduleDefaultsSettings.readChazarahOffsets()
+                            presetUpdateState = presetUpdateSettings.read()
                             accountState = accountService.state()
                             accountBusy = false
+                            if (appLanguage != oldLanguage) AppLocale.apply(context, appLanguage)
                         }
                     },
                     onUseCloud = {
@@ -431,6 +441,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
                 app.veshinantam.notifications.ReminderNotifications.createChannel(AppLocale.wrap(context.applicationContext))
                 ReminderScheduler.sync(context.applicationContext, preference)
                 app.veshinantam.widget.WidgetUpdater.enqueueImmediate(context.applicationContext)
+                accountService.scheduleAutomaticSync()
                 val needsPermission = preference.enabled &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -3238,6 +3249,7 @@ private fun TodayScreen(
                 onSelected = { index ->
                     sortOrder = TodaySortOrder.entries[index]
                     displaySettings.saveSortOrder(sortOrder)
+                    (context.applicationContext as VeShinantamApplication).supabaseSyncService.scheduleAutomaticSync()
                 },
                 modifier = Modifier.fillMaxWidth(),
             )

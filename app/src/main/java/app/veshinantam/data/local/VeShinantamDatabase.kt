@@ -9,8 +9,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ScheduleEntity::class, ScheduleExclusionEntity::class, TaskEntity::class, ProgressGoalEntity::class],
-    version = 7,
+    entities = [
+        ScheduleEntity::class,
+        ScheduleExclusionEntity::class,
+        TaskEntity::class,
+        ProgressGoalEntity::class,
+        SyncOutboxEntity::class,
+        SyncShadowEntity::class,
+        SyncMetadataEntity::class,
+    ],
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(RoomConverters::class)
@@ -66,6 +74,14 @@ abstract class VeShinantamDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_outbox (entityType TEXT NOT NULL, entityId TEXT NOT NULL, mutationId TEXT NOT NULL, baseRevision INTEGER NOT NULL, payload TEXT, deleted INTEGER NOT NULL, createdAt TEXT NOT NULL, PRIMARY KEY(entityType, entityId))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_shadow (entityType TEXT NOT NULL, entityId TEXT NOT NULL, payload TEXT, revision INTEGER NOT NULL, deleted INTEGER NOT NULL, PRIMARY KEY(entityType, entityId))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_metadata (`key` TEXT NOT NULL, longValue INTEGER NOT NULL, PRIMARY KEY(`key`))")
+            }
+        }
+
         internal val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -73,6 +89,7 @@ abstract class VeShinantamDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
         )
     }
 }

@@ -13,6 +13,7 @@ import app.veshinantam.domain.model.ScheduleKind
 import app.veshinantam.domain.model.ScheduleState
 import app.veshinantam.domain.model.TaskType
 import app.veshinantam.localization.LanguageSettings
+import app.veshinantam.widget.WidgetUpdater
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.DayOfWeek
@@ -34,6 +35,10 @@ class SupabaseSyncService(
 ) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val deviceSyncPreferences = appContext.getSharedPreferences(DEVICE_SYNC_PREFERENCES, Context.MODE_PRIVATE)
+    private val entitySync = AndroidEntitySync(appContext, dao) { path, method, body ->
+        request(path, method, body)
+    }
 
     fun state() = AccountSyncState(
         configured = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank(),
@@ -53,6 +58,7 @@ class SupabaseSyncService(
             .remove(KEY_CONFLICT)
             .putString(KEY_STATUS, "Signed in. Tap Sync now to connect this device.")
             .apply()
+        scheduleAutomaticSync()
         return true
     }
 
@@ -70,6 +76,23 @@ class SupabaseSyncService(
 
     suspend fun sync(): Result<Unit> = runCatching {
         preferences.edit().putString(KEY_STATUS, "Synchronizing…").apply()
+        if (BuildConfig.ENTITY_SYNC_ENABLED) {
+            prepareEntityAccount()
+            val result = entitySync.synchronize()
+            WidgetUpdater.enqueueImmediate(appContext)
+            preferences.edit()
+                .remove(KEY_CONFLICT)
+                .putString(
+                    KEY_STATUS,
+                    if (result.conflicts > 0) {
+                        "Synced with ${result.conflicts} newer cloud change${if (result.conflicts == 1) "" else "s"}."
+                    } else {
+                        "Synced successfully."
+                    },
+                )
+                .apply()
+            return@runCatching
+        }
         val local = localPayload()
         val rows = JSONArray(request("/rest/v1/learning_snapshots?select=payload,revision&limit=1"))
         if (rows.length() == 0) {
@@ -112,7 +135,34 @@ class SupabaseSyncService(
     }
 
     fun signOut() {
+        EntitySyncScheduler.cancel(appContext)
         preferences.edit().clear().putString(KEY_STATUS, "Signed out. Device data remains available offline.").apply()
+    }
+
+    fun scheduleAutomaticSync() {
+        if (BuildConfig.ENTITY_SYNC_ENABLED && preferences.contains(KEY_ACCESS_TOKEN)) {
+            EntitySyncScheduler.enqueue(appContext)
+        }
+    }
+
+    suspend fun automaticSync(): Boolean {
+        if (!BuildConfig.ENTITY_SYNC_ENABLED || !preferences.contains(KEY_ACCESS_TOKEN)) return true
+        return sync().isSuccess
+    }
+
+    private suspend fun prepareEntityAccount() {
+        val accountId = preferences.getString(KEY_USER_ID, null)
+            ?: preferences.getString(KEY_ACCESS_TOKEN, null)?.let(::tokenClaims)?.optString("sub")
+                ?.takeIf(String::isNotBlank)
+                ?.also { preferences.edit().putString(KEY_USER_ID, it).apply() }
+            ?: error("Please sign in again.")
+        val boundAccountId = deviceSyncPreferences.getString(KEY_ENTITY_ACCOUNT_ID, null)
+        if (boundAccountId == null) {
+            entitySync.resetForAccount()
+            deviceSyncPreferences.edit().putString(KEY_ENTITY_ACCOUNT_ID, accountId).apply()
+        } else if (boundAccountId != accountId) {
+            error("This device's offline data is linked to another account. Clear the app's data before linking a different account.")
+        }
     }
 
     private suspend fun localPayload(): JSONObject {
@@ -279,23 +329,29 @@ class SupabaseSyncService(
     }
 
     private fun saveSession(accessToken: String, refreshToken: String) {
-        val claims = runCatching {
-            val encoded = accessToken.split('.')[1]
-            JSONObject(String(Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING), Charsets.UTF_8))
-        }.getOrDefault(JSONObject())
+        val claims = tokenClaims(accessToken)
         preferences.edit()
             .putString(KEY_ACCESS_TOKEN, accessToken)
             .putString(KEY_REFRESH_TOKEN, refreshToken)
             .putString(KEY_EMAIL, claims.optString("email"))
+            .putString(KEY_USER_ID, claims.optString("sub"))
             .putLong(KEY_EXPIRES_AT, claims.optLong("exp") * 1000)
             .apply()
     }
 
+    private fun tokenClaims(accessToken: String): JSONObject = runCatching {
+        val encoded = accessToken.split('.')[1]
+        JSONObject(String(Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING), Charsets.UTF_8))
+    }.getOrDefault(JSONObject())
+
     private companion object {
         const val PREFERENCES = "supabase_account"
+        const val DEVICE_SYNC_PREFERENCES = "supabase_device_sync"
         const val KEY_ACCESS_TOKEN = "access_token"
         const val KEY_REFRESH_TOKEN = "refresh_token"
         const val KEY_EMAIL = "email"
+        const val KEY_USER_ID = "user_id"
+        const val KEY_ENTITY_ACCOUNT_ID = "entity_account_id"
         const val KEY_EXPIRES_AT = "expires_at"
         const val KEY_REVISION = "revision"
         const val KEY_STATUS = "status"

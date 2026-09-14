@@ -35,6 +35,7 @@ android {
         versionCode = 2
         versionName = "0.1.1"
         val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl").orElse("").get()
+        val entitySyncEnabled = providers.gradleProperty("entitySyncEnabled").orElse("false").get().toBooleanStrict()
         val presetCatalogPublicKey = providers.gradleProperty("presetCatalogPublicKey").orElse(
             "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx3gli60LF/hLHlkuh9AqlgM3rpo3bP5L3fQySwJH8ggsHmMMmgSdisKnL+ljpJGSuEqE82uN/UBItAYlPpfZpA==",
         ).get()
@@ -42,6 +43,8 @@ android {
         buildConfigField("String", "PRESET_CATALOG_PUBLIC_KEY", "\"${presetCatalogPublicKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "SUPABASE_URL", "\"https://tyzembsyzzjrdhmmmfln.supabase.co\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_VpyDD3COjLuAKkNmaPaBgQ_sKGiIGXe\"")
+        // Turn on with -PentitySyncEnabled=true only for the coordinated Android/web rollout.
+        buildConfigField("boolean", "ENTITY_SYNC_ENABLED", entitySyncEnabled.toString())
 
         testInstrumentationRunner = "app.veshinantam.data.local.MigrationTestInstrumentation"
         vectorDrawables.useSupportLibrary = true
@@ -109,6 +112,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.kotlinx.serialization.json)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     testImplementation(libs.junit)

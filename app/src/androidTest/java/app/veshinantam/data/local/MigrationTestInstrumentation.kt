@@ -49,7 +49,7 @@ class MigrationTestInstrumentation : Instrumentation() {
             endToEndScheduleTodayCompletionAndBackupSmoke()
             results.putString(
                 REPORT_KEY_STREAMRESULT,
-                "VeShinantam database migrations 1-7 passed.\n" +
+                "VeShinantam database migrations 1-8 passed.\n" +
                     "VeShinantam end-to-end schedule, Today, completion, and backup smoke passed.\n",
             )
             finish(Activity.RESULT_OK, results)
@@ -212,7 +212,7 @@ class MigrationTestInstrumentation : Instrumentation() {
             check(dao.getAllExclusions() == payload.exclusions)
             check(dao.getAllTasks() == payload.tasks)
             check(dao.getAllProgressGoals() == payload.goals)
-            check(dataChangeCount == 4) { "Expected four repository change notifications, got $dataChangeCount." }
+            check(dataChangeCount == 5) { "Expected five repository change notifications, got $dataChangeCount." }
         } finally {
             database.close()
         }
@@ -259,8 +259,16 @@ class MigrationTestInstrumentation : Instrumentation() {
     }
 
     private companion object {
-        const val CURRENT_VERSION = 7
+        const val CURRENT_VERSION = 8
         const val SCHEMA_ASSET_DIRECTORY = "app.veshinantam.data.local.VeShinantamDatabase"
-        val EXPECTED_TABLES = setOf("progress_goals", "schedule_exclusions", "schedules", "tasks")
+        val EXPECTED_TABLES = setOf(
+            "progress_goals",
+            "schedule_exclusions",
+            "schedules",
+            "sync_metadata",
+            "sync_outbox",
+            "sync_shadow",
+            "tasks",
+        )
     }
 }

@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import app.veshinantam.domain.model.ScheduleState
 import app.veshinantam.domain.model.TaskType
 import kotlinx.coroutines.flow.Flow
@@ -308,4 +309,71 @@ interface ScheduleDao {
         insertSchedule(schedule)
         insertTasks(tasks)
     }
+
+    @Query("SELECT * FROM sync_outbox ORDER BY createdAt, entityType, entityId")
+    suspend fun getSyncOutbox(): List<SyncOutboxEntity>
+
+    @Query("SELECT * FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun getSyncOutbox(entityType: String, entityId: String): SyncOutboxEntity?
+
+    @Upsert
+    suspend fun upsertSyncOutbox(value: SyncOutboxEntity)
+
+    @Query("DELETE FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId AND mutationId = :mutationId")
+    suspend fun deleteSyncOutbox(entityType: String, entityId: String, mutationId: String): Int
+
+    @Query("UPDATE sync_outbox SET baseRevision = :revision WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun updateSyncOutboxBaseRevision(entityType: String, entityId: String, revision: Long)
+
+    @Query("SELECT * FROM sync_shadow")
+    suspend fun getSyncShadows(): List<SyncShadowEntity>
+
+    @Query("SELECT * FROM sync_shadow WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun getSyncShadow(entityType: String, entityId: String): SyncShadowEntity?
+
+    @Upsert
+    suspend fun upsertSyncShadow(value: SyncShadowEntity)
+
+    @Query("SELECT longValue FROM sync_metadata WHERE `key` = :key")
+    suspend fun getSyncMetadata(key: String): Long?
+
+    @Upsert
+    suspend fun upsertSyncMetadata(value: SyncMetadataEntity)
+
+    @Query("DELETE FROM sync_outbox")
+    suspend fun clearSyncOutbox()
+
+    @Query("DELETE FROM sync_shadow")
+    suspend fun clearSyncShadows()
+
+    @Query("DELETE FROM sync_metadata")
+    suspend fun clearSyncMetadata()
+
+    @Transaction
+    suspend fun clearSyncState() {
+        clearSyncOutbox()
+        clearSyncShadows()
+        clearSyncMetadata()
+    }
+
+    @Upsert
+    suspend fun upsertSyncedSchedule(value: ScheduleEntity)
+
+    @Upsert
+    suspend fun upsertSyncedTask(value: TaskEntity)
+
+    @Upsert
+    suspend fun upsertSyncedExclusion(value: ScheduleExclusionEntity)
+
+    @Upsert
+    suspend fun upsertSyncedGoal(value: ProgressGoalEntity)
+
+    @Query("DELETE FROM tasks WHERE id = :id")
+    suspend fun deleteSyncedTask(id: String)
+
+    @Query("DELETE FROM schedule_exclusions WHERE scheduleId = :scheduleId AND date = :date")
+    suspend fun deleteSyncedExclusion(scheduleId: String, date: LocalDate)
+
+    @Query("DELETE FROM progress_goals WHERE kind = :kind")
+    suspend fun deleteSyncedGoal(kind: String)
 }

@@ -27,7 +27,7 @@ The repository also contains a Kotlin/Compose Multiplatform Web companion. Andro
 - Settings-backed daily aggregate reminders at a user-selected local time, with correct learning/chazarah counts, a Today-screen notification link, and automatic rescheduling after reboot, clock/time-zone changes, and app updates
 - A localized home-screen widget listing today’s tasks and separately counting overdue learning and chazarah, refreshed after changes and at day rollover
 - Versioned JSON backup and transactional restore through Android’s system file picker, covering schedules, tasks, completion history, exclusions, goals, and user preferences
-- Optional Supabase account and revision-checked manual sync shared with the web companion, including safe merging for web-created plans and explicit conflict resolution
+- Optional Supabase account with a durable per-entity outbox, revisions, tombstones, deterministic conflict handling, and automatic network-constrained retries; rollout remains gated until the matching Android/web release
 - Printable A4 schedule PDFs for the next 7, 14, 30, 60, or 90 days, localized for English/Hebrew and the selected sefarim and primary-calendar display, with one checkbox per task
 - Optional HTTPS preset-position updates with a pinned ECDSA signature, monotonic rollback protection, strict bundled-reference validation, atomic private caching, daily WorkManager checks, and automatic bundled fallback
 - Exported Room schemas with on-device upgrade tests for every database version, plus committed compatibility fixtures for every supported backup format

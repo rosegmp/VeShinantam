@@ -17,7 +17,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. “Partial�
 | Hebrew references/numerals | Complete | Partial | Shared formatter and reference snapshots |
 | Offline persistence | Room | IndexedDB foundation | IndexedDB authoritative store with migrations and outbox |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |
-| Cross-device sync | Snapshot/manual | Snapshot/manual | Incremental entity sync, retries, tombstones, and deterministic conflicts |
+| Cross-device sync | Incremental client (rollout-gated) | Incremental client (rollout-gated) | Distribute the updated APK, then enable both clients together |
 | Backup and restore | Complete | Partial | One canonical format and lossless Android ↔ web round trip |
 | Printable schedule | Complete | Missing | Equivalent browser print/PDF output |
 | Reminders | Complete | Missing | Best-effort notification; Web Push for closed-app delivery if enabled |

@@ -228,7 +228,7 @@ Progress includes:
 
 ## 14. Privacy and security
 
-- No account, analytics, ads, telemetry, or progress network upload.
+- Accounts are optional. With account sync disabled or signed out, no learning progress leaves the device; the product has no analytics, ads, or telemetry.
 - Backups and PDFs leave the app only through the Storage Access Framework at explicit user request.
 - Imported files are treated as untrusted: size limits, schema validation, enum/range validation, referential-integrity validation, and transactional replacement are required.
 - Optional preset updates use signed/versioned catalogs over HTTPS and never include user progress.

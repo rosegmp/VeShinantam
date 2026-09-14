@@ -16,6 +16,8 @@ import app.veshinantam.shared.CanonicalScheduleState
 import app.veshinantam.shared.CanonicalTask
 import app.veshinantam.shared.CanonicalTaskType
 import java.time.Instant
+import java.time.DayOfWeek
+import java.time.LocalDate
 
 /** Lossless boundary between Android Room records and the shared sync/backup contract. */
 object CanonicalAndroidMapper {
@@ -90,4 +92,52 @@ object CanonicalAndroidMapper {
             syncCursor = syncCursor,
         )
     }
+
+    fun schedule(value: CanonicalSchedule) = ScheduleEntity(
+        id = value.id,
+        nameEnglish = value.nameEnglish,
+        nameHebrew = value.nameHebrew,
+        kind = app.veshinantam.domain.model.ScheduleKind.valueOf(value.kind.name),
+        sourceType = value.sourceType,
+        materialType = app.veshinantam.domain.model.MaterialType.valueOf(value.materialType.name),
+        presetId = value.presetId,
+        startDate = LocalDate.parse(value.startDate),
+        targetDate = value.targetDate?.let(LocalDate::parse),
+        dailyQuantity = value.dailyQuantity,
+        selectedWeekdays = value.selectedWeekdays.sorted().joinToString(",") { day ->
+            if (day == 0) DayOfWeek.SUNDAY.name else DayOfWeek.of(day).name
+        },
+        chazarahDayOffsets = value.chazarahDayOffsets.joinToString(","),
+        repeatsAnnually = value.repeatsAnnually,
+        officialOraysaChazarah = value.officialOraysaChazarah,
+        missedWorkBehavior = app.veshinantam.domain.model.MissedWorkBehavior.valueOf(value.missedWorkBehavior.name),
+        state = app.veshinantam.domain.model.ScheduleState.valueOf(value.state.name),
+        generationRevision = value.generationRevision,
+        createdAt = Instant.parse(value.createdAt),
+    )
+
+    fun task(value: CanonicalTask) = TaskEntity(
+        id = value.id,
+        stableKey = value.stableKey,
+        scheduleId = value.scheduleId,
+        type = app.veshinantam.domain.model.TaskType.valueOf(value.type.name),
+        labelEnglish = value.labelEnglish,
+        labelHebrew = value.labelHebrew,
+        materialType = app.veshinantam.domain.model.MaterialType.valueOf(value.materialType.name),
+        quantity = value.quantity,
+        plannedDate = LocalDate.parse(value.plannedDate),
+        originalLearningDate = LocalDate.parse(value.originalLearningDate),
+        reviewIdentity = value.reviewIdentity,
+        generationRevision = value.generationRevision,
+        completedAt = value.completedAt?.let(Instant::parse),
+        completionLocalDate = value.completionLocalDate?.let(LocalDate::parse),
+        completionZoneId = value.completionZoneId,
+    )
+
+    fun exclusion(value: CanonicalExclusion) = ScheduleExclusionEntity(
+        scheduleId = value.scheduleId,
+        date = LocalDate.parse(value.date),
+    )
+
+    fun goal(value: CanonicalGoal) = ProgressGoalEntity(value.kind, value.target)
 }

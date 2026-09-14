@@ -17,7 +17,10 @@ import kotlinx.coroutines.launch
 class VeShinantamApplication : Application() {
     val database: VeShinantamDatabase by lazy { VeShinantamDatabase.create(this) }
     val scheduleRepository: ScheduleRepository by lazy {
-        ScheduleRepository(database.scheduleDao(), onDataChanged = { WidgetUpdater.enqueueImmediate(this) })
+        ScheduleRepository(database.scheduleDao(), onDataChanged = {
+            WidgetUpdater.enqueueImmediate(this)
+            supabaseSyncService.scheduleAutomaticSync()
+        })
     }
     val supabaseSyncService: SupabaseSyncService by lazy {
         SupabaseSyncService(this, database.scheduleDao())
@@ -34,6 +37,7 @@ class VeShinantamApplication : Application() {
             database.scheduleDao().deleteSchedule(LEGACY_DEBUG_SCHEDULE_ID)
             scheduleRepository.rollOverMissedLearning(notifyDataChanged = false)
             WidgetUpdater.enqueueImmediate(this@VeShinantamApplication)
+            supabaseSyncService.scheduleAutomaticSync()
         }
     }
 

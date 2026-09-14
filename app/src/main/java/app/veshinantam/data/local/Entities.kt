@@ -92,6 +92,32 @@ data class ProgressGoalEntity(
     val target: Double,
 )
 
+@Entity(tableName = "sync_outbox", primaryKeys = ["entityType", "entityId"])
+data class SyncOutboxEntity(
+    val entityType: String,
+    val entityId: String,
+    val mutationId: String,
+    val baseRevision: Long,
+    val payload: String?,
+    val deleted: Boolean,
+    val createdAt: String,
+)
+
+@Entity(tableName = "sync_shadow", primaryKeys = ["entityType", "entityId"])
+data class SyncShadowEntity(
+    val entityType: String,
+    val entityId: String,
+    val payload: String?,
+    val revision: Long,
+    val deleted: Boolean,
+)
+
+@Entity(tableName = "sync_metadata")
+data class SyncMetadataEntity(
+    @PrimaryKey val key: String,
+    val longValue: Long,
+)
+
 data class TodayTaskRow(
     val taskId: String,
     val scheduleId: String,

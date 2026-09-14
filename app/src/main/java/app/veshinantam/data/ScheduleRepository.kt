@@ -101,7 +101,10 @@ class ScheduleRepository(
     fun observeProgressTasks(): Flow<List<ProgressTaskRow>> = dao.observeProgressTasks()
     fun observeProgressGoals(): Flow<List<ProgressGoalEntity>> = dao.observeProgressGoals()
 
-    suspend fun replaceProgressGoals(goals: List<ProgressGoalEntity>) = dao.replaceProgressGoals(goals)
+    suspend fun replaceProgressGoals(goals: List<ProgressGoalEntity>) {
+        dao.replaceProgressGoals(goals)
+        onDataChanged()
+    }
 
     suspend fun setCompleted(taskId: String, completed: Boolean) {
         val zone = zoneProvider()
