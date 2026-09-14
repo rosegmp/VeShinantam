@@ -143,7 +143,7 @@ private external fun resolveCloudSync(choice: String, state: String)
 private external fun cloudSignOut()
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("() => new Date().toISOString().slice(0, 10)")
+@JsFun("() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }")
 private external fun currentIsoDate(): String
 
 @OptIn(ExperimentalWasmJsInterop::class)

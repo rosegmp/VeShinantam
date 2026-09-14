@@ -206,6 +206,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
+                                onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -245,6 +246,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
+                                onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -461,6 +463,7 @@ private fun AppContent(
     todayIso: String,
     hebrew: Boolean,
     onLanguage: () -> Unit,
+    onSefarimLanguage: (String) -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
@@ -489,6 +492,22 @@ private fun AppContent(
                     modifier = Modifier.semantics { contentDescription = if (hebrew) "גיבוי ושחזור" else "Backup and restore" },
                 ) { Icon(Icons.Default.MoreVert, null, tint = DeepBlue) }
                 DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (hebrew) "שפת מראי המקומות" else "Reference language", fontWeight = FontWeight.Bold) },
+                        enabled = false,
+                        onClick = {},
+                    )
+                    listOf(
+                        "ENGLISH" to (if (hebrew) "אנגלית" else "English"),
+                        "HEBREW" to (if (hebrew) "עברית" else "Hebrew"),
+                        "BOTH" to (if (hebrew) "שתיהן" else "Both"),
+                    ).forEach { (value, label) ->
+                        DropdownMenuItem(
+                            text = { Text((if (state.sefarimLanguage == value) "✓  " else "    ") + label) },
+                            onClick = { onSefarimLanguage(value); showDataMenu = false },
+                        )
+                    }
+                    HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text(if (hebrew) "חשבון וסנכרון" else "Account and sync") },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
@@ -654,6 +673,7 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
                             title = if (hebrew) "לימוד חדש" else "New learning",
                             tasks = scheduleTasks.filter { it.type == LearningTaskType.LEARNING },
                             hebrew = hebrew,
+                            sefarimLanguage = state.sefarimLanguage,
                             onToggle = onToggle,
                         )
                     }
@@ -662,6 +682,7 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
                             title = if (hebrew) "חזרה" else "Chazarah",
                             tasks = scheduleTasks.filter { it.type == LearningTaskType.CHAZARAH },
                             hebrew = hebrew,
+                            sefarimLanguage = state.sefarimLanguage,
                             onToggle = onToggle,
                         )
                     }
@@ -678,7 +699,13 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
 }
 
 @Composable
-private fun TaskGroup(title: String, tasks: List<LearningTask>, hebrew: Boolean, onToggle: (String) -> Unit) {
+private fun TaskGroup(
+    title: String,
+    tasks: List<LearningTask>,
+    hebrew: Boolean,
+    sefarimLanguage: String,
+    onToggle: (String) -> Unit,
+) {
     if (tasks.isEmpty()) return
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
         Column {
@@ -692,8 +719,16 @@ private fun TaskGroup(title: String, tasks: List<LearningTask>, hebrew: Boolean,
                     Checkbox(checked = task.completed, onCheckedChange = { onToggle(task.id) })
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(if (hebrew) task.referenceHebrew else task.referenceEnglish, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else Color(0xFF22262D))
-                        Text(if (hebrew) task.referenceEnglish else task.referenceHebrew, color = MutedInk, fontSize = 14.sp)
+                        val primary = when (sefarimLanguage) {
+                            "ENGLISH" -> task.referenceEnglish
+                            "HEBREW" -> task.referenceHebrew
+                            else -> if (hebrew) task.referenceHebrew else task.referenceEnglish
+                        }
+                        val secondary = if (sefarimLanguage == "BOTH") {
+                            if (hebrew) task.referenceEnglish else task.referenceHebrew
+                        } else null
+                        Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else Color(0xFF22262D))
+                        secondary?.takeIf { it.isNotBlank() }?.let { Text(it, color = MutedInk, fontSize = 14.sp) }
                     }
                     if (task.completed) Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(21.dp))
                 }
@@ -846,6 +881,7 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                         title = if (hebrew) "משימות היום" else "Day’s tasks",
                         tasks = scheduleTasks,
                         hebrew = hebrew,
+                        sefarimLanguage = state.sefarimLanguage,
                         onToggle = onToggle,
                     )
                 }

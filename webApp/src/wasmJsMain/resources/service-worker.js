@@ -1,5 +1,5 @@
-const CACHE = 'veshinantam-web-v10';
-const SHELL = ['./', './index.html', './veshinantam.js', './supabase-config.js', './manifest.webmanifest', './icon.svg'];
+const CACHE = 'veshinantam-web-v11';
+const SHELL = ['./', './index.html', './veshinantam.js', './entity-sync.js', './supabase-config.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

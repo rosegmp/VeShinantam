@@ -16,48 +16,7 @@
 </head>
 <body>
   <script src="supabase-config.js"></script>
-  <script>
-    (() => {
-      const STATE_KEY = 'veshinantam.web.v1';
-      const DATABASE_NAME = 'veshinantam';
-      const STORE_NAME = 'app_state';
-      let database = null;
-
-      const writeIndexedState = (value) => {
-        if (!database) return;
-        try {
-          database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(value, 'state');
-        } catch (_) { /* The local mirror remains available for this session. */ }
-      };
-
-      window.veshinantamPersistState = (value) => {
-        localStorage.setItem(STATE_KEY, value);
-        writeIndexedState(value);
-      };
-
-      window.veshinantamStorageReady = new Promise((resolve) => {
-        if (!('indexedDB' in window)) { resolve(); return; }
-        const request = indexedDB.open(DATABASE_NAME, 1);
-        request.onupgradeneeded = () => {
-          if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
-        };
-        request.onerror = () => resolve();
-        request.onsuccess = () => {
-          database = request.result;
-          const transaction = database.transaction(STORE_NAME, 'readonly');
-          const read = transaction.objectStore(STORE_NAME).get('state');
-          read.onerror = () => resolve();
-          read.onsuccess = () => {
-            const indexedState = typeof read.result === 'string' ? read.result : null;
-            const legacyState = localStorage.getItem(STATE_KEY);
-            if (indexedState) localStorage.setItem(STATE_KEY, indexedState);
-            else if (legacyState) writeIndexedState(legacyState);
-            resolve();
-          };
-        };
-      });
-    })();
-  </script>
+  <script src="entity-sync.js"></script>
   <script>
     (() => {
       const STATE_KEY = 'veshinantam.web.v1';
@@ -168,7 +127,7 @@
         } catch (_) { setStatus('Error sending the sign-in link. Please try again.'); }
         reload();
       };
-      window.veshinantamSync = async (state) => {
+      const legacySnapshotSync = async (state) => {
         if (!configured) return;
         setStatus('Synchronizing…');
         try {
@@ -194,6 +153,71 @@
           }
         } catch (_) { setStatus('Error synchronizing. Your device data is unchanged.'); }
         reload();
+      };
+      const entitySyncAvailable = async () => {
+        const session = await authenticatedSession();
+        const response = await fetch(`${config.url}/rest/v1/learning_entities?select=revision&limit=1`, {
+          headers: {
+            'apikey': config.publishableKey,
+            'Authorization': `Bearer ${session.accessToken}`
+          }
+        });
+        if (response.ok) return true;
+        const detail = await response.text();
+        if (response.status === 404 && (detail.includes('learning_entities') || detail.includes('PGRST205'))) return false;
+        throw new Error(detail || `Sync availability check failed (${response.status}).`);
+      };
+      const incrementalEntitySync = async (state) => {
+        setStatus('Synchronizing…');
+        const parsedState = JSON.parse(state);
+        await window.veshinantamEnsureEntitySeed(parsedState);
+        const mutations = await window.veshinantamReadOutbox();
+        let remoteWonConflict = false;
+        const conflictRecords = [];
+        for (const mutation of mutations) {
+          const rows = await api('/rest/v1/rpc/apply_learning_mutation', {
+            method: 'POST',
+            body: JSON.stringify({
+              p_mutation_id: mutation.mutationId,
+              p_entity_type: mutation.entityType,
+              p_entity_id: mutation.entityId,
+              p_base_revision: Number(mutation.baseRevision || 0),
+              p_payload: mutation.deleted ? null : mutation.payload,
+              p_deleted: Boolean(mutation.deleted)
+            })
+          });
+          const result = rows && rows[0];
+          if (!result) throw new Error('The sync server returned an incomplete mutation result.');
+          remoteWonConflict = remoteWonConflict || Boolean(result.conflict);
+          if (result.conflict) conflictRecords.push({
+            entity_type: mutation.entityType,
+            entity_id: mutation.entityId,
+            payload: result.remote_payload,
+            deleted: result.remote_deleted,
+            revision: result.revision,
+            updated_at: new Date().toISOString()
+          });
+          await window.veshinantamRemoveOutbox(mutation.entityType, mutation.entityId);
+        }
+        if (conflictRecords.length) await window.veshinantamApplyEntityRecords(conflictRecords);
+        const cursor = await window.veshinantamGetSyncCursor();
+        const records = await api(`/rest/v1/learning_entities?select=entity_type,entity_id,payload,deleted,revision,updated_at&revision=gt.${cursor}&order=revision.asc`);
+        if (records.length) {
+          await window.veshinantamApplyEntityRecords(records);
+          await window.veshinantamSetSyncCursor(Math.max(...records.map(record => Number(record.revision))));
+        }
+        setStatus(remoteWonConflict ? 'Synchronized. A newer cloud change was kept for one item.' : 'Synced successfully.');
+        reload();
+      };
+      window.veshinantamSync = async state => {
+        if (!configured) return;
+        try {
+          if (await entitySyncAvailable()) await incrementalEntitySync(state);
+          else await legacySnapshotSync(state);
+        } catch (_) {
+          setStatus('Error synchronizing. Your device data is unchanged.');
+          reload();
+        }
       };
       window.veshinantamResolveSync = async (choice, state) => {
         try {
@@ -278,6 +302,11 @@
           const task = (state.tasks || []).find(candidate => candidate.id === input.taskId);
           if (!task) throw new Error('Task not found');
           task.completed = input.completed;
+          const now = new Date();
+          task.completedAt = input.completed ? now.toISOString() : null;
+          task.completionLocalDate = input.completed ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` : null;
+          task.completionZoneId = input.completed ? (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC') : null;
+          task.updatedAt = now.toISOString();
           window.veshinantamPersistState(JSON.stringify(state));
           setTimeout(() => window.location.reload(), 150);
           return { taskId: task.id, completed: task.completed };

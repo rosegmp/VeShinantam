@@ -9,9 +9,11 @@ import app.veshinantam.shared.CanonicalDataValidator
 import app.veshinantam.shared.CanonicalMaterialType
 import app.veshinantam.shared.CanonicalMissedWorkBehavior
 import app.veshinantam.shared.CanonicalPreferences
+import app.veshinantam.shared.CanonicalPrimaryCalendar
 import app.veshinantam.shared.CanonicalSchedule
 import app.veshinantam.shared.CanonicalScheduleKind
 import app.veshinantam.shared.CanonicalScheduleState
+import app.veshinantam.shared.CanonicalSefarimLanguage
 import app.veshinantam.shared.CanonicalTask
 import app.veshinantam.shared.CanonicalTaskType
 import kotlinx.serialization.Serializable
@@ -73,6 +75,10 @@ data class WebAppState(
     val schedules: List<StoredSchedule> = emptyList(),
     val tasks: List<StoredTask> = emptyList(),
     val language: String = "en",
+    val sefarimLanguage: String = "BOTH",
+    val primaryCalendar: String = "GREGORIAN",
+    val defaultChazarahOffsets: List<Int> = listOf(1, 7, 30, 90),
+    val preferencesRevision: Long = 0,
 ) {
     companion object {
         fun sample(today: String) = WebAppState(
@@ -105,6 +111,10 @@ sealed interface BackupImportResult {
 
 fun WebBackup.validStateOrNull(): WebAppState? {
     if (version !in 1..2 || state.language !in setOf("en", "he")) return null
+    if (state.sefarimLanguage !in CanonicalSefarimLanguage.entries.map { it.name } ||
+        state.primaryCalendar !in CanonicalPrimaryCalendar.entries.map { it.name } ||
+        state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it <= 0 }
+    ) return null
     if (version >= 2 && (canonical == null || CanonicalDataValidator.validate(canonical).isNotEmpty())) return null
     if (state.schedules.size > 500 || state.tasks.size > 50_000) return null
     val scheduleIds = state.schedules.map { it.id }
@@ -187,7 +197,16 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
                 revision = task.revision,
             )
         },
-        preferences = CanonicalPreferences(appLanguage = language, updatedAt = now),
+        preferences = CanonicalPreferences(
+            appLanguage = language,
+            sefarimLanguage = runCatching { CanonicalSefarimLanguage.valueOf(sefarimLanguage) }
+                .getOrDefault(CanonicalSefarimLanguage.BOTH),
+            primaryCalendar = runCatching { CanonicalPrimaryCalendar.valueOf(primaryCalendar) }
+                .getOrDefault(CanonicalPrimaryCalendar.GREGORIAN),
+            defaultChazarahOffsets = defaultChazarahOffsets,
+            updatedAt = now,
+            revision = preferencesRevision,
+        ),
     )
 }
 
