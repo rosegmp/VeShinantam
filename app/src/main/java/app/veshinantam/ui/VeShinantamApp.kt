@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -124,6 +126,7 @@ import app.veshinantam.data.preset.PresetUpdateSettings
 import app.veshinantam.data.local.ScheduleEntity
 import app.veshinantam.data.local.ScheduleExclusionEntity
 import app.veshinantam.data.local.TodayTaskRow
+import app.veshinantam.data.sync.AccountSyncState
 import app.veshinantam.domain.model.ChazarahPattern
 import app.veshinantam.domain.model.ChazarahDefaults
 import app.veshinantam.domain.model.MissedWorkBehavior
@@ -205,7 +208,7 @@ private val LocalDefaultChazarahOffsets = staticCompositionLocalOf { ChazarahDef
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VeShinantamApp(openTodayRequest: Int = 0) {
+fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
     val context = LocalContext.current
     var destination by remember { mutableStateOf(Destination.TODAY) }
     val reminderSettings = remember(context) { ReminderSettings(context.applicationContext) }
@@ -217,6 +220,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
     val printableScheduleService = remember(application) { PrintableScheduleService(application, application.database.scheduleDao()) }
     val presetUpdateSettings = remember(application) { PresetUpdateSettings(application) }
     val presetUpdateClient = remember(application) { PresetCatalogUpdateClient(application) }
+    val accountService = remember(application) { application.supabaseSyncService }
     val coroutineScope = rememberCoroutineScope()
     var reminderPreference by remember { mutableStateOf(reminderSettings.read()) }
     var appLanguage by remember { mutableStateOf(languageSettings.read()) }
@@ -232,6 +236,9 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
     var pendingPrintDayCount by remember { mutableStateOf(30) }
     var presetUpdateState by remember { mutableStateOf(presetUpdateSettings.read()) }
     var presetUpdateInProgress by remember { mutableStateOf(false) }
+    var accountState by remember { mutableStateOf(accountService.state()) }
+    var showAccount by remember { mutableStateOf(false) }
+    var accountBusy by remember { mutableStateOf(false) }
     val localizedContext = remember(context, appLanguage) { AppLocale.wrap(context, appLanguage) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -292,6 +299,12 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
     LaunchedEffect(openTodayRequest) {
         if (openTodayRequest > 0) destination = Destination.TODAY
     }
+    LaunchedEffect(openAccountRequest) {
+        if (openAccountRequest > 0) {
+            accountState = accountService.state()
+            showAccount = true
+        }
+    }
 
     CompositionLocalProvider(
         LocalContext provides localizedContext,
@@ -323,6 +336,49 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
                 },
             )
         } else {
+            if (showAccount) {
+                AccountDialog(
+                    state = accountState,
+                    busy = accountBusy,
+                    onDismiss = { if (!accountBusy) showAccount = false },
+                    onSendLink = { email ->
+                        accountBusy = true
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) { accountService.sendMagicLink(email) }
+                            accountState = accountService.state()
+                            accountBusy = false
+                        }
+                    },
+                    onSync = {
+                        accountBusy = true
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) { accountService.sync() }
+                            accountState = accountService.state()
+                            accountBusy = false
+                        }
+                    },
+                    onUseCloud = {
+                        accountBusy = true
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) { accountService.useCloudCopy() }
+                            accountState = accountService.state()
+                            accountBusy = false
+                        }
+                    },
+                    onUseDevice = {
+                        accountBusy = true
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) { accountService.replaceCloudCopy() }
+                            accountState = accountService.state()
+                            accountBusy = false
+                        }
+                    },
+                    onSignOut = {
+                        accountService.signOut()
+                        accountState = accountService.state()
+                    },
+                )
+            }
             if (showReminderSettings) {
                 SettingsDialog(
             initial = reminderPreference,
@@ -393,6 +449,9 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
             TopAppBar(
                 title = { Text(if (destination == Destination.TODAY) stringResource(R.string.app_name) else stringResource(destination.label)) },
                 actions = {
+                    IconButton(onClick = { accountState = accountService.state(); showAccount = true }) {
+                        Icon(Icons.Default.AccountCircle, contentDescription = stringResource(R.string.account_and_sync))
+                    }
                     IconButton(onClick = { showReminderSettings = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
                     }
@@ -427,6 +486,78 @@ fun VeShinantamApp(openTodayRequest: Int = 0) {
             }
         }
     }
+}
+
+@Composable
+private fun AccountDialog(
+    state: AccountSyncState,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onSendLink: (String) -> Unit,
+    onSync: () -> Unit,
+    onUseCloud: () -> Unit,
+    onUseDevice: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    var email by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(if (state.email == null) Icons.Default.AccountCircle else Icons.Default.CloudSync, null) },
+        title = { Text(stringResource(R.string.account_and_sync)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when {
+                    !state.configured -> Text(stringResource(R.string.account_not_configured))
+                    state.email == null -> {
+                        Text(stringResource(R.string.account_sign_in_explanation))
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it.trim() },
+                            label = { Text(stringResource(R.string.account_email)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            singleLine = true,
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    state.conflict -> {
+                        Text(stringResource(R.string.sync_conflict_explanation))
+                        OutlinedButton(onClick = onUseCloud, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.use_cloud_copy))
+                        }
+                        OutlinedButton(onClick = onUseDevice, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.use_device_copy))
+                        }
+                    }
+                    else -> {
+                        Text(state.email, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.sync_offline_explanation))
+                        Button(onClick = onSync, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            if (busy) CircularProgressIndicator(Modifier.width(20.dp), strokeWidth = 2.dp)
+                            else Icon(Icons.Default.CloudSync, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.sync_now))
+                        }
+                        TextButton(onClick = onSignOut, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.sign_out))
+                        }
+                    }
+                }
+                state.status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+            }
+        },
+        confirmButton = {
+            if (state.configured && state.email == null) {
+                Button(
+                    onClick = { onSendLink(email) },
+                    enabled = !busy && '@' in email && '.' in email.substringAfterLast('@', ""),
+                ) { Text(stringResource(R.string.send_sign_in_link)) }
+            } else TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) }
+        },
+        dismissButton = {
+            if (state.configured && state.email == null) TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

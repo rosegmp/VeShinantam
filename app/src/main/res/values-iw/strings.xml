@@ -235,6 +235,17 @@
     <string name="notification_channel_description">סיכום יומי אחד של הלימוד והחזרות להיום</string>
     <string name="reminder_settings">הגדרות תזכורת</string>
     <string name="settings">הגדרות</string>
+    <string name="account_and_sync">חשבון וסנכרון</string>
+    <string name="account_not_configured">סנכרון החשבון אינו מוגדר בגרסה זו.</string>
+    <string name="account_sign_in_explanation">קבל קישור כניסה מאובטח בדוא״ל. נתוני הלימוד יישארו זמינים גם ללא חיבור.</string>
+    <string name="account_email">דוא״ל</string>
+    <string name="send_sign_in_link">שלח קישור כניסה</string>
+    <string name="sync_now">סנכרן עכשיו</string>
+    <string name="sign_out">יציאה</string>
+    <string name="sync_offline_explanation">השינויים נשמרים קודם במכשיר ומסתנכרנים לפי דרישה.</string>
+    <string name="sync_conflict_explanation">נמצאו שינויים גם בענן וגם במכשיר. בחר איזה עותק לשמור. נתוני הענן יתמזגו בבטחה בלי למחוק פרטים הקיימים רק באנדרואיד.</string>
+    <string name="use_cloud_copy">מזג את העותק מהענן</string>
+    <string name="use_device_copy">השתמש בעותק מהמכשיר</string>
     <string name="default_chazarah">ברירות מחדל לתוכניות</string>
     <string name="default_chazarah_offsets">מרווחי חזרה כברירת מחדל</string>
     <string name="default_chazarah_help">משמשים כערכים התחלתיים בתוכניות מוכנות ואישיות חדשות.</string>

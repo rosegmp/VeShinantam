@@ -2,7 +2,7 @@
 
 VeShinantam is a standalone, private, offline-first Android app for planning Torah learning and chazarah. This repository is an early native MVP foundation built with Kotlin, Jetpack Compose, Material 3, Room, and WorkManager.
 
-The repository also contains a Kotlin/Compose Multiplatform Web companion. Its optional Supabase account uses email magic links, preserves device-local offline data, and requires an explicit choice before resolving divergent cloud and device copies.
+The repository also contains a Kotlin/Compose Multiplatform Web companion. Android and web can use the same optional Supabase account with email magic links, preserve device-local offline data, and require an explicit choice before resolving divergent cloud and device copies.
 
 ## What is implemented now
 
@@ -27,6 +27,7 @@ The repository also contains a Kotlin/Compose Multiplatform Web companion. Its o
 - Settings-backed daily aggregate reminders at a user-selected local time, with correct learning/chazarah counts, a Today-screen notification link, and automatic rescheduling after reboot, clock/time-zone changes, and app updates
 - A localized home-screen widget listing today’s tasks and separately counting overdue learning and chazarah, refreshed after changes and at day rollover
 - Versioned JSON backup and transactional restore through Android’s system file picker, covering schedules, tasks, completion history, exclusions, goals, and user preferences
+- Optional Supabase account and revision-checked manual sync shared with the web companion, including safe merging for web-created plans and explicit conflict resolution
 - Printable A4 schedule PDFs for the next 7, 14, 30, 60, or 90 days, localized for English/Hebrew and the selected sefarim and primary-calendar display, with one checkbox per task
 - Optional HTTPS preset-position updates with a pinned ECDSA signature, monotonic rollback protection, strict bundled-reference validation, atomic private caching, daily WorkManager checks, and automatic bundled fallback
 - Exported Room schemas with on-device upgrade tests for every database version, plus committed compatibility fixtures for every supported backup format

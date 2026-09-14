@@ -7,6 +7,7 @@ import app.veshinantam.data.preset.PresetCatalogUpdateScheduler
 import app.veshinantam.data.preset.PresetCatalogUpdateStore
 import app.veshinantam.notifications.ReminderNotifications
 import app.veshinantam.notifications.ReminderScheduler
+import app.veshinantam.data.sync.SupabaseSyncService
 import app.veshinantam.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,9 @@ class VeShinantamApplication : Application() {
     val database: VeShinantamDatabase by lazy { VeShinantamDatabase.create(this) }
     val scheduleRepository: ScheduleRepository by lazy {
         ScheduleRepository(database.scheduleDao(), onDataChanged = { WidgetUpdater.enqueueImmediate(this) })
+    }
+    val supabaseSyncService: SupabaseSyncService by lazy {
+        SupabaseSyncService(this, database.scheduleDao())
     }
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

@@ -15,6 +15,7 @@ import app.veshinantam.localization.AppLocale
 
 class MainActivity : ComponentActivity() {
     private var openTodayRequest by mutableIntStateOf(0)
+    private var openAccountRequest by mutableIntStateOf(0)
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
@@ -27,7 +28,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             VeShinantamTheme {
-                VeShinantamApp(openTodayRequest)
+                VeShinantamApp(openTodayRequest, openAccountRequest)
             }
         }
     }
@@ -40,6 +41,10 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_TODAY, false) == true) openTodayRequest++
+        if (intent?.data?.scheme == "app.veshinantam" && intent.data?.host == "auth") {
+            (application as VeShinantamApplication).supabaseSyncService.handleAuthRedirect(intent.data!!)
+            openAccountRequest++
+        }
     }
 
     companion object {

@@ -40,6 +40,8 @@ android {
         ).get()
         buildConfigField("String", "PRESET_CATALOG_UPDATE_URL", "\"${presetCatalogUpdateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "PRESET_CATALOG_PUBLIC_KEY", "\"${presetCatalogPublicKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"https://tyzembsyzzjrdhmmmfln.supabase.co\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_VpyDD3COjLuAKkNmaPaBgQ_sKGiIGXe\"")
 
         testInstrumentationRunner = "app.veshinantam.data.local.MigrationTestInstrumentation"
         vectorDrawables.useSupportLibrary = true
