@@ -155,6 +155,7 @@
         reload();
       };
       const entitySyncAvailable = async () => {
+        if (config.entitySyncEnabled !== true) return false;
         const session = await authenticatedSession();
         const response = await fetch(`${config.url}/rest/v1/learning_entities?select=revision&limit=1`, {
           headers: {
