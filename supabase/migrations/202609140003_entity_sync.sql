@@ -1,5 +1,7 @@
 create sequence if not exists public.learning_entity_revision_seq;
 
+revoke all on sequence public.learning_entity_revision_seq from anon, authenticated;
+
 create table if not exists public.learning_entities (
   user_id uuid not null references auth.users(id) on delete cascade,
   entity_type text not null check (entity_type in ('SCHEDULE', 'MATERIAL_UNIT', 'TASK', 'EXCLUSION', 'GOAL', 'PREFERENCES')),
@@ -27,6 +29,9 @@ create table if not exists public.learning_mutations (
 
 alter table public.learning_entities enable row level security;
 alter table public.learning_mutations enable row level security;
+
+revoke all on public.learning_entities from anon, authenticated;
+revoke all on public.learning_mutations from anon, authenticated;
 
 create policy "Users can read their learning entities"
 on public.learning_entities for select
@@ -81,6 +86,15 @@ begin
     raise exception 'Invalid mutation payload';
   end if;
 
+  -- A row cannot be locked before its first insert. This transaction-scoped lock
+  -- serializes every mutation for one logical entity, including concurrent creates.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      v_user_id::text || ':' || p_entity_type || ':' || p_entity_id,
+      0
+    )
+  );
+
   select m.applied_revision into v_receipt_revision
   from public.learning_mutations m
   where m.user_id = v_user_id and m.mutation_id = p_mutation_id;
@@ -123,7 +137,8 @@ begin
 end;
 $$;
 
-revoke all on function public.apply_learning_mutation(uuid, text, text, bigint, jsonb, boolean) from public;
+revoke all on function public.apply_learning_mutation(uuid, text, text, bigint, jsonb, boolean)
+  from public, anon, authenticated;
 grant execute on function public.apply_learning_mutation(uuid, text, text, bigint, jsonb, boolean) to authenticated;
 
 comment on table public.learning_entities is
