@@ -8,12 +8,14 @@ import org.junit.Test
 
 class SupabaseSyncRequestTest {
     @Test
-    fun magicLinkUsesTheRawAuthApiRedirectField() {
-        val body = JSONObject(magicLinkRequestBody(" user@example.com ", "app.veshinantam://auth"))
+    fun magicLinkUsesTheRawAuthApiRedirectQueryParameter() {
+        val body = JSONObject(magicLinkRequestBody(" user@example.com "))
+        val path = magicLinkRequestPath("app.veshinantam://auth")
 
         assertEquals("user@example.com", body.getString("email"))
         assertTrue(body.getBoolean("create_user"))
-        assertEquals("app.veshinantam://auth", body.getString("redirect_to"))
+        assertEquals("/auth/v1/otp?redirect_to=app.veshinantam%3A%2F%2Fauth", path)
+        assertFalse(body.has("redirect_to"))
         assertFalse(body.has("email_redirect_to"))
     }
 }

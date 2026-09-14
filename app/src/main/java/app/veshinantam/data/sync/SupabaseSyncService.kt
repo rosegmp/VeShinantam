@@ -16,6 +16,7 @@ import app.veshinantam.localization.LanguageSettings
 import app.veshinantam.widget.WidgetUpdater
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -63,8 +64,8 @@ class SupabaseSyncService(
     }
 
     suspend fun sendMagicLink(email: String): Result<Unit> = runCatching {
-        val body = magicLinkRequestBody(email, "app.veshinantam://auth")
-        request("/auth/v1/otp", "POST", body, authenticated = false)
+        val redirectTo = "app.veshinantam://auth"
+        request(magicLinkRequestPath(redirectTo), "POST", magicLinkRequestBody(email), authenticated = false)
         preferences.edit().putString(KEY_STATUS, "Check your email for the secure sign-in link.").apply()
     }.onFailure {
         preferences.edit().putString(KEY_STATUS, "Error sending the sign-in link. Please try again.").apply()
@@ -355,8 +356,10 @@ class SupabaseSyncService(
     }
 }
 
-internal fun magicLinkRequestBody(email: String, redirectTo: String): String = JSONObject()
+internal fun magicLinkRequestBody(email: String): String = JSONObject()
     .put("email", email.trim())
     .put("create_user", true)
-    .put("redirect_to", redirectTo)
     .toString()
+
+internal fun magicLinkRequestPath(redirectTo: String): String =
+    "/auth/v1/otp?redirect_to=${URLEncoder.encode(redirectTo, Charsets.UTF_8.name())}"

@@ -32,8 +32,8 @@ android {
         applicationId = "app.veshinantam"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.1.4"
         val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl").orElse("").get()
         val entitySyncEnabled = providers.gradleProperty("entitySyncEnabled").orElse("false").get().toBooleanStrict()
         val presetCatalogPublicKey = providers.gradleProperty("presetCatalogPublicKey").orElse(
