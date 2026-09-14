@@ -15,6 +15,168 @@
   </style>
 </head>
 <body>
+  <script src="supabase-config.js"></script>
+  <script>
+    (() => {
+      const STATE_KEY = 'veshinantam.web.v1';
+      const SESSION_KEY = 'veshinantam.supabase.session.v1';
+      const REVISION_KEY = 'veshinantam.supabase.revision.v1';
+      const STATUS_KEY = 'veshinantam.supabase.status.v1';
+      const CONFLICT_KEY = 'veshinantam.supabase.conflict.v1';
+      const config = window.VESHINANTAM_SUPABASE || {};
+      const configured = Boolean(config.url && config.publishableKey);
+
+      const setStatus = (value) => localStorage.setItem(STATUS_KEY, value);
+      const reload = () => setTimeout(() => window.location.reload(), 80);
+      const normalize = (value) => JSON.stringify(typeof value === 'string' ? JSON.parse(value) : value);
+      const decodeJwt = (token) => {
+        try {
+          const body = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+          return JSON.parse(decodeURIComponent(Array.from(atob(body), c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')));
+        } catch (_) { return {}; }
+      };
+      const readSession = () => {
+        try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
+      };
+      const saveSession = (accessToken, refreshToken) => {
+        const claims = decodeJwt(accessToken);
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+          accessToken,
+          refreshToken,
+          email: claims.email || '',
+          expiresAt: Number(claims.exp || 0) * 1000
+        }));
+      };
+
+      if (configured && location.hash.includes('access_token=')) {
+        const values = new URLSearchParams(location.hash.slice(1));
+        const accessToken = values.get('access_token');
+        const refreshToken = values.get('refresh_token');
+        if (accessToken && refreshToken) {
+          saveSession(accessToken, refreshToken);
+          localStorage.removeItem(REVISION_KEY);
+          localStorage.removeItem(CONFLICT_KEY);
+          setStatus('Signed in. Choose Sync now to connect this device.');
+          history.replaceState(null, '', location.pathname + location.search);
+        }
+      }
+
+      const authenticatedSession = async () => {
+        const session = readSession();
+        if (!session) throw new Error('Please sign in again.');
+        if (session.expiresAt > Date.now() + 60000) return session;
+        const response = await fetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: session.refreshToken })
+        });
+        if (!response.ok) throw new Error('Your session expired. Please sign in again.');
+        const refreshed = await response.json();
+        saveSession(refreshed.access_token, refreshed.refresh_token);
+        return readSession();
+      };
+      const api = async (path, options = {}) => {
+        const session = await authenticatedSession();
+        const response = await fetch(`${config.url}${path}`, {
+          ...options,
+          headers: {
+            'apikey': config.publishableKey,
+            'Authorization': `Bearer ${session.accessToken}`,
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          }
+        });
+        if (!response.ok) {
+          const detail = await response.text();
+          throw new Error(detail || `Sync failed (${response.status}).`);
+        }
+        return response.status === 204 ? null : response.json();
+      };
+      const push = async (state, expectedRevision) => {
+        const value = await api('/rest/v1/rpc/sync_learning_snapshot', {
+          method: 'POST',
+          body: JSON.stringify({ expected_revision: Number(expectedRevision), new_payload: JSON.parse(state) })
+        });
+        const revision = Number(value);
+        localStorage.setItem(REVISION_KEY, String(revision));
+        localStorage.removeItem(CONFLICT_KEY);
+        setStatus('Synced successfully.');
+      };
+
+      window.veshinantamAccountState = () => {
+        const session = readSession();
+        return JSON.stringify({
+          configured,
+          email: session?.email || null,
+          status: localStorage.getItem(STATUS_KEY),
+          conflict: Boolean(localStorage.getItem(CONFLICT_KEY))
+        });
+      };
+      window.veshinantamSendMagicLink = async (email) => {
+        if (!configured) return;
+        setStatus('Sending sign-in link…');
+        try {
+          const response = await fetch(`${config.url}/auth/v1/otp`, {
+            method: 'POST',
+            headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, create_user: true, email_redirect_to: location.origin + location.pathname })
+          });
+          if (!response.ok) throw new Error(await response.text());
+          setStatus('Check your email for the secure sign-in link.');
+        } catch (_) { setStatus('Error sending the sign-in link. Please try again.'); }
+        reload();
+      };
+      window.veshinantamSync = async (state) => {
+        if (!configured) return;
+        setStatus('Synchronizing…');
+        try {
+          const rows = await api('/rest/v1/learning_snapshots?select=payload,revision&limit=1');
+          const remote = rows && rows[0];
+          if (!remote) {
+            await push(state, 0);
+          } else {
+            const localRevision = localStorage.getItem(REVISION_KEY);
+            if (localRevision === null || Number(localRevision) !== Number(remote.revision)) {
+              if (normalize(state) === normalize(remote.payload)) {
+                localStorage.setItem(REVISION_KEY, String(remote.revision));
+                setStatus('Already up to date.');
+              } else {
+                localStorage.setItem(CONFLICT_KEY, JSON.stringify({ payload: remote.payload, revision: remote.revision }));
+                setStatus('Choose which copy to keep.');
+              }
+            } else if (normalize(state) === normalize(remote.payload)) {
+              setStatus('Already up to date.');
+            } else {
+              await push(state, remote.revision);
+            }
+          }
+        } catch (_) { setStatus('Error synchronizing. Your device data is unchanged.'); }
+        reload();
+      };
+      window.veshinantamResolveSync = async (choice, state) => {
+        try {
+          const conflict = JSON.parse(localStorage.getItem(CONFLICT_KEY) || 'null');
+          if (!conflict) throw new Error('No pending conflict.');
+          if (choice === 'cloud') {
+            localStorage.setItem(STATE_KEY, JSON.stringify(conflict.payload));
+            localStorage.setItem(REVISION_KEY, String(conflict.revision));
+            localStorage.removeItem(CONFLICT_KEY);
+            setStatus('Cloud copy restored on this device.');
+          } else {
+            await push(state, conflict.revision);
+          }
+        } catch (_) { setStatus('Error resolving the sync choice. No data was replaced.'); }
+        reload();
+      };
+      window.veshinantamSignOut = () => {
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(REVISION_KEY);
+        localStorage.removeItem(CONFLICT_KEY);
+        setStatus('Signed out. Device data remains available offline.');
+        reload();
+      };
+    })();
+  </script>
   <script src="veshinantam.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

@@ -41,6 +41,22 @@ private class LocalBrowserStore(private val today: String) : BrowserStore {
     }
 }
 
+private class SupabaseCloudAccount : CloudAccount {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    override fun state(): CloudAccountState {
+        val raw = cloudAccountState()
+        return runCatching { json.decodeFromString<CloudAccountState>(raw) }
+            .getOrElse { CloudAccountState(configured = false, status = "Account status could not be read.") }
+    }
+
+    override fun requestMagicLink(email: String) = sendMagicLink(email)
+    override fun sync(state: WebAppState) = startCloudSync(json.encodeToString(state))
+    override fun useCloudCopy() = resolveCloudSync("cloud", "")
+    override fun replaceCloudCopy(state: WebAppState) = resolveCloudSync("device", json.encodeToString(state))
+    override fun signOut() = cloudSignOut()
+}
+
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(key) => window.localStorage.getItem(key)")
 private external fun readLocalStorage(key: String): String?
@@ -100,6 +116,26 @@ private external fun downloadTextFile(filename: String, text: String)
 private external fun chooseBackupFile(key: String, invalidMarker: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamAccountState()")
+private external fun cloudAccountState(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(email) => window.veshinantamSendMagicLink(email)")
+private external fun sendMagicLink(email: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(state) => window.veshinantamSync(state)")
+private external fun startCloudSync(state: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(choice, state) => window.veshinantamResolveSync(choice, state)")
+private external fun resolveCloudSync(choice: String, state: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamSignOut()")
+private external fun cloudSignOut()
+
+@OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => new Date().toISOString().slice(0, 10)")
 private external fun currentIsoDate(): String
 
@@ -107,6 +143,6 @@ private external fun currentIsoDate(): String
 fun main() {
     val today = currentIsoDate()
     ComposeViewport(document.body!!) {
-        WebApp(LocalBrowserStore(today), today)
+        WebApp(LocalBrowserStore(today), SupabaseCloudAccount(), today)
     }
 }

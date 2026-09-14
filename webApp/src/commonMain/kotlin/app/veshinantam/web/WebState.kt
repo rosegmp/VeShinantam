@@ -99,3 +99,20 @@ interface BrowserStore {
     fun requestBackupImport()
     fun consumeBackupImport(): BackupImportResult
 }
+
+@Serializable
+data class CloudAccountState(
+    val configured: Boolean,
+    val email: String? = null,
+    val status: String? = null,
+    val conflict: Boolean = false,
+)
+
+interface CloudAccount {
+    fun state(): CloudAccountState
+    fun requestMagicLink(email: String)
+    fun sync(state: WebAppState)
+    fun useCloudCopy()
+    fun replaceCloudCopy(state: WebAppState)
+    fun signOut()
+}

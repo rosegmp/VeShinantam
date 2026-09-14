@@ -34,12 +34,14 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Unarchive
@@ -151,7 +153,7 @@ private data class ScheduleDraft(
 )
 
 @Composable
-fun WebApp(store: BrowserStore, todayIso: String) {
+fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
     val initialImportResult = remember { store.consumeBackupImport() }
     var appState by remember { mutableStateOf(store.load()) }
     var destination by remember { mutableStateOf(Destination.TODAY) }
@@ -159,6 +161,8 @@ fun WebApp(store: BrowserStore, todayIso: String) {
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
+    var accountState by remember { mutableStateOf(cloudAccount.state()) }
+    var showAccount by remember { mutableStateOf(accountState.status != null || accountState.conflict) }
     val hebrew = appState.language == "he"
 
     fun update(transform: (WebAppState) -> WebAppState) {
@@ -173,7 +177,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                     val desktop = maxWidth >= 880.dp
                     if (desktop) {
                         Row(Modifier.fillMaxSize()) {
-                            DesktopNavigation(destination, hebrew, onDestination = { destination = it })
+                            DesktopNavigation(destination, hebrew, accountState.email != null, onDestination = { destination = it })
                             AppContent(
                                 modifier = Modifier.weight(1f),
                                 destination = destination,
@@ -201,6 +205,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
+                                onAccount = { accountState = cloudAccount.state(); showAccount = true },
                             )
                         }
                     } else {
@@ -245,6 +250,7 @@ fun WebApp(store: BrowserStore, todayIso: String) {
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
+                                onAccount = { accountState = cloudAccount.state(); showAccount = true },
                             )
                         }
                     }
@@ -355,10 +361,24 @@ fun WebApp(store: BrowserStore, todayIso: String) {
             confirmButton = { Button(onClick = { showInvalidBackup = false }) { Text(if (hebrew) "אישור" else "OK") } },
         )
     }
+
+
+    if (showAccount) {
+        AccountDialog(
+            state = accountState,
+            hebrew = hebrew,
+            onDismiss = { showAccount = false },
+            onSendLink = cloudAccount::requestMagicLink,
+            onSync = { cloudAccount.sync(appState) },
+            onUseCloud = cloudAccount::useCloudCopy,
+            onUseDevice = { cloudAccount.replaceCloudCopy(appState) },
+            onSignOut = cloudAccount::signOut,
+        )
+    }
 }
 
 @Composable
-private fun DesktopNavigation(selected: Destination, hebrew: Boolean, onDestination: (Destination) -> Unit) {
+private fun DesktopNavigation(selected: Destination, hebrew: Boolean, signedIn: Boolean, onDestination: (Destination) -> Unit) {
     Column(
         modifier = Modifier.width(248.dp).fillMaxHeight().background(DeepBlue).padding(20.dp),
     ) {
@@ -388,9 +408,13 @@ private fun DesktopNavigation(selected: Destination, hebrew: Boolean, onDestinat
         }
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.CloudOff, null, tint = Color.White.copy(alpha = .68f), modifier = Modifier.size(18.dp))
+            Icon(if (signedIn) Icons.Default.CloudSync else Icons.Default.CloudOff, null, tint = Color.White.copy(alpha = .68f), modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(if (hebrew) "נשמר במכשיר" else "Saved on this device", color = Color.White.copy(alpha = .72f), fontSize = 13.sp)
+            Text(
+                if (signedIn) { if (hebrew) "סנכרון מופעל" else "Account sync enabled" }
+                else { if (hebrew) "נשמר במכשיר" else "Saved on this device" },
+                color = Color.White.copy(alpha = .72f), fontSize = 13.sp,
+            )
         }
     }
 }
@@ -411,6 +435,7 @@ private fun AppContent(
     onRequestDelete: (String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onAccount: () -> Unit,
 ) {
     var showDataMenu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
@@ -430,6 +455,11 @@ private fun AppContent(
                     modifier = Modifier.semantics { contentDescription = if (hebrew) "גיבוי ושחזור" else "Backup and restore" },
                 ) { Icon(Icons.Default.MoreVert, null, tint = DeepBlue) }
                 DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (hebrew) "חשבון וסנכרון" else "Account and sync") },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        onClick = { showDataMenu = false; onAccount() },
+                    )
                     DropdownMenuItem(
                         text = { Text(if (hebrew) "ייצוא גיבוי" else "Export backup") },
                         leadingIcon = { Icon(Icons.Default.Download, null) },
@@ -453,6 +483,88 @@ private fun AppContent(
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
         }
     }
+}
+
+@Composable
+private fun AccountDialog(
+    state: CloudAccountState,
+    hebrew: Boolean,
+    onDismiss: () -> Unit,
+    onSendLink: (String) -> Unit,
+    onSync: () -> Unit,
+    onUseCloud: () -> Unit,
+    onUseDevice: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    var email by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(if (state.email != null) Icons.Default.CloudSync else Icons.Default.Person, null, tint = DeepBlue) },
+        title = { Text(if (hebrew) "חשבון וסנכרון" else "Account and sync", color = DeepBlue) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when {
+                    !state.configured -> Text(
+                        if (hebrew) "החיבור לחשבון עדיין לא הוגדר." else "Account sync is ready, but this build is not connected to a Supabase project yet.",
+                        color = MutedInk,
+                    )
+                    state.email == null -> {
+                        Text(
+                            if (hebrew) "קבל קישור כניסה מאובטח בדוא״ל. הנתונים יישארו זמינים גם ללא חיבור." else "Receive a secure sign-in link by email. Your data remains available offline.",
+                            color = MutedInk,
+                        )
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it.trim() },
+                            label = { Text(if (hebrew) "דוא״ל" else "Email") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    state.conflict -> {
+                        Text(
+                            if (hebrew) "נמצאו שינויים גם בענן וגם במכשיר. בחר איזה עותק לשמור." else "Changes exist in both the cloud and this device. Choose which copy to keep.",
+                            color = MutedInk,
+                        )
+                        OutlinedButton(onClick = onUseCloud, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (hebrew) "השתמש בעותק מהענן" else "Use cloud copy")
+                        }
+                        OutlinedButton(onClick = onUseDevice, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (hebrew) "השתמש בעותק מהמכשיר" else "Use this device’s copy")
+                        }
+                    }
+                    else -> {
+                        Text(state.email, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (hebrew) "הנתונים נשמרים קודם במכשיר ומסתנכרנים לפי דרישה." else "Changes are saved on this device first and synchronized on demand.",
+                            color = MutedInk,
+                        )
+                        Button(onClick = onSync, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.CloudSync, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (hebrew) "סנכרן עכשיו" else "Sync now")
+                        }
+                        TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (hebrew) "יציאה" else "Sign out")
+                        }
+                    }
+                }
+                state.status?.let { Text(it, color = if (it.startsWith("Error")) Color(0xFF9B2C2C) else SuccessGreen, fontSize = 14.sp) }
+            }
+        },
+        confirmButton = {
+            if (state.configured && state.email == null) {
+                Button(onClick = { onSendLink(email) }, enabled = '@' in email && '.' in email.substringAfterLast('@', "")) {
+                    Text(if (hebrew) "שלח קישור כניסה" else "Send sign-in link")
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text(if (hebrew) "סגור" else "Close") }
+            }
+        },
+        dismissButton = {
+            if (state.configured && state.email == null) TextButton(onClick = onDismiss) { Text(if (hebrew) "ביטול" else "Cancel") }
+        },
+    )
 }
 
 @Composable
