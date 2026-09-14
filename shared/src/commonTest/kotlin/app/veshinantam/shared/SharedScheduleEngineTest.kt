@@ -36,4 +36,23 @@ class SharedScheduleEngineTest {
         val reviews = engine.generateChazarah(learning, emptyList(), true, everyDay, 2025)
         assertEquals("2025-02-28", reviews.single().plannedDate.toString())
     }
+
+    @Test
+    fun weekendChazarahCombinesSundayAndMondayOntoFriday() {
+        val everyDay = SharedScheduleRules((0..6).toSet())
+        val learning = engine.generateByDailyQuantity(units.take(2), IsoDate(2026, 9, 20), 1, everyDay)
+        val reviews = engine.generateWeekendChazarah(learning)
+        assertEquals(1, reviews.size)
+        assertEquals("2026-09-25", reviews.single().plannedDate.toString())
+        assertEquals("Unit 1 – Unit 2", reviews.single().material.labelEnglish)
+        assertEquals("weekend:weekly:friday", reviews.single().reviewIdentity)
+    }
+
+    @Test
+    fun officialOraysaIncludesDailyAndWeekendReview() {
+        val everyDay = SharedScheduleRules((0..6).toSet())
+        val learning = engine.generateByDailyQuantity(units.take(1), IsoDate(2026, 9, 20), 1, everyDay)
+        val reviews = engine.generateOfficialOraysaChazarah(learning, everyDay)
+        assertEquals(listOf("oraysa:daily", "weekend:weekly:friday"), reviews.map { it.reviewIdentity })
+    }
 }

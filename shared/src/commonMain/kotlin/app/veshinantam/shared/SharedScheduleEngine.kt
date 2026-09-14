@@ -146,6 +146,37 @@ class SharedScheduleEngine {
         originalLearningDate = date,
     )
 
+    fun generateOfficialOraysaChazarah(
+        learningTasks: List<SharedPlannedTask>,
+        learningRules: SharedScheduleRules,
+    ): List<SharedPlannedTask> {
+        if (learningTasks.isEmpty()) return emptyList()
+        val daily = generateChazarah(
+            learningTasks = learningTasks,
+            dayOffsets = listOf(1),
+            repeatsAnnually = false,
+            rules = learningRules,
+            annualReviewsThroughYear = learningTasks.first().plannedDate.year,
+        ).map { it.copy(reviewIdentity = "oraysa:daily") }
+        return daily + generateWeekendChazarah(learningTasks)
+    }
+
+    /** Splits Sunday–Monday learning onto Friday and Tuesday–Thursday learning onto Shabbos. */
+    fun generateWeekendChazarah(learningTasks: List<SharedPlannedTask>): List<SharedPlannedTask> = buildList {
+        if (learningTasks.isEmpty()) return@buildList
+        require(learningTasks.all { it.type == LearningTaskType.LEARNING })
+        learningTasks.groupBy { task ->
+            val weekday = GregorianCalendar.dayOfWeek(task.plannedDate.year, task.plannedDate.month, task.plannedDate.day)
+            task.plannedDate.minusDays(weekday)
+        }.entries.sortedBy { it.key }.forEach { (sunday, week) ->
+            val byDay = week.groupBy { it.plannedDate }
+            val fridayMaterial = listOf(0, 1).flatMap { day -> byDay[sunday.plusDays(day)].orEmpty() }
+            val shabbosMaterial = listOf(2, 3, 4).flatMap { day -> byDay[sunday.plusDays(day)].orEmpty() }
+            if (fridayMaterial.isNotEmpty()) add(weekendTask(fridayMaterial, sunday.plusDays(5), "friday"))
+            if (shabbosMaterial.isNotEmpty()) add(weekendTask(shabbosMaterial, sunday.plusDays(6), "shabbos"))
+        }
+    }
+
     private fun reviewTask(learning: SharedPlannedTask, date: IsoDate, identity: String) = SharedPlannedTask(
         stableKey = "review:${learning.stableKey}:$identity",
         material = learning.material,
@@ -154,6 +185,32 @@ class SharedScheduleEngine {
         originalLearningDate = learning.originalLearningDate,
         reviewIdentity = identity,
     )
+
+    private fun weekendTask(
+        learning: List<SharedPlannedTask>,
+        date: IsoDate,
+        dayIdentity: String,
+    ): SharedPlannedTask {
+        val first = learning.first().material
+        val last = learning.last().material
+        fun range(start: String, end: String): String = if (start == end) start else "$start – $end"
+        val sunday = date.minusDays(if (dayIdentity == "friday") 5 else 6)
+        val material = SharedMaterialUnit(
+            id = "weekend:$sunday:$dayIdentity",
+            ordinal = first.ordinal,
+            labelEnglish = range(first.labelEnglish, last.labelEnglish),
+            labelHebrew = range(first.labelHebrew, last.labelHebrew),
+            quantity = learning.sumOf { it.material.quantity },
+        )
+        return SharedPlannedTask(
+            stableKey = "review:${material.id}",
+            material = material,
+            type = LearningTaskType.CHAZARAH,
+            plannedDate = date,
+            originalLearningDate = learning.first().originalLearningDate,
+            reviewIdentity = "weekend:weekly:$dayIdentity",
+        )
+    }
 
     private fun sameGregorianDate(source: IsoDate, year: Int): IsoDate {
         val day = source.day.coerceAtMost(GregorianCalendar.daysInMonth(year, source.month))

@@ -6,7 +6,7 @@ Target: behavioral and data parity between Android and the Compose Multiplatform
 
 Planning assumption: one engineer working in focused increments; estimates are indicative, not commitments
 
-Implementation status (2026-09-14): milestone 0 complete; milestones 1 and 2 in progress. The canonical shared contract, Android export adapter, validation/round-trip tests, version-2 web backup envelope, IndexedDB migration foundation, and first shared deterministic planning engine are implemented. The additive entity-sync migration is authored but still needs deployment; incremental clients, complete catalogs, and remaining planning rules are next.
+Implementation status (2026-09-14): milestone 0 complete; milestones 1 and 2 in progress. The canonical shared contract, Android export adapter, validation/round-trip tests, version-2 web backup envelope, IndexedDB migration foundation, and shared deterministic planning engine are implemented. Android and web now execute common pace, finish-by, exclusion, finite/annual chazarah, weekend, and official Oraysa rules. The additive entity-sync migration is authored but still needs deployment; incremental clients and complete shared catalogs are next.
 
 ## Outcome
 

@@ -5,160 +5,88 @@ import app.veshinantam.domain.model.MaterialUnit
 import app.veshinantam.domain.model.PlannedTask
 import app.veshinantam.domain.model.ScheduleRules
 import app.veshinantam.domain.model.TaskType
+import app.veshinantam.shared.IsoDate
+import app.veshinantam.shared.LearningTaskType
+import app.veshinantam.shared.SharedMaterialUnit
+import app.veshinantam.shared.SharedPlannedTask
+import app.veshinantam.shared.SharedScheduleEngine
+import app.veshinantam.shared.SharedScheduleRules
 import java.time.DateTimeException
 import java.time.DayOfWeek
 import java.time.LocalDate
 
 /** Pure, deterministic scheduling rules. Persistence and UI deliberately live elsewhere. */
 class ScheduleEngine {
-    fun nextEligibleDate(candidate: LocalDate, rules: ScheduleRules): LocalDate {
-        var date = candidate
-        repeat(MAX_SEARCH_DAYS) {
-            if (rules.isEligible(date)) return date
-            date = date.plusDays(1)
-        }
-        error("No eligible date found within $MAX_SEARCH_DAYS days")
-    }
+    private val shared = SharedScheduleEngine()
+
+    fun nextEligibleDate(candidate: LocalDate, rules: ScheduleRules): LocalDate =
+        shared.nextEligibleDate(candidate.toSharedDate(), rules.toSharedRules()).toAndroidDate()
 
     fun generateByDailyQuantity(
         units: List<MaterialUnit>,
         startDate: LocalDate,
         unitsPerDay: Int,
         rules: ScheduleRules,
-    ): List<PlannedTask> {
-        require(unitsPerDay > 0) { "Daily quantity must be positive" }
-        if (units.isEmpty()) return emptyList()
-
-        val tasks = mutableListOf<PlannedTask>()
-        var date = nextEligibleDate(startDate, rules)
-        units.chunked(unitsPerDay).forEachIndexed { index, assignment ->
-            assignment.forEach { unit ->
-                tasks += learningTask(unit, date)
-            }
-            if (index < (units.size - 1) / unitsPerDay) {
-                date = nextEligibleDate(date.plusDays(1), rules)
-            }
-        }
-        return tasks
-    }
+    ): List<PlannedTask> = shared.generateByDailyQuantity(
+        units.map { it.toSharedUnit() }, startDate.toSharedDate(), unitsPerDay, rules.toSharedRules(),
+    ).map { it.toAndroidTask() }
 
     fun generateByCompletionDate(
         units: List<MaterialUnit>,
         startDate: LocalDate,
         targetDate: LocalDate,
         rules: ScheduleRules,
-    ): List<PlannedTask> {
-        require(!targetDate.isBefore(startDate)) { "Completion date cannot precede start date" }
-        if (units.isEmpty()) return emptyList()
-
-        val dates = eligibleDates(startDate, targetDate, rules)
-        require(dates.isNotEmpty()) { "The date range contains no selected learning days" }
-        if (units.size < dates.size) {
-            val assignedDates = if (units.size == 1) {
-                listOf(dates.last())
-            } else {
-                units.indices.map { index ->
-                    dates[index * (dates.lastIndex) / units.lastIndex]
-                }
-            }
-            return units.zip(assignedDates) { unit, date -> learningTask(unit, date) }
-        }
-
-        val base = units.size / dates.size
-        val largerDayCount = units.size % dates.size
-        var unitIndex = 0
-        return buildList {
-            dates.forEachIndexed { dayIndex, date ->
-                val count = base + if (dayIndex < largerDayCount) 1 else 0
-                repeat(count) {
-                    add(learningTask(units[unitIndex++], date))
-                }
-            }
-        }
-    }
+    ): List<PlannedTask> = shared.generateByCompletionDate(
+        units.map { it.toSharedUnit() }, startDate.toSharedDate(), targetDate.toSharedDate(), rules.toSharedRules(),
+    ).map { it.toAndroidTask() }
 
     fun generateChazarah(
         learningTasks: List<PlannedTask>,
         pattern: ChazarahPattern,
         rules: ScheduleRules,
         annualReviewsThroughYear: Int,
-    ): List<PlannedTask> = buildList {
-        if (learningTasks.isEmpty()) return@buildList
-        learningTasks.forEach { require(it.type == TaskType.LEARNING) }
-
-        val learningByDate = learningTasks.groupBy { it.originalLearningDate }.toSortedMap()
-        val firstLearningDate = learningByDate.firstKey()
-        val timeline = EligibleDateTimeline(firstLearningDate, rules, ::nextEligibleDate)
-        val learningSlots = learningByDate.map { (date, learning) -> timeline.indexOf(date) to learning }
-        var previousSlotLag = 0
-        pattern.dayOffsets.sorted().forEach { offset ->
-            // Offsets are successive gaps in eligible learning slots. Once a rest day moves
-            // a chazarah, the whole series keeps its spacing instead of collapsing assignments.
-            val slotLag = Math.addExact(previousSlotLag, offset)
-            learningSlots.forEach { (learningSlot, learningSet) ->
-                val reviewDate = timeline.dateAt(learningSlot + slotLag)
-                learningSet.forEach { learning ->
-                    add(reviewTask(learning, reviewDate, "day:$offset"))
-                }
-            }
-            previousSlotLag = slotLag
-        }
-
-        if (pattern.repeatsAnnually) {
-            for (annualNumber in 1..annualReviewsThroughYear - firstLearningDate.year) {
-                val firstTargetDate = sameGregorianDate(firstLearningDate, firstLearningDate.year + annualNumber)
-                val calculatedLag = timeline.indexOf(nextEligibleDate(firstTargetDate, rules))
-                val slotLag = calculatedLag.coerceAtLeast(previousSlotLag + 1)
-                learningSlots.forEach { (learningSlot, learningSet) ->
-                    val reviewDate = timeline.dateAt(learningSlot + slotLag)
-                    learningSet.forEach { learning ->
-                        val annualYear = learning.originalLearningDate.year + annualNumber
-                        if (annualYear <= annualReviewsThroughYear) {
-                            add(reviewTask(learning, reviewDate, "annual:$annualYear"))
-                        }
-                    }
-                }
-                previousSlotLag = slotLag
-            }
-        }
-    }
+    ): List<PlannedTask> = shared.generateChazarah(
+        learningTasks.map { it.toSharedTask() }, pattern.dayOffsets, pattern.repeatsAnnually,
+        rules.toSharedRules(), annualReviewsThroughYear,
+    ).map { it.toAndroidTask() }
 
     fun generateOfficialOraysaChazarah(
         learningTasks: List<PlannedTask>,
         learningRules: ScheduleRules,
-    ): List<PlannedTask> = buildList {
-        if (learningTasks.isEmpty()) return@buildList
-        learningTasks.forEach { require(it.type == TaskType.LEARNING) }
-
-        addAll(
-            generateChazarah(
-                learningTasks = learningTasks,
-                pattern = ChazarahPattern(dayOffsets = listOf(1), repeatsAnnually = false),
-                rules = learningRules,
-                annualReviewsThroughYear = learningTasks.first().plannedDate.year,
-            ).map { it.copy(reviewIdentity = "oraysa:daily") },
-        )
-
-        addAll(generateWeekendChazarah(learningTasks))
-    }
+    ): List<PlannedTask> = shared.generateOfficialOraysaChazarah(
+        learningTasks.map { it.toSharedTask() }, learningRules.toSharedRules(),
+    ).map { it.toAndroidTask() }
 
     /** Splits Sunday-Monday learning onto Friday and Tuesday-Thursday learning onto Shabbos. */
-    fun generateWeekendChazarah(learningTasks: List<PlannedTask>): List<PlannedTask> = buildList {
-        if (learningTasks.isEmpty()) return@buildList
-        learningTasks.forEach { require(it.type == TaskType.LEARNING) }
+    fun generateWeekendChazarah(learningTasks: List<PlannedTask>): List<PlannedTask> =
+        shared.generateWeekendChazarah(learningTasks.map { it.toSharedTask() }).map { it.toAndroidTask() }
 
-        learningTasks.groupBy { task ->
-            task.plannedDate.minusDays((task.plannedDate.dayOfWeek.value % 7).toLong())
-        }.toSortedMap().forEach { (sunday, week) ->
-            val byDay = week.groupBy(PlannedTask::plannedDate)
-            val fridayMaterial = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY)
-                .flatMap { day -> byDay[sunday.plusDays((day.value % 7).toLong())].orEmpty() }
-            val shabbosMaterial = listOf(DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY)
-                .flatMap { day -> byDay[sunday.plusDays((day.value % 7).toLong())].orEmpty() }
-            if (fridayMaterial.isNotEmpty()) add(weekendTask(fridayMaterial, sunday.plusDays(5), "friday"))
-            if (shabbosMaterial.isNotEmpty()) add(weekendTask(shabbosMaterial, sunday.plusDays(6), "shabbos"))
-        }
-    }
+    private fun LocalDate.toSharedDate() = IsoDate(year, monthValue, dayOfMonth)
+    private fun IsoDate.toAndroidDate() = LocalDate.of(year, month, day)
+    private fun ScheduleRules.toSharedRules() = SharedScheduleRules(
+        selectedWeekdays.map { it.value % 7 }.toSet(),
+        excludedDates.map { it.toSharedDate() }.toSet(),
+    )
+    private fun MaterialUnit.toSharedUnit() = SharedMaterialUnit(
+        id, ordinal, label.english, label.hebrew, quantity,
+    )
+    private fun PlannedTask.toSharedTask() = SharedPlannedTask(
+        stableKey, material.toSharedUnit(), LearningTaskType.valueOf(type.name),
+        plannedDate.toSharedDate(), originalLearningDate.toSharedDate(), reviewIdentity,
+    )
+    private fun SharedPlannedTask.toAndroidTask() = PlannedTask(
+        stableKey = stableKey,
+        material = MaterialUnit(
+            id = material.id,
+            ordinal = material.ordinal,
+            label = app.veshinantam.domain.model.BilingualLabel(material.labelEnglish, material.labelHebrew),
+            quantity = material.quantity,
+        ),
+        type = TaskType.valueOf(type.name),
+        plannedDate = plannedDate.toAndroidDate(),
+        originalLearningDate = originalLearningDate.toAndroidDate(),
+        reviewIdentity = reviewIdentity,
+    )
 
     private fun eligibleDates(
         startDate: LocalDate,
