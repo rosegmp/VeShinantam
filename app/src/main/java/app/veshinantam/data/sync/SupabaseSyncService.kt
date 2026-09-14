@@ -63,11 +63,7 @@ class SupabaseSyncService(
     }
 
     suspend fun sendMagicLink(email: String): Result<Unit> = runCatching {
-        val body = JSONObject()
-            .put("email", email.trim())
-            .put("create_user", true)
-            .put("email_redirect_to", "app.veshinantam://auth")
-            .toString()
+        val body = magicLinkRequestBody(email, "app.veshinantam://auth")
         request("/auth/v1/otp", "POST", body, authenticated = false)
         preferences.edit().putString(KEY_STATUS, "Check your email for the secure sign-in link.").apply()
     }.onFailure {
@@ -358,3 +354,9 @@ class SupabaseSyncService(
         const val KEY_CONFLICT = "conflict"
     }
 }
+
+internal fun magicLinkRequestBody(email: String, redirectTo: String): String = JSONObject()
+    .put("email", email.trim())
+    .put("create_user", true)
+    .put("redirect_to", redirectTo)
+    .toString()

@@ -120,7 +120,7 @@
           const response = await fetch(`${config.url}/auth/v1/otp`, {
             method: 'POST',
             headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, create_user: true, email_redirect_to: location.origin + location.pathname })
+            body: JSON.stringify({ email, create_user: true, redirect_to: location.origin + location.pathname })
           });
           if (!response.ok) throw new Error(await response.text());
           setStatus('Check your email for the secure sign-in link.');
