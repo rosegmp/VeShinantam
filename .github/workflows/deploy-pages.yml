@@ -39,7 +39,9 @@ jobs:
           cache-provider: basic
 
       - name: Build production web app
-        run: ./gradlew :webApp:stageSite
+        run: |
+          ./gradlew kotlinWasmUpgradePackageLock --rerun-tasks
+          ./gradlew :webApp:stageSite
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
