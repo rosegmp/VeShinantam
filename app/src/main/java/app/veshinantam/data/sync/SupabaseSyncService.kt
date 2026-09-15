@@ -63,12 +63,54 @@ class SupabaseSyncService(
         return true
     }
 
-    suspend fun sendMagicLink(email: String): Result<Unit> = runCatching {
-        val redirectTo = "app.veshinantam://auth"
-        request(magicLinkRequestPath(redirectTo), "POST", magicLinkRequestBody(email), authenticated = false)
-        preferences.edit().putString(KEY_STATUS, "Check your email for the secure sign-in link.").apply()
+    suspend fun signInWithPassword(email: String, password: String): Result<Unit> = runCatching {
+        val response = JSONObject(
+            request(
+                "/auth/v1/token?grant_type=password",
+                "POST",
+                emailPasswordRequestBody(email, password),
+                authenticated = false,
+            ),
+        )
+        savePasswordSession(response)
+        preferences.edit()
+            .remove(KEY_REVISION)
+            .remove(KEY_CONFLICT)
+            .putString(KEY_STATUS, "Signed in. Tap Sync now to connect this device.")
+            .apply()
+        scheduleAutomaticSync()
     }.onFailure {
-        preferences.edit().putString(KEY_STATUS, "Error sending the sign-in link. Please try again.").apply()
+        preferences.edit().putString(KEY_STATUS, authFailureStatus("signing in", it)).apply()
+    }
+
+    suspend fun createPasswordAccount(email: String, password: String): Result<Unit> = runCatching {
+        val redirectTo = "app.veshinantam://auth"
+        val response = JSONObject(
+            request(
+                passwordSignUpRequestPath(redirectTo),
+                "POST",
+                emailPasswordRequestBody(email, password),
+                authenticated = false,
+            ),
+        )
+        val accessToken = response.optString("access_token").takeIf { it.isNotBlank() && it != "null" }
+        val refreshToken = response.optString("refresh_token").takeIf { it.isNotBlank() && it != "null" }
+        if (accessToken != null && refreshToken != null) {
+            saveSession(accessToken, refreshToken)
+            preferences.edit()
+                .remove(KEY_REVISION)
+                .remove(KEY_CONFLICT)
+                .putString(KEY_STATUS, "Account created. Tap Sync now to connect this device.")
+                .apply()
+            scheduleAutomaticSync()
+        } else {
+            preferences.edit().putString(
+                KEY_STATUS,
+                "Account created. Check your email to confirm it, then sign in with your password.",
+            ).apply()
+        }
+    }.onFailure {
+        preferences.edit().putString(KEY_STATUS, authFailureStatus("creating the account", it)).apply()
     }
 
     suspend fun sync(): Result<Unit> = runCatching {
@@ -336,6 +378,10 @@ class SupabaseSyncService(
             .apply()
     }
 
+    private fun savePasswordSession(response: JSONObject) {
+        saveSession(response.getString("access_token"), response.getString("refresh_token"))
+    }
+
     private fun tokenClaims(accessToken: String): JSONObject = runCatching {
         val encoded = accessToken.split('.')[1]
         JSONObject(String(Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING), Charsets.UTF_8))
@@ -356,13 +402,26 @@ class SupabaseSyncService(
     }
 }
 
-internal fun magicLinkRequestBody(email: String): String = JSONObject()
+internal fun emailPasswordRequestBody(email: String, password: String): String = JSONObject()
     .put("email", email.trim())
-    .put("create_user", true)
+    .put("password", password)
     .toString()
 
-internal fun magicLinkRequestPath(redirectTo: String): String =
-    "/auth/v1/otp?redirect_to=${URLEncoder.encode(redirectTo, Charsets.UTF_8.name())}"
+internal fun passwordSignUpRequestPath(redirectTo: String): String =
+    "/auth/v1/signup?redirect_to=${URLEncoder.encode(redirectTo, Charsets.UTF_8.name())}"
+
+internal fun authFailureStatus(action: String, error: Throwable): String {
+    val raw = error.message.orEmpty()
+    val detail = runCatching {
+        val json = JSONObject(raw)
+        json.optString("msg").ifBlank { json.optString("message") }
+    }.getOrDefault(raw)
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(180)
+        .takeIf(String::isNotBlank)
+    return if (detail == null) "Error $action. Please try again." else "Error $action: $detail"
+}
 
 internal fun syncFailureStatus(error: Throwable): String {
     val detail = error.message

@@ -2,7 +2,7 @@
 
 VeShinantam is a standalone, private, offline-first Android app for planning Torah learning and chazarah. This repository is an early native MVP foundation built with Kotlin, Jetpack Compose, Material 3, Room, and WorkManager.
 
-The repository also contains a Kotlin/Compose Multiplatform Web companion. Android and web can use the same optional Supabase account with email magic links, preserve device-local offline data, and require an explicit choice before resolving divergent cloud and device copies.
+The repository also contains a Kotlin/Compose Multiplatform Web companion. Android and web can use the same optional Supabase account with email/password authentication, preserve device-local offline data, and require an explicit choice before resolving divergent cloud and device copies.
 
 ## What is implemented now
 

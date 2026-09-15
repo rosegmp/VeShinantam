@@ -241,7 +241,8 @@ data class CloudAccountState(
 
 interface CloudAccount {
     fun state(): CloudAccountState
-    fun requestMagicLink(email: String)
+    fun signIn(email: String, password: String)
+    fun createAccount(email: String, password: String)
     fun sync(state: WebAppState)
     fun useCloudCopy()
     fun replaceCloudCopy(state: WebAppState)

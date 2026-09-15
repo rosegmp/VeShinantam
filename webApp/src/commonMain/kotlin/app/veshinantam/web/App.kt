@@ -87,6 +87,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -404,7 +405,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
             state = accountState,
             hebrew = hebrew,
             onDismiss = { showAccount = false },
-            onSendLink = cloudAccount::requestMagicLink,
+            onSignIn = cloudAccount::signIn,
+            onCreateAccount = cloudAccount::createAccount,
             onSync = { cloudAccount.sync(appState) },
             onUseCloud = cloudAccount::useCloudCopy,
             onUseDevice = { cloudAccount.replaceCloudCopy(appState) },
@@ -543,13 +545,16 @@ private fun AccountDialog(
     state: CloudAccountState,
     hebrew: Boolean,
     onDismiss: () -> Unit,
-    onSendLink: (String) -> Unit,
+    onSignIn: (String, String) -> Unit,
+    onCreateAccount: (String, String) -> Unit,
     onSync: () -> Unit,
     onUseCloud: () -> Unit,
     onUseDevice: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val credentialsValid = '@' in email && '.' in email.substringAfterLast('@', "") && password.length >= 6
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(if (state.email != null) Icons.Default.CloudSync else Icons.Default.Person, null, tint = DeepBlue) },
@@ -563,7 +568,7 @@ private fun AccountDialog(
                     )
                     state.email == null -> {
                         Text(
-                            if (hebrew) "קבל קישור כניסה מאובטח בדוא״ל. הנתונים יישארו זמינים גם ללא חיבור." else "Receive a secure sign-in link by email. Your data remains available offline.",
+                            if (hebrew) "היכנס באמצעות דוא״ל וסיסמה. הנתונים יישארו זמינים גם ללא חיבור." else "Sign in with your email and password. Your data remains available offline.",
                             color = MutedInk,
                         )
                         OutlinedTextField(
@@ -573,6 +578,20 @@ private fun AccountDialog(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text(if (hebrew) "סיסמה" else "Password") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(if (hebrew) "יש להשתמש ב־6 תווים לפחות." else "Use at least 6 characters.", color = MutedInk, fontSize = 13.sp)
+                        OutlinedButton(
+                            onClick = { onCreateAccount(email, password) },
+                            enabled = credentialsValid,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (hebrew) "יצירת חשבון" else "Create account") }
                     }
                     state.conflict -> {
                         Text(
@@ -607,8 +626,8 @@ private fun AccountDialog(
         },
         confirmButton = {
             if (state.configured && state.email == null) {
-                Button(onClick = { onSendLink(email) }, enabled = '@' in email && '.' in email.substringAfterLast('@', "")) {
-                    Text(if (hebrew) "שלח קישור כניסה" else "Send sign-in link")
+                Button(onClick = { onSignIn(email, password) }, enabled = credentialsValid) {
+                    Text(if (hebrew) "כניסה" else "Sign in")
                 }
             } else {
                 TextButton(onClick = onDismiss) { Text(if (hebrew) "סגור" else "Close") }

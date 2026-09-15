@@ -237,9 +237,12 @@
     <string name="settings">הגדרות</string>
     <string name="account_and_sync">חשבון וסנכרון</string>
     <string name="account_not_configured">סנכרון החשבון אינו מוגדר בגרסה זו.</string>
-    <string name="account_sign_in_explanation">קבל קישור כניסה מאובטח בדוא״ל. נתוני הלימוד יישארו זמינים גם ללא חיבור.</string>
+    <string name="account_sign_in_explanation">היכנס באמצעות דוא״ל וסיסמה. נתוני הלימוד יישארו זמינים גם ללא חיבור.</string>
     <string name="account_email">דוא״ל</string>
-    <string name="send_sign_in_link">שלח קישור כניסה</string>
+    <string name="account_password">סיסמה</string>
+    <string name="account_password_requirement">יש להשתמש ב־6 תווים לפחות.</string>
+    <string name="sign_in">כניסה</string>
+    <string name="create_account">יצירת חשבון</string>
     <string name="sync_now">סנכרן עכשיו</string>
     <string name="sign_out">יציאה</string>
     <string name="sync_offline_explanation">השינויים נשמרים קודם במכשיר ומסתנכרנים לפי דרישה.</string>

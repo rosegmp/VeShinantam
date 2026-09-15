@@ -9,15 +9,22 @@ import org.junit.Test
 
 class SupabaseSyncRequestTest {
     @Test
-    fun magicLinkUsesTheRawAuthApiRedirectQueryParameter() {
-        val body = JSONObject(magicLinkRequestBody(" user@example.com "))
-        val path = magicLinkRequestPath("app.veshinantam://auth")
+    fun passwordSignupUsesTheRawAuthApiRedirectQueryParameter() {
+        val body = JSONObject(emailPasswordRequestBody(" user@example.com ", "test-password"))
+        val path = passwordSignUpRequestPath("app.veshinantam://auth")
 
         assertEquals("user@example.com", body.getString("email"))
-        assertTrue(body.getBoolean("create_user"))
-        assertEquals("/auth/v1/otp?redirect_to=app.veshinantam%3A%2F%2Fauth", path)
+        assertEquals("test-password", body.getString("password"))
+        assertEquals("/auth/v1/signup?redirect_to=app.veshinantam%3A%2F%2Fauth", path)
         assertFalse(body.has("redirect_to"))
         assertFalse(body.has("email_redirect_to"))
+    }
+
+    @Test
+    fun authFailureUsesTheSupabaseMessage() {
+        val status = authFailureStatus("signing in", IllegalStateException("{\"msg\":\"Invalid login credentials\"}"))
+
+        assertEquals("Error signing in: Invalid login credentials", status)
     }
 
     @Test

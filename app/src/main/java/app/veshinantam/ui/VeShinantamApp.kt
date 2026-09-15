@@ -99,6 +99,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -343,10 +344,18 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
                     state = accountState,
                     busy = accountBusy,
                     onDismiss = { if (!accountBusy) showAccount = false },
-                    onSendLink = { email ->
+                    onSignIn = { email, password ->
                         accountBusy = true
                         coroutineScope.launch {
-                            withContext(Dispatchers.IO) { accountService.sendMagicLink(email) }
+                            withContext(Dispatchers.IO) { accountService.signInWithPassword(email, password) }
+                            accountState = accountService.state()
+                            accountBusy = false
+                        }
+                    },
+                    onCreateAccount = { email, password ->
+                        accountBusy = true
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) { accountService.createPasswordAccount(email, password) }
                             accountState = accountService.state()
                             accountBusy = false
                         }
@@ -504,13 +513,16 @@ private fun AccountDialog(
     state: AccountSyncState,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSendLink: (String) -> Unit,
+    onSignIn: (String, String) -> Unit,
+    onCreateAccount: (String, String) -> Unit,
     onSync: () -> Unit,
     onUseCloud: () -> Unit,
     onUseDevice: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val credentialsValid = '@' in email && '.' in email.substringAfterLast('@', "") && password.length >= 6
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(if (state.email == null) Icons.Default.AccountCircle else Icons.Default.CloudSync, null) },
@@ -530,6 +542,25 @@ private fun AccountDialog(
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text(stringResource(R.string.account_password)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            stringResource(R.string.account_password_requirement),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(
+                            onClick = { onCreateAccount(email, password) },
+                            enabled = !busy && credentialsValid,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.create_account)) }
                     }
                     state.conflict -> {
                         Text(stringResource(R.string.sync_conflict_explanation))
@@ -560,9 +591,9 @@ private fun AccountDialog(
         confirmButton = {
             if (state.configured && state.email == null) {
                 Button(
-                    onClick = { onSendLink(email) },
-                    enabled = !busy && '@' in email && '.' in email.substringAfterLast('@', ""),
-                ) { Text(stringResource(R.string.send_sign_in_link)) }
+                    onClick = { onSignIn(email, password) },
+                    enabled = !busy && credentialsValid,
+                ) { Text(stringResource(R.string.sign_in)) }
             } else TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) }
         },
         dismissButton = {

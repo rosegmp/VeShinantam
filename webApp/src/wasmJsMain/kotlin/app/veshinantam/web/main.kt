@@ -57,7 +57,8 @@ private class SupabaseCloudAccount : CloudAccount {
             .getOrElse { CloudAccountState(configured = false, status = "Account status could not be read.") }
     }
 
-    override fun requestMagicLink(email: String) = sendMagicLink(email)
+    override fun signIn(email: String, password: String) = passwordSignIn(email, password)
+    override fun createAccount(email: String, password: String) = passwordCreateAccount(email, password)
     override fun sync(state: WebAppState) = startCloudSync(json.encodeToString(state))
     override fun useCloudCopy() = resolveCloudSync("cloud", "")
     override fun replaceCloudCopy(state: WebAppState) = resolveCloudSync("device", json.encodeToString(state))
@@ -127,8 +128,12 @@ private external fun chooseBackupFile(key: String, invalidMarker: String)
 private external fun cloudAccountState(): String
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("(email) => window.veshinantamSendMagicLink(email)")
-private external fun sendMagicLink(email: String)
+@JsFun("(email, password) => window.veshinantamPasswordSignIn(email, password)")
+private external fun passwordSignIn(email: String, password: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(email, password) => window.veshinantamPasswordCreateAccount(email, password)")
+private external fun passwordCreateAccount(email: String, password: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(state) => window.veshinantamSync(state)")

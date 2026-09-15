@@ -113,19 +113,52 @@
           conflict: Boolean(localStorage.getItem(CONFLICT_KEY))
         });
       };
-      window.veshinantamSendMagicLink = async (email) => {
-        if (!configured) return;
-        setStatus('Sending sign-in link…');
+      const authError = async (response) => {
+        const text = await response.text();
         try {
-          const redirectTo = location.origin + location.pathname;
-          const response = await fetch(`${config.url}/auth/v1/otp?redirect_to=${encodeURIComponent(redirectTo)}`, {
+          const value = JSON.parse(text);
+          return value.msg || value.message || text;
+        } catch (_) { return text || `Request failed (${response.status}).`; }
+      };
+      window.veshinantamPasswordSignIn = async (email, password) => {
+        if (!configured) return;
+        setStatus('Signing in…');
+        try {
+          const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
             method: 'POST',
             headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, create_user: true })
+            body: JSON.stringify({ email: email.trim(), password })
           });
-          if (!response.ok) throw new Error(await response.text());
-          setStatus('Check your email for the secure sign-in link.');
-        } catch (_) { setStatus('Error sending the sign-in link. Please try again.'); }
+          if (!response.ok) throw new Error(await authError(response));
+          const session = await response.json();
+          saveSession(session.access_token, session.refresh_token);
+          localStorage.removeItem(REVISION_KEY);
+          localStorage.removeItem(CONFLICT_KEY);
+          setStatus('Signed in. Choose Sync now to connect this device.');
+        } catch (error) { setStatus(`Error signing in: ${error.message || 'Please try again.'}`); }
+        reload();
+      };
+      window.veshinantamPasswordCreateAccount = async (email, password) => {
+        if (!configured) return;
+        setStatus('Creating account…');
+        try {
+          const redirectTo = location.origin + location.pathname;
+          const response = await fetch(`${config.url}/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo)}`, {
+            method: 'POST',
+            headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim(), password })
+          });
+          if (!response.ok) throw new Error(await authError(response));
+          const result = await response.json();
+          if (result.access_token && result.refresh_token) {
+            saveSession(result.access_token, result.refresh_token);
+            localStorage.removeItem(REVISION_KEY);
+            localStorage.removeItem(CONFLICT_KEY);
+            setStatus('Account created. Choose Sync now to connect this device.');
+          } else {
+            setStatus('Account created. Check your email to confirm it, then sign in with your password.');
+          }
+        } catch (error) { setStatus(`Error creating the account: ${error.message || 'Please try again.'}`); }
         reload();
       };
       const legacySnapshotSync = async (state) => {
