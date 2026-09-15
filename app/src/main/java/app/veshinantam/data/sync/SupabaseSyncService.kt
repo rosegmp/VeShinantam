@@ -112,7 +112,7 @@ class SupabaseSyncService(
             push(local, remoteRevision)
         }
     }.onFailure {
-        preferences.edit().putString(KEY_STATUS, "Error synchronizing. Device data is unchanged.").apply()
+        preferences.edit().putString(KEY_STATUS, syncFailureStatus(it)).apply()
     }
 
     suspend fun useCloudCopy(): Result<Unit> = runCatching {
@@ -363,3 +363,16 @@ internal fun magicLinkRequestBody(email: String): String = JSONObject()
 
 internal fun magicLinkRequestPath(redirectTo: String): String =
     "/auth/v1/otp?redirect_to=${URLEncoder.encode(redirectTo, Charsets.UTF_8.name())}"
+
+internal fun syncFailureStatus(error: Throwable): String {
+    val detail = error.message
+        ?.replace(Regex("\\s+"), " ")
+        ?.trim()
+        ?.take(180)
+        ?.takeIf(String::isNotBlank)
+    return if (detail == null) {
+        "Error synchronizing. Device data is unchanged."
+    } else {
+        "Sync error: $detail Device data is unchanged."
+    }
+}

@@ -49,9 +49,9 @@ internal class AndroidEntitySync(
     private val mutex = Mutex()
 
     suspend fun synchronize(): EntitySyncResult = mutex.withLock {
-        captureLocalChanges()
-        val push = pushOutbox()
-        val pulled = pullRemoteChanges()
+        syncPhase("Preparing device changes") { captureLocalChanges() }
+        val push = syncPhase("Uploading device changes") { pushOutbox() }
+        val pulled = syncPhase("Downloading cloud changes") { pullRemoteChanges() }
         EntitySyncResult(push.first, pulled, push.second)
     }
 
@@ -114,44 +114,52 @@ internal class AndroidEntitySync(
     private suspend fun pushOutbox(): Pair<Int, Int> {
         var pushed = 0
         var conflicts = 0
-        for (mutation in dao.getSyncOutbox()) {
-            val body = JSONObject()
-                .put("p_mutation_id", mutation.mutationId)
-                .put("p_entity_type", mutation.entityType)
-                .put("p_entity_id", mutation.entityId)
-                .put("p_base_revision", mutation.baseRevision)
-                .put("p_payload", mutation.payload?.let(::JSONObject) ?: JSONObject.NULL)
-                .put("p_deleted", mutation.deleted)
-                .toString()
-            val raw = request("/rest/v1/rpc/apply_learning_mutation", "POST", body).trim()
-            val result = if (raw.startsWith('[')) JSONArray(raw).getJSONObject(0) else JSONObject(raw)
-            val revision = result.getLong("revision")
-            val current = dao.getSyncOutbox(mutation.entityType, mutation.entityId)
-            if (result.optBoolean("conflict")) {
-                conflicts++
-                val remote = RemoteEntity(
-                    type = SyncEntityType.valueOf(mutation.entityType),
-                    id = mutation.entityId,
-                    payload = result.optJSONObject("remote_payload")?.toString(),
-                    deleted = result.optBoolean("remote_deleted"),
-                    revision = revision,
-                )
-                if (current?.mutationId == mutation.mutationId) {
-                    applyRemote(remote)
-                    dao.deleteSyncOutbox(mutation.entityType, mutation.entityId, mutation.mutationId)
-                } else {
-                    updateShadow(remote)
-                    dao.updateSyncOutboxBaseRevision(mutation.entityType, mutation.entityId, revision)
+        for (batch in dao.getSyncOutbox().chunked(ENTITY_SYNC_PUSH_BATCH_SIZE)) {
+            val rows = JSONArray(
+                request(
+                    "/rest/v1/rpc/apply_learning_mutations",
+                    "POST",
+                    mutationBatchRequestBody(batch),
+                ),
+            )
+            val results = (0 until rows.length()).associate { index ->
+                val row = rows.getJSONObject(index)
+                row.getString("mutation_id") to row
+            }
+            check(results.size == batch.size) { "The sync server returned an incomplete mutation batch." }
+
+            for (mutation in batch) {
+                val result = checkNotNull(results[mutation.mutationId]) {
+                    "The sync server omitted mutation ${mutation.mutationId}."
                 }
-            } else {
-                pushed++
-                dao.upsertSyncShadow(
-                    SyncShadowEntity(mutation.entityType, mutation.entityId, mutation.payload, revision, mutation.deleted),
-                )
-                if (current?.mutationId == mutation.mutationId) {
-                    dao.deleteSyncOutbox(mutation.entityType, mutation.entityId, mutation.mutationId)
+                val revision = result.getLong("revision")
+                val current = dao.getSyncOutbox(mutation.entityType, mutation.entityId)
+                if (result.optBoolean("conflict")) {
+                    conflicts++
+                    val remote = RemoteEntity(
+                        type = SyncEntityType.valueOf(mutation.entityType),
+                        id = mutation.entityId,
+                        payload = result.optJSONObject("remote_payload")?.toString(),
+                        deleted = result.optBoolean("remote_deleted"),
+                        revision = revision,
+                    )
+                    if (current?.mutationId == mutation.mutationId) {
+                        applyRemote(remote)
+                        dao.deleteSyncOutbox(mutation.entityType, mutation.entityId, mutation.mutationId)
+                    } else {
+                        updateShadow(remote)
+                        dao.updateSyncOutboxBaseRevision(mutation.entityType, mutation.entityId, revision)
+                    }
                 } else {
-                    dao.updateSyncOutboxBaseRevision(mutation.entityType, mutation.entityId, revision)
+                    pushed++
+                    dao.upsertSyncShadow(
+                        SyncShadowEntity(mutation.entityType, mutation.entityId, mutation.payload, revision, mutation.deleted),
+                    )
+                    if (current?.mutationId == mutation.mutationId) {
+                        dao.deleteSyncOutbox(mutation.entityType, mutation.entityId, mutation.mutationId)
+                    } else {
+                        dao.updateSyncOutboxBaseRevision(mutation.entityType, mutation.entityId, revision)
+                    }
                 }
             }
         }
@@ -292,6 +300,12 @@ internal class AndroidEntitySync(
         else -> 2
     }
 
+    private suspend fun <T> syncPhase(name: String, block: suspend () -> T): T = try {
+        block()
+    } catch (error: Exception) {
+        throw IllegalStateException("$name failed: ${error.message ?: error.javaClass.simpleName}", error)
+    }
+
     private data class LocalEntity(val type: SyncEntityType, val id: String, val payload: String)
     private data class RemoteEntity(
         val type: SyncEntityType,
@@ -307,3 +321,21 @@ internal class AndroidEntitySync(
         const val PULL_PAGE_SIZE = 1_000
     }
 }
+
+internal const val ENTITY_SYNC_PUSH_BATCH_SIZE = 100
+
+internal fun mutationBatchRequestBody(mutations: List<SyncOutboxEntity>): String = JSONObject()
+    .put("p_mutations", JSONArray().apply {
+        mutations.forEach { mutation ->
+            put(
+                JSONObject()
+                    .put("mutation_id", mutation.mutationId)
+                    .put("entity_type", mutation.entityType)
+                    .put("entity_id", mutation.entityId)
+                    .put("base_revision", mutation.baseRevision)
+                    .put("payload", mutation.payload?.let(::JSONObject) ?: JSONObject.NULL)
+                    .put("deleted", mutation.deleted),
+            )
+        }
+    })
+    .toString()

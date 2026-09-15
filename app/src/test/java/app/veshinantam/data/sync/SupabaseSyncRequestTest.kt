@@ -1,5 +1,6 @@
 package app.veshinantam.data.sync
 
+import app.veshinantam.data.local.SyncOutboxEntity
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,5 +18,34 @@ class SupabaseSyncRequestTest {
         assertEquals("/auth/v1/otp?redirect_to=app.veshinantam%3A%2F%2Fauth", path)
         assertFalse(body.has("redirect_to"))
         assertFalse(body.has("email_redirect_to"))
+    }
+
+    @Test
+    fun entityMutationsAreEncodedAsOneBatchRpcArgument() {
+        val body = JSONObject(
+            mutationBatchRequestBody(
+                listOf(
+                    SyncOutboxEntity("TASK", "task-1", "00000000-0000-0000-0000-000000000001", 7, "{\"completed\":true}", false, "now"),
+                    SyncOutboxEntity("TASK", "task-2", "00000000-0000-0000-0000-000000000002", 8, null, true, "now"),
+                ),
+            ),
+        )
+        val mutations = body.getJSONArray("p_mutations")
+
+        assertEquals(100, ENTITY_SYNC_PUSH_BATCH_SIZE)
+        assertEquals(2, mutations.length())
+        assertEquals("task-1", mutations.getJSONObject(0).getString("entity_id"))
+        assertTrue(mutations.getJSONObject(0).getJSONObject("payload").getBoolean("completed"))
+        assertEquals(JSONObject.NULL, mutations.getJSONObject(1).get("payload"))
+        assertTrue(mutations.getJSONObject(1).getBoolean("deleted"))
+    }
+
+    @Test
+    fun syncFailureIncludesThePhaseWithoutGrowingUnbounded() {
+        val status = syncFailureStatus(IllegalStateException("Uploading device changes failed: network unavailable"))
+
+        assertTrue(status.startsWith("Sync error: Uploading device changes failed:"))
+        assertTrue(status.endsWith("Device data is unchanged."))
+        assertTrue(status.length < 250)
     }
 }
