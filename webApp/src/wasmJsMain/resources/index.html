@@ -25,6 +25,7 @@
       const STATUS_KEY = 'veshinantam.supabase.status.v1';
       const CONFLICT_KEY = 'veshinantam.supabase.conflict.v1';
       const REQUEST_TIMEOUT_MS = 30000;
+      const API_RETRY_DELAYS_MS = [600, 1800];
       const PUSH_BATCH_SIZE = 100;
       const PULL_PAGE_SIZE = 1000;
       const config = window.VESHINANTAM_SUPABASE || {};
@@ -33,6 +34,7 @@
 
       const setStatus = (value) => localStorage.setItem(STATUS_KEY, value);
       const reload = () => setTimeout(() => window.location.reload(), 80);
+      const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
       const timedFetch = async (url, options = {}) => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -104,20 +106,30 @@
       };
       const api = async (path, options = {}) => {
         const session = await authenticatedSession();
-        const response = await timedFetch(`${config.url}${path}`, {
-          ...options,
-          headers: {
-            'apikey': config.publishableKey,
-            'Authorization': `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
-            ...(options.headers || {})
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            const response = await timedFetch(`${config.url}${path}`, {
+              ...options,
+              headers: {
+                'apikey': config.publishableKey,
+                'Authorization': `Bearer ${session.accessToken}`,
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+              }
+            });
+            if (response.ok) return response.status === 204 ? null : response.json();
+            const detail = await response.text();
+            const retryable = [408, 502, 503, 504].includes(response.status);
+            if (!retryable || attempt >= API_RETRY_DELAYS_MS.length) {
+              throw new Error(detail || `Sync failed (${response.status}).`);
+            }
+          } catch (error) {
+            const isNetworkFailure = error?.name === 'TypeError' || error?.message?.includes('did not respond within');
+            if (!isNetworkFailure || attempt >= API_RETRY_DELAYS_MS.length) throw error;
           }
-        });
-        if (!response.ok) {
-          const detail = await response.text();
-          throw new Error(detail || `Sync failed (${response.status}).`);
+          setStatus(`The cloud server is busy; retrying (${attempt + 1}/${API_RETRY_DELAYS_MS.length})…`);
+          await wait(API_RETRY_DELAYS_MS[attempt] + Math.floor(Math.random() * 250));
         }
-        return response.status === 204 ? null : response.json();
       };
       const push = async (state, expectedRevision) => {
         const value = await api('/rest/v1/rpc/sync_learning_snapshot', {
@@ -215,20 +227,6 @@
         } catch (_) { setStatus('Error synchronizing. Your device data is unchanged.'); }
         reload();
       };
-      const entitySyncAvailable = async () => {
-        if (config.entitySyncEnabled !== true) return false;
-        const session = await authenticatedSession();
-        const response = await timedFetch(`${config.url}/rest/v1/learning_entities?select=revision&limit=1`, {
-          headers: {
-            'apikey': config.publishableKey,
-            'Authorization': `Bearer ${session.accessToken}`
-          }
-        });
-        if (response.ok) return true;
-        const detail = await response.text();
-        if (response.status === 404 && (detail.includes('learning_entities') || detail.includes('PGRST205'))) return false;
-        throw new Error(detail || `Sync availability check failed (${response.status}).`);
-      };
       const incrementalEntitySync = async (state) => {
         setStatus('Preparing device changes…');
         const parsedState = JSON.parse(state);
@@ -292,9 +290,8 @@
         if (syncPromise) return syncPromise;
         syncPromise = (async () => {
           try {
-            setStatus('Checking cloud sync…');
-            if (await entitySyncAvailable()) await incrementalEntitySync(state);
-            else await legacySnapshotSync(state);
+            if (config.entitySyncEnabled !== true) throw new Error('Entity synchronization is not enabled in this build.');
+            await incrementalEntitySync(state);
           } catch (error) {
             setStatus(`Sync failed: ${errorMessage(error)} Your device data was not replaced.`);
             reload();
