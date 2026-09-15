@@ -5,6 +5,7 @@
   const OUTBOX = 'sync_outbox';
   const METADATA = 'sync_metadata';
   let database = null;
+  let cachedState = null;
   let suppressDiff = false;
   let pendingDiff = Promise.resolve();
 
@@ -156,10 +157,17 @@
     return transactionDone(transaction);
   };
 
+  const readBrowserState = () => cachedState ?? localStorage.getItem(STATE_KEY);
+  window.veshinantamReadState = readBrowserState;
+
   window.veshinantamPersistState = value => {
-    const previousRaw = localStorage.getItem(STATE_KEY);
-    localStorage.setItem(STATE_KEY, value);
-    writeIndexedState(value).catch(() => {});
+    const previousRaw = readBrowserState();
+    cachedState = value;
+    if (database) {
+      writeIndexedState(value).then(() => localStorage.removeItem(STATE_KEY)).catch(() => {});
+    } else {
+      localStorage.setItem(STATE_KEY, value);
+    }
     try {
       pendingDiff = pendingDiff.then(() => queueStateDiff(previousRaw ? JSON.parse(previousRaw) : null, JSON.parse(value))).catch(() => {});
     } catch (_) { /* Kotlin validates the state before it reaches persistence. */ }
@@ -227,16 +235,22 @@
   });
 
   window.veshinantamApplyEntityRecords = async records => {
-    const state = JSON.parse(localStorage.getItem(STATE_KEY) || '{"schedules":[],"tasks":[],"language":"en"}');
-    const replace = (collection, id, value, deleted) => deleted
-      ? collection.filter(item => item.id !== id)
-      : [...collection.filter(item => item.id !== id), value];
+    if (!database) throw new Error('IndexedDB is unavailable; cloud data cannot be stored safely in this browser.');
+    const state = JSON.parse(readBrowserState() || '{"schedules":[],"tasks":[],"language":"en"}');
+    const schedules = new Map((state.schedules || []).map(value => [value.id, value]));
+    const tasks = new Map((state.tasks || []).map(value => [value.id, value]));
+    const deletedScheduleIds = new Set();
     for (const record of records) {
       if (record.entity_type === 'SCHEDULE') {
-        state.schedules = replace(state.schedules || [], record.entity_id, record.payload ? scheduleFromCanonical({ ...record.payload, revision: record.revision }) : null, record.deleted);
-        if (record.deleted) state.tasks = (state.tasks || []).filter(task => task.scheduleId !== record.entity_id);
+        if (record.deleted) {
+          schedules.delete(record.entity_id);
+          deletedScheduleIds.add(record.entity_id);
+        } else if (record.payload) {
+          schedules.set(record.entity_id, scheduleFromCanonical({ ...record.payload, revision: record.revision }));
+        }
       } else if (record.entity_type === 'TASK') {
-        state.tasks = replace(state.tasks || [], record.entity_id, record.payload ? taskFromCanonical({ ...record.payload, revision: record.revision }) : null, record.deleted);
+        if (record.deleted) tasks.delete(record.entity_id);
+        else if (record.payload) tasks.set(record.entity_id, taskFromCanonical({ ...record.payload, revision: record.revision }));
       } else if (record.entity_type === 'PREFERENCES' && !record.deleted && record.payload) {
         state.language = record.payload.appLanguage === 'he' ? 'he' : 'en';
         state.sefarimLanguage = record.payload.sefarimLanguage || 'BOTH';
@@ -245,10 +259,13 @@
         state.preferencesRevision = record.revision;
       }
     }
+    state.schedules = Array.from(schedules.values());
+    state.tasks = Array.from(tasks.values()).filter(task => !deletedScheduleIds.has(task.scheduleId));
     const serialized = JSON.stringify(state);
     suppressDiff = true;
-    localStorage.setItem(STATE_KEY, serialized);
+    cachedState = serialized;
     await writeIndexedState(serialized);
+    localStorage.removeItem(STATE_KEY);
     suppressDiff = false;
     return state;
   };
@@ -261,16 +278,25 @@
       if (!request.result.objectStoreNames.contains(OUTBOX)) request.result.createObjectStore(OUTBOX);
       if (!request.result.objectStoreNames.contains(METADATA)) request.result.createObjectStore(METADATA);
     };
-    request.onerror = () => resolve();
+    request.onerror = () => {
+      cachedState = localStorage.getItem(STATE_KEY);
+      resolve();
+    };
     request.onsuccess = async () => {
       database = request.result;
       database.onversionchange = () => database.close();
       try {
         const indexedState = await requestResult(database.transaction(APP_STATE, 'readonly').objectStore(APP_STATE).get('state'));
         const legacyState = localStorage.getItem(STATE_KEY);
-        if (typeof indexedState === 'string') localStorage.setItem(STATE_KEY, indexedState);
-        else if (legacyState) await writeIndexedState(legacyState);
-      } catch (_) { /* Use the local mirror if IndexedDB is unavailable. */ }
+        if (typeof indexedState === 'string') {
+          cachedState = indexedState;
+          localStorage.removeItem(STATE_KEY);
+        } else if (legacyState) {
+          cachedState = legacyState;
+          await writeIndexedState(legacyState);
+          localStorage.removeItem(STATE_KEY);
+        }
+      } catch (_) { cachedState = localStorage.getItem(STATE_KEY); }
       resolve();
     };
   });

@@ -343,7 +343,7 @@
 
     const modelContext = document.modelContext;
     if (modelContext?.registerTool) {
-      const readState = () => JSON.parse(localStorage.getItem('veshinantam.web.v1') || '{"tasks":[]}');
+      const readState = () => JSON.parse(window.veshinantamReadState() || '{"tasks":[]}');
       Promise.resolve(modelContext.registerTool({
         name: 'list_due_learning_tasks',
         title: 'List due learning tasks',

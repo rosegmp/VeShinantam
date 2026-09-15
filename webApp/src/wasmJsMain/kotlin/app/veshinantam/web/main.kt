@@ -7,7 +7,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.js.ExperimentalWasmJsInterop
 
-private const val StorageKey = "veshinantam.web.v1"
 private const val PendingImportKey = "veshinantam.web.pending-import"
 private const val InvalidImportMarker = "__VESHINANTAM_INVALID_BACKUP__"
 
@@ -16,7 +15,7 @@ private class LocalBrowserStore(private val today: String) : BrowserStore {
     private val backupJson = Json { prettyPrint = true }
 
     override fun load(): WebAppState {
-        val raw = readLocalStorage(StorageKey) ?: return WebAppState.sample(today).also(::save)
+        val raw = readBrowserState() ?: return WebAppState.sample(today).also(::save)
         return runCatching { json.decodeFromString<WebAppState>(raw) }.getOrElse { WebAppState.sample(today) }
     }
 
@@ -66,8 +65,8 @@ private class SupabaseCloudAccount : CloudAccount {
 }
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("(key) => window.localStorage.getItem(key)")
-private external fun readLocalStorage(key: String): String?
+@JsFun("() => window.veshinantamReadState()")
+private external fun readBrowserState(): String?
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(value) => window.veshinantamPersistState(value)")
