@@ -72,6 +72,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +103,7 @@ import app.veshinantam.shared.SharedScheduleRules
 import app.veshinantam.web.generated.resources.NotoSansHebrew
 import app.veshinantam.web.generated.resources.Res
 import org.jetbrains.compose.resources.Font
+import kotlinx.coroutines.delay
 
 private val DeepBlue = Color(0xFF173B67)
 private val DeepBlueContainer = Color(0xFFDCE9FF)
@@ -169,6 +171,13 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
     var accountState by remember { mutableStateOf(cloudAccount.state()) }
     var showAccount by remember { mutableStateOf(accountState.status != null || accountState.conflict) }
     val hebrew = appState.language == "he"
+
+    LaunchedEffect(showAccount) {
+        while (showAccount) {
+            accountState = cloudAccount.state()
+            delay(250)
+        }
+    }
 
     fun update(transform: (WebAppState) -> WebAppState) {
         appState = transform(appState)
@@ -611,7 +620,7 @@ private fun AccountDialog(
                             if (hebrew) "הנתונים נשמרים קודם במכשיר ומסתנכרנים לפי דרישה." else "Changes are saved on this device first and synchronized on demand.",
                             color = MutedInk,
                         )
-                        Button(onClick = onSync, modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = onSync, enabled = !state.syncing, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Default.CloudSync, null)
                             Spacer(Modifier.width(8.dp))
                             Text(if (hebrew) "סנכרן עכשיו" else "Sync now")
@@ -621,7 +630,13 @@ private fun AccountDialog(
                         }
                     }
                 }
-                state.status?.let { Text(it, color = if (it.startsWith("Error")) Color(0xFF9B2C2C) else SuccessGreen, fontSize = 14.sp) }
+                state.status?.let {
+                    Text(
+                        it,
+                        color = if (it.startsWith("Error") || it.startsWith("Sync failed")) Color(0xFF9B2C2C) else SuccessGreen,
+                        fontSize = 14.sp,
+                    )
+                }
             }
         },
         confirmButton = {

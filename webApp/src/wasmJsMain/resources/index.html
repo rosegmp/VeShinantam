@@ -24,11 +24,37 @@
       const REVISION_KEY = 'veshinantam.supabase.revision.v1';
       const STATUS_KEY = 'veshinantam.supabase.status.v1';
       const CONFLICT_KEY = 'veshinantam.supabase.conflict.v1';
+      const REQUEST_TIMEOUT_MS = 30000;
+      const PUSH_BATCH_SIZE = 100;
+      const PULL_PAGE_SIZE = 1000;
       const config = window.VESHINANTAM_SUPABASE || {};
       const configured = Boolean(config.url && config.publishableKey);
+      let syncPromise = null;
 
       const setStatus = (value) => localStorage.setItem(STATUS_KEY, value);
       const reload = () => setTimeout(() => window.location.reload(), 80);
+      const timedFetch = async (url, options = {}) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal });
+        } catch (error) {
+          if (error?.name === 'AbortError') throw new Error('The sync server did not respond within 30 seconds.');
+          throw error;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const errorMessage = error => {
+        const fallback = 'Please try again.';
+        let message = error?.message || fallback;
+        try {
+          const parsed = JSON.parse(message);
+          message = [parsed.code, parsed.message || parsed.msg || parsed.details].filter(Boolean).join(': ') || fallback;
+        } catch (_) { /* The error was already plain text. */ }
+        if (message.includes('PGRST003')) return 'The sync server is busy (PGRST003). Wait a minute and try again.';
+        return message;
+      };
       const normalize = (value) => JSON.stringify(typeof value === 'string' ? JSON.parse(value) : value);
       const decodeJwt = (token) => {
         try {
@@ -66,7 +92,7 @@
         const session = readSession();
         if (!session) throw new Error('Please sign in again.');
         if (session.expiresAt > Date.now() + 60000) return session;
-        const response = await fetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+        const response = await timedFetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
           headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: session.refreshToken })
@@ -78,7 +104,7 @@
       };
       const api = async (path, options = {}) => {
         const session = await authenticatedSession();
-        const response = await fetch(`${config.url}${path}`, {
+        const response = await timedFetch(`${config.url}${path}`, {
           ...options,
           headers: {
             'apikey': config.publishableKey,
@@ -110,7 +136,8 @@
           configured,
           email: session?.email || null,
           status: localStorage.getItem(STATUS_KEY),
-          conflict: Boolean(localStorage.getItem(CONFLICT_KEY))
+          conflict: Boolean(localStorage.getItem(CONFLICT_KEY)),
+          syncing: Boolean(syncPromise)
         });
       };
       const authError = async (response) => {
@@ -124,7 +151,7 @@
         if (!configured) return;
         setStatus('Signing in…');
         try {
-          const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+          const response = await timedFetch(`${config.url}/auth/v1/token?grant_type=password`, {
             method: 'POST',
             headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email.trim(), password })
@@ -143,7 +170,7 @@
         setStatus('Creating account…');
         try {
           const redirectTo = location.origin + location.pathname;
-          const response = await fetch(`${config.url}/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo)}`, {
+          const response = await timedFetch(`${config.url}/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo)}`, {
             method: 'POST',
             headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email.trim(), password })
@@ -191,7 +218,7 @@
       const entitySyncAvailable = async () => {
         if (config.entitySyncEnabled !== true) return false;
         const session = await authenticatedSession();
-        const response = await fetch(`${config.url}/rest/v1/learning_entities?select=revision&limit=1`, {
+        const response = await timedFetch(`${config.url}/rest/v1/learning_entities?select=revision&limit=1`, {
           headers: {
             'apikey': config.publishableKey,
             'Authorization': `Bearer ${session.accessToken}`
@@ -203,56 +230,79 @@
         throw new Error(detail || `Sync availability check failed (${response.status}).`);
       };
       const incrementalEntitySync = async (state) => {
-        setStatus('Synchronizing…');
+        setStatus('Preparing device changes…');
         const parsedState = JSON.parse(state);
         await window.veshinantamEnsureEntitySeed(parsedState);
         const mutations = await window.veshinantamReadOutbox();
         let remoteWonConflict = false;
         const conflictRecords = [];
-        for (const mutation of mutations) {
-          const rows = await api('/rest/v1/rpc/apply_learning_mutation', {
+        let uploaded = 0;
+        for (let offset = 0; offset < mutations.length; offset += PUSH_BATCH_SIZE) {
+          const batch = mutations.slice(offset, offset + PUSH_BATCH_SIZE);
+          setStatus(`Uploading device changes (${uploaded}/${mutations.length})…`);
+          const rows = await api('/rest/v1/rpc/apply_learning_mutations', {
             method: 'POST',
-            body: JSON.stringify({
-              p_mutation_id: mutation.mutationId,
-              p_entity_type: mutation.entityType,
-              p_entity_id: mutation.entityId,
-              p_base_revision: Number(mutation.baseRevision || 0),
-              p_payload: mutation.deleted ? null : mutation.payload,
-              p_deleted: Boolean(mutation.deleted)
-            })
+            body: JSON.stringify({ p_mutations: batch.map(mutation => ({
+              mutation_id: mutation.mutationId,
+              entity_type: mutation.entityType,
+              entity_id: mutation.entityId,
+              base_revision: Number(mutation.baseRevision || 0),
+              payload: mutation.deleted ? null : mutation.payload,
+              deleted: Boolean(mutation.deleted)
+            })) })
           });
-          const result = rows && rows[0];
-          if (!result) throw new Error('The sync server returned an incomplete mutation result.');
-          remoteWonConflict = remoteWonConflict || Boolean(result.conflict);
-          if (result.conflict) conflictRecords.push({
-            entity_type: mutation.entityType,
-            entity_id: mutation.entityId,
-            payload: result.remote_payload,
-            deleted: result.remote_deleted,
-            revision: result.revision,
-            updated_at: new Date().toISOString()
-          });
-          await window.veshinantamRemoveOutbox(mutation.entityType, mutation.entityId);
+          const results = new Map((rows || []).map(result => [result.mutation_id, result]));
+          if (results.size !== batch.length) throw new Error('The sync server returned an incomplete mutation batch.');
+          for (const mutation of batch) {
+            const result = results.get(mutation.mutationId);
+            if (!result) throw new Error(`The sync server omitted mutation ${mutation.mutationId}.`);
+            remoteWonConflict = remoteWonConflict || Boolean(result.conflict);
+            if (result.conflict) conflictRecords.push({
+              entity_type: mutation.entityType,
+              entity_id: mutation.entityId,
+              payload: result.remote_payload,
+              deleted: result.remote_deleted,
+              revision: result.revision,
+              updated_at: new Date().toISOString()
+            });
+            await window.veshinantamRemoveOutbox(mutation.entityType, mutation.entityId);
+            uploaded += 1;
+          }
         }
         if (conflictRecords.length) await window.veshinantamApplyEntityRecords(conflictRecords);
-        const cursor = await window.veshinantamGetSyncCursor();
-        const records = await api(`/rest/v1/learning_entities?select=entity_type,entity_id,payload,deleted,revision,updated_at&revision=gt.${cursor}&order=revision.asc`);
-        if (records.length) {
-          await window.veshinantamApplyEntityRecords(records);
-          await window.veshinantamSetSyncCursor(Math.max(...records.map(record => Number(record.revision))));
-        }
+        let cursor = await window.veshinantamGetSyncCursor();
+        let downloaded = 0;
+        let records;
+        do {
+          setStatus(`Downloading cloud changes (${downloaded} received)…`);
+          records = await api(`/rest/v1/learning_entities?select=entity_type,entity_id,payload,deleted,revision,updated_at&revision=gt.${cursor}&order=revision.asc&limit=${PULL_PAGE_SIZE}`);
+          if (records.length) {
+            setStatus(`Applying cloud changes (${downloaded + records.length} received)…`);
+            await window.veshinantamApplyEntityRecords(records);
+            cursor = Math.max(...records.map(record => Number(record.revision)));
+            await window.veshinantamSetSyncCursor(cursor);
+            downloaded += records.length;
+          }
+        } while (records.length === PULL_PAGE_SIZE);
         setStatus(remoteWonConflict ? 'Synchronized. A newer cloud change was kept for one item.' : 'Synced successfully.');
         reload();
       };
-      window.veshinantamSync = async state => {
-        if (!configured) return;
-        try {
-          if (await entitySyncAvailable()) await incrementalEntitySync(state);
-          else await legacySnapshotSync(state);
-        } catch (_) {
-          setStatus('Error synchronizing. Your device data is unchanged.');
-          reload();
-        }
+      window.veshinantamSync = state => {
+        if (!configured) return Promise.resolve();
+        if (syncPromise) return syncPromise;
+        syncPromise = (async () => {
+          try {
+            setStatus('Checking cloud sync…');
+            if (await entitySyncAvailable()) await incrementalEntitySync(state);
+            else await legacySnapshotSync(state);
+          } catch (error) {
+            setStatus(`Sync failed: ${errorMessage(error)} Your device data was not replaced.`);
+            reload();
+          } finally {
+            syncPromise = null;
+          }
+        })();
+        return syncPromise;
       };
       window.veshinantamResolveSync = async (choice, state) => {
         try {

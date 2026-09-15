@@ -237,6 +237,7 @@ data class CloudAccountState(
     val email: String? = null,
     val status: String? = null,
     val conflict: Boolean = false,
+    val syncing: Boolean = false,
 )
 
 interface CloudAccount {
