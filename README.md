@@ -4,6 +4,8 @@ VeShinantam is a standalone, private, offline-first Android app for planning Tor
 
 The repository also contains a Kotlin/Compose Multiplatform Web companion. Android and web can use the same optional Supabase account with email/password authentication, preserve device-local offline data, and require an explicit choice before resolving divergent cloud and device copies.
 
+The web app is deployed automatically from `main` to [GitHub Pages](https://rosegmp.github.io/VeShinantam/).
+
 ## What is implemented now
 
 - A four-tab Compose application shell with Today as the default screen
