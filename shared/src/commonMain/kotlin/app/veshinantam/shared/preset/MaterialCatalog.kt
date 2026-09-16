@@ -1,6 +1,4 @@
-package app.veshinantam.domain.material
-
-import app.veshinantam.localization.HebrewNumerals
+package app.veshinantam.shared.preset
 
 enum class SeferChoice { GEMARA, YERUSHALMI, MISHNAH, MISHNAH_BERURAH, RAMBAM, CHOFETZ_CHAIM, TEHILLIM, KITZUR, OTHER }
 enum class GemaraUnit { DAF, AMUD }
@@ -48,15 +46,15 @@ object MaterialCatalog {
     val mishnahBerurahChelakim = listOf(1..127, 128..241, 242..344, 345..428, 429..529, 530..697)
 
     fun yerushalmiUnits(masechta: Masechta): List<UnitReference> = (1..masechta.lastLocation).map { daf ->
-        UnitReference("Yerushalmi ${masechta.english} $daf", "ירושלמי ${masechta.hebrew} דף ${HebrewNumerals.format(daf)}.")
+        UnitReference("Yerushalmi ${masechta.english} $daf", "ירושלמי ${masechta.hebrew} דף ${PresetHebrewNumerals.format(daf)}.")
     }
 
     fun rambamUnits(section: Masechta): List<UnitReference> = (1..section.lastLocation).map { chapter ->
-        UnitReference("Rambam, ${section.english} $chapter", "רמב״ם, ${section.hebrew} פרק ${HebrewNumerals.format(chapter)}")
+        UnitReference("Rambam, ${section.english} $chapter", "רמב״ם, ${section.hebrew} פרק ${PresetHebrewNumerals.format(chapter)}")
     }
 
     val tehillimUnits: List<UnitReference> = (1..150).map { chapter ->
-        UnitReference("Tehillim $chapter", "תהילים פרק ${HebrewNumerals.format(chapter)}")
+        UnitReference("Tehillim $chapter", "תהילים פרק ${PresetHebrewNumerals.format(chapter)}")
     }
 
     val monthlyTehillimUnits: List<UnitReference> = listOf(
@@ -64,6 +62,8 @@ object MaterialCatalog {
         "60-65", "66-68", "69-71", "72-76", "77-78", "79-82", "83-87", "88-89", "90-96", "97-103",
         "104-105", "106-107", "108-112", "113-118", "119:1-96", "119:97-176", "120-134", "135-139", "140-150",
     ).map { range -> UnitReference("Tehillim $range", "תהילים ${hebrewLocation(range)}") }
+
+    val kitzurYomiUnits: List<UnitReference> get() = KitzurYomiData.units
 
     val chofetzChaimUnits: List<UnitReference> by lazy {
         chofetzChaimPortions.split(';').map { raw ->
@@ -93,22 +93,22 @@ object MaterialCatalog {
     private const val chofetzChaimPortions = "Hakdamah|1|4;Hakdamah|5|10;Hakdamah|11|16;Hakdamah|17|22;Hakdamah|23|27;Hakdamah|28|33-34;Hakdamah|29|32;Psichah|1|4;Psichah|5|11;Lavin|1|2;Lavin|3|4;Lavin|5|6;Lavin|7|9;Lavin|10|11;Lavin|12|13;Lavin|14|15;Lavin|16|17;Asin|1|2;Asin|3|4;Asin|5|6;Asin|7|8;Asin|9|10;Asin|11|12;Asin|13|14;Arurin||;HilchosLH|1.1|1.2;HilchosLH|1.3|1.4;HilchosLH|1.5|1.6;HilchosLH|1.7|1.9;HilchosLH|2.1|2.2;HilchosLH|2.3|2.4;HilchosLH|2.5|2.6;HilchosLH|2.7|2.8;HilchosLH|2.9|2.10;HilchosLH|2.11|2.11;HilchosLH|2.12|2.13;HilchosLH|3.1|3.2;HilchosLH|3.3|3.4;HilchosLH|3.5|3.6;HilchosLH|3.7|3.8;HilchosLH|4.1|4.2;HilchosLH|4.3|4.4;HilchosLH|4.5|4.6;HilchosLH|4.7|4.8;HilchosLH|4.9|4.10;HilchosLH|4.11|4.11;HilchosLH|4.12|5.1;HilchosLH|5.2|5.4;HilchosLH|5.5|5.6;HilchosLH|5.7|5.8;HilchosLH|6.1|6.2;HilchosLH|6.3|6.4;HilchosLH|6.5|6.6;HilchosLH|6.7|6.8;HilchosLH|6.9|6.10;HilchosLH|6.11|6.12;HilchosLH|7.1|7.2;HilchosLH|7.3|7.4;HilchosLH|7.5|7.6;HilchosLH|7.7|7.8;HilchosLH|7.9|7.9;HilchosLH|7.10|7.12;HilchosLH|7.13|7.14;HilchosLH|8.1|8.2;HilchosLH|8.3|8.4;HilchosLH|8.5|8.7;HilchosLH|8.8|8.9;HilchosLH|8.10|8.11;HilchosLH|8.12|8.12;HilchosLH|8.13|8.14;HilchosLH|9.1|9.2;HilchosLH|9.3|9.4;HilchosLH|9.5|9.6;HilchosLH|10.1|10.2;HilchosLH|10.3|10.4;HilchosLH|10.5|10.6;HilchosLH|10.7|10.8;HilchosLH|10.9|10.10;HilchosLH|10.11|10.12;HilchosLH|10.13|10.14;HilchosLH|10.15|10.16;HilchosLH|10.17|10.17;HilchosRechilus|1.1|1.3;HilchosRechilus|1.4|1.5;HilchosRechilus|1.6|1.7;HilchosRechilus|1.8|1.9;HilchosRechilus|1.10|1.11;HilchosRechilus|2.1|2.2;HilchosRechilus|2.3|2.4;HilchosRechilus|3.1|3.1;HilchosRechilus|3.2|3.4;HilchosRechilus|4.1|4.3;HilchosRechilus|5.1|5.2;HilchosRechilus|5.3|5.4;HilchosRechilus|5.5|5.5;HilchosRechilus|5.6|5.7;HilchosRechilus|6.1|6.2;HilchosRechilus|6.3|6.4;HilchosRechilus|6.5|6.7;HilchosRechilus|6.8|6.10;HilchosRechilus|7.1|7.1;HilchosRechilus|7.2|7.2;HilchosRechilus|7.3|7.4;HilchosRechilus|7.5|7.5;HilchosRechilus|8.1|8.3;HilchosRechilus|8.4|8.5;HilchosRechilus|9.1|9.2;HilchosRechilus|9.3|9.4;HilchosRechilus|9.5|9.6;HilchosRechilus|9.7|9.9;HilchosRechilus|9.10|9.10;HilchosRechilus|9.11|9.12;HilchosRechilus|9.13|9.13;HilchosRechilus|9.14|9.15;Tziyurim|1|3;Tziyurim|4|5;Tziyurim|6|7;Tziyurim|8|9;Tziyurim|10|11"
 
     private fun hebrewLocation(value: String): String = Regex("\\d+").replace(value) { match ->
-        HebrewNumerals.format(match.value.toInt())
+        PresetHebrewNumerals.format(match.value.toInt())
     }.replace('.', ':').replace("-", "–")
 
     fun gemaraUnits(masechtos: List<Masechta>, startDaf: Int, endDaf: Int, unit: GemaraUnit): List<UnitReference> =
         ranged(masechtos, startDaf, endDaf, minimum = 2).flatMap { (masechta, number) ->
-            if (unit == GemaraUnit.DAF) listOf(UnitReference("${masechta.english} $number", "${masechta.hebrew} דף ${HebrewNumerals.format(number)}."))
+            if (unit == GemaraUnit.DAF) listOf(UnitReference("${masechta.english} $number", "${masechta.hebrew} דף ${PresetHebrewNumerals.format(number)}."))
             else listOf("a" to ".", "b" to ":")
                 .take(if (number == masechta.lastLocation && !masechta.lastDafHasAmudB) 1 else 2)
                 .map { (side, punctuation) ->
-                UnitReference("${masechta.english} $number$side", "${masechta.hebrew} דף ${HebrewNumerals.format(number)}$punctuation")
+                UnitReference("${masechta.english} $number$side", "${masechta.hebrew} דף ${PresetHebrewNumerals.format(number)}$punctuation")
             }
         }
 
     fun mishnahPerakim(masechtos: List<Masechta>, startPerek: Int, endPerek: Int): List<UnitReference> =
         ranged(masechtos, startPerek, endPerek, minimum = 1).map { (masechta, number) ->
-            UnitReference("${masechta.english} perek $number", "${masechta.hebrew} פרק ${HebrewNumerals.format(number)}")
+                UnitReference("${masechta.english} perek $number", "${masechta.hebrew} פרק ${PresetHebrewNumerals.format(number)}")
         }
 
     fun mishnahUnits(masechta: Masechta, unit: MishnahUnit): List<UnitReference> = when (unit) {
@@ -118,7 +118,7 @@ object MaterialCatalog {
             masechta.mishnayosPerPerek.flatMapIndexed { perekIndex, count ->
                 (1..count).map { mishnahNumber ->
                     val location = "${perekIndex + 1}:$mishnahNumber"
-                    val hebrewLocation = "${HebrewNumerals.format(perekIndex + 1)}:${HebrewNumerals.format(mishnahNumber)}"
+                    val hebrewLocation = "${PresetHebrewNumerals.format(perekIndex + 1)}:${PresetHebrewNumerals.format(mishnahNumber)}"
                     UnitReference("${masechta.english} $location", "${masechta.hebrew} $hebrewLocation")
                 }
             }
@@ -127,7 +127,7 @@ object MaterialCatalog {
 
     fun simanim(titleEnglish: String, titleHebrew: String, start: Int, end: Int): List<UnitReference> {
         require(start > 0 && end >= start)
-        return (start..end).map { UnitReference("$titleEnglish siman $it", "$titleHebrew סימן ${HebrewNumerals.format(it)}") }
+        return (start..end).map { UnitReference("$titleEnglish siman $it", "$titleHebrew סימן ${PresetHebrewNumerals.format(it)}") }
     }
 
     fun mishnahBerurahUnitOptions(chelek: Int, unit: MishnahBerurahUnit): List<UnitReference> {
@@ -137,19 +137,19 @@ object MaterialCatalog {
                 listOf("a" to ".", "b" to ":").map { (side, punctuation) ->
                     UnitReference(
                         "Mishnah Berurah, chelek $chelek page $page$side",
-                        "משנה ברורה חלק ${HebrewNumerals.format(chelek)} עמוד ${HebrewNumerals.format(page)}$punctuation",
+                        "משנה ברורה חלק ${PresetHebrewNumerals.format(chelek)} עמוד ${PresetHebrewNumerals.format(page)}$punctuation",
                     )
                 }
             }
             MishnahBerurahUnit.SIMAN -> mishnahBerurahChelakim[chelek - 1].map { siman ->
-                UnitReference("Mishnah Berurah, chelek $chelek siman $siman", "משנה ברורה חלק ${HebrewNumerals.format(chelek)} סימן ${HebrewNumerals.format(siman)}")
+                UnitReference("Mishnah Berurah, chelek $chelek siman $siman", "משנה ברורה חלק ${PresetHebrewNumerals.format(chelek)} סימן ${PresetHebrewNumerals.format(siman)}")
             }
             MishnahBerurahUnit.SEIF -> mishnahBerurahChelakim[chelek - 1].flatMap { siman ->
                 val seifCount = MaterialStructureData.mishnahBerurahSeifimPerSiman[siman - 1]
                 (1..seifCount).map { seif ->
                     UnitReference(
                         "Mishnah Berurah, chelek $chelek siman $siman seif $seif",
-                        "משנה ברורה חלק ${HebrewNumerals.format(chelek)} סימן ${HebrewNumerals.format(siman)} סעיף ${HebrewNumerals.format(seif)}",
+                        "משנה ברורה חלק ${PresetHebrewNumerals.format(chelek)} סימן ${PresetHebrewNumerals.format(siman)} סעיף ${PresetHebrewNumerals.format(seif)}",
                     )
                 }
             }

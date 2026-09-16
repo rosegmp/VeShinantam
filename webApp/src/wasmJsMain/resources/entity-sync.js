@@ -45,7 +45,7 @@
       nameEnglish: schedule.name,
       nameHebrew: schedule.nameHebrew || '',
       kind: schedule.presetId ? 'PRESET' : 'CUSTOM',
-      sourceType: schedule.material || 'CUSTOM',
+      sourceType: schedule.sourceType || schedule.material || 'CUSTOM',
       materialType: materialType(schedule.materialType || schedule.material),
       presetId: schedule.presetId || undefined,
       startDate: schedule.startDate || allDates[0] || now.slice(0, 10),
@@ -221,7 +221,8 @@
     presetId: value.presetId || null, startDate: value.startDate, targetDate: value.targetDate || null,
     missedWorkBehavior: value.missedWorkBehavior, repeatsAnnually: value.repeatsAnnually,
     officialOraysaChazarah: value.officialOraysaChazarah, generationRevision: value.generationRevision,
-    createdAt: value.createdAt, updatedAt: value.updatedAt, revision: value.revision
+    createdAt: value.createdAt, updatedAt: value.updatedAt, revision: value.revision,
+    sourceType: value.sourceType, materialType: value.materialType
   });
 
   const taskFromCanonical = value => ({

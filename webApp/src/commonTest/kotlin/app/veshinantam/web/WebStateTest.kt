@@ -142,4 +142,28 @@ class WebStateTest {
         assertTrue(!completed.getValue("past-review").completed)
         assertEquals("2026-09-12T10:00:00Z", completed.getValue("already-done").completedAt)
     }
+
+    @Test
+    fun presetMetadataUsesCanonicalSourceAndMaterialType() {
+        val state = WebAppState(
+            schedules = listOf(
+                StoredSchedule(
+                    id = "preset",
+                    name = "Daf Yomi Bavli",
+                    material = "DAF",
+                    pace = 1,
+                    presetId = "daf-yomi-bavli",
+                    startDate = today,
+                    sourceType = "PRESET:2026.09.10-8",
+                    materialType = "DAF",
+                ),
+            ),
+        )
+
+        val canonical = state.toCanonical(now, today).schedules.single()
+
+        assertEquals("PRESET:2026.09.10-8", canonical.sourceType)
+        assertEquals(app.veshinantam.shared.CanonicalMaterialType.DAF, canonical.materialType)
+        assertEquals("daf-yomi-bavli", canonical.presetId)
+    }
 }

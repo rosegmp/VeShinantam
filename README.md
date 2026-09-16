@@ -10,6 +10,8 @@ The web Calendar grid shows filter-aware incomplete, partial, and complete statu
 
 Web schedule management supports pause/resume, archive/restore, confirmed permanent deletion, and separate confirmed bulk completion of overdue learning or chazarah. Bulk completion records the browser-local completion date, instant, and time zone so Android and web retain equivalent history.
 
+The web preset creator uses the complete shared Android catalog: all 12 programs, exact bilingual unit sequences, verified worldwide positions and dates, program cadence/exclusions, searchable earlier positions, current-tractate starts, weekend chazarah, and official Oraysa review behavior.
+
 The web app is deployed automatically from `main` to [GitHub Pages](https://rosegmp.github.io/VeShinantam/).
 
 ## What is implemented now

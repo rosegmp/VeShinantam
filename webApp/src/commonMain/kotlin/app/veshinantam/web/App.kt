@@ -102,6 +102,9 @@ import app.veshinantam.shared.LearningTaskType
 import app.veshinantam.shared.SharedMaterialUnit
 import app.veshinantam.shared.SharedScheduleEngine
 import app.veshinantam.shared.SharedScheduleRules
+import app.veshinantam.shared.preset.SharedPresetCatalog
+import app.veshinantam.shared.preset.SharedPresetProgram
+import app.veshinantam.shared.preset.UnitReference
 import app.veshinantam.web.generated.resources.NotoSansHebrew
 import app.veshinantam.web.generated.resources.Res
 import org.jetbrains.compose.resources.Font
@@ -153,12 +156,18 @@ private enum class CalendarTaskFilter { ALL, LEARNING, CHAZARAH }
 
 private data class ScheduleDraft(
     val name: String,
+    val nameHebrew: String,
     val material: String,
-    val referenceEnglish: String,
-    val referenceHebrew: String,
+    val materialType: String,
+    val preset: SharedPresetProgram?,
+    val startIndex: Int,
+    val customReferenceEnglish: String,
+    val customReferenceHebrew: String,
     val pace: Int,
     val weekdays: Set<Int>,
+    val excludedDates: Set<IsoDate>,
     val chazarahOffsets: List<Int>,
+    val includeWeekendChazarah: Boolean,
 )
 
 private data class BulkCompletionRequest(
@@ -336,15 +345,31 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                     pace = draft.pace,
                     weekdays = draft.weekdays,
                     chazarahOffsets = draft.chazarahOffsets,
+                    nameHebrew = draft.nameHebrew,
+                    presetId = draft.preset?.id,
+                    startDate = todayIso,
+                    officialOraysaChazarah = draft.includeWeekendChazarah,
+                    createdAt = store.currentInstant(),
+                    updatedAt = store.currentInstant(),
+                    sourceType = draft.preset?.let { "PRESET:${SharedPresetCatalog.VERSION}" } ?: "CUSTOM",
+                    materialType = draft.materialType,
                 )
                 val engine = SharedScheduleEngine()
-                val rules = SharedScheduleRules(schedule.weekdays)
-                val units = (1..(14 * schedule.pace)).map { ordinal ->
+                val rules = SharedScheduleRules(schedule.weekdays, draft.excludedDates)
+                val sourceUnits: List<UnitReference>? = draft.preset?.units?.subList(draft.startIndex, draft.preset.units.size)
+                val units = sourceUnits?.mapIndexed { index, reference ->
+                    SharedMaterialUnit(
+                        id = "$id-unit-$index",
+                        ordinal = index,
+                        labelEnglish = reference.english,
+                        labelHebrew = reference.hebrew,
+                    )
+                } ?: (1..(14 * schedule.pace)).map { ordinal ->
                     SharedMaterialUnit(
                         id = "$id-unit-$ordinal",
                         ordinal = ordinal,
-                        labelEnglish = "${draft.referenceEnglish} $ordinal".trim(),
-                        labelHebrew = "${draft.referenceHebrew} $ordinal".trim(),
+                        labelEnglish = "${draft.customReferenceEnglish} $ordinal".trim(),
+                        labelHebrew = "${draft.customReferenceHebrew} $ordinal".trim(),
                     )
                 }
                 val learningTasks = engine.generateByDailyQuantity(
@@ -353,13 +378,22 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                     unitsPerDay = schedule.pace,
                     rules = rules,
                 )
-                val plannedTasks = learningTasks + engine.generateChazarah(
+                val additionalReviews = engine.generateChazarah(
                     learningTasks = learningTasks,
                     dayOffsets = schedule.chazarahOffsets,
                     repeatsAnnually = false,
                     rules = rules,
                     annualReviewsThroughYear = requireNotNull(IsoDate.parse(todayIso)).year,
                 )
+                val weekendReviews = if (draft.includeWeekendChazarah) {
+                    if (draft.preset?.id == "oraysa") engine.generateOfficialOraysaChazarah(learningTasks, rules)
+                    else engine.generateWeekendChazarah(learningTasks)
+                } else {
+                    emptyList()
+                }
+                val plannedTasks = (learningTasks + weekendReviews + additionalReviews).distinctBy { task ->
+                    listOf(task.type.name, task.originalLearningDate.toString(), task.plannedDate.toString(), task.material.labelEnglish)
+                }
                 val generatedTasks = plannedTasks.mapIndexed { index, task ->
                     StoredTask(
                         id = "$id-${task.type.name.lowercase()}-${index + 1}",
@@ -369,6 +403,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                         dueDate = task.plannedDate.toString(),
                         type = task.type.name,
                         stableKey = task.stableKey,
+                        materialType = draft.materialType,
                         originalLearningDate = task.originalLearningDate.toString(),
                         reviewIdentity = task.reviewIdentity,
                     )
@@ -1384,64 +1419,164 @@ private fun ProgressMetric(label: String, value: String) {
 
 @Composable
 private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
-    val presets = listOf(
-        listOf("Daf Yomi Bavli", "Gemara", "Berachos", "ברכות", "1"),
-        listOf("Mishnah Yomis", "Mishnah", "Peah", "פאה", "2"),
-        listOf("Rambam Yomi", "Mishneh Torah", "Mishneh Torah", "משנה תורה", "1"),
-        listOf(if (hebrew) "מותאם אישית" else "Custom", "", "", "", "1"),
-    )
-    var selectedPreset by remember { mutableStateOf(0) }
-    var name by remember { mutableStateOf(presets[0][0]) }
-    var material by remember { mutableStateOf(presets[0][1]) }
-    var english by remember { mutableStateOf(presets[0][2]) }
-    var hebrewReference by remember { mutableStateOf(presets[0][3]) }
-    var paceText by remember { mutableStateOf(presets[0][4]) }
-    var weekdays by remember { mutableStateOf((0..6).toSet()) }
-    var chazarahEnabled by remember { mutableStateOf(true) }
+    val programs = remember { SharedPresetCatalog.programs }
+    var selectedProgramIndex by remember { mutableStateOf(0) }
+    val program = programs.getOrNull(selectedProgramIndex)
+    val custom = program == null
+    var programMenuExpanded by remember { mutableStateOf(false) }
+    var startIndex by remember(selectedProgramIndex) { mutableStateOf(program?.currentIndex ?: 0) }
+    var positionQuery by remember(selectedProgramIndex) { mutableStateOf("") }
+    var customName by remember { mutableStateOf("") }
+    var customMaterial by remember { mutableStateOf("") }
+    var customEnglish by remember { mutableStateOf("") }
+    var customHebrew by remember { mutableStateOf("") }
+    var paceText by remember(selectedProgramIndex) { mutableStateOf((program?.dailyQuantity ?: 1).toString()) }
+    var weekdays by remember(selectedProgramIndex) { mutableStateOf(program?.selectedWeekdays ?: (0..6).toSet()) }
+    var chazarahEnabled by remember(selectedProgramIndex) { mutableStateOf(program?.id != "oraysa") }
+    var weekendChazarah by remember(selectedProgramIndex) { mutableStateOf(program?.id == "oraysa") }
+    val currentMasechtaStart = program?.let(SharedPresetCatalog::currentMasechtaStartIndex)
+    val positionMatches = if (program != null && positionQuery.length >= 2) {
+        program.selectableStartingUnits.withIndex().filter { indexed ->
+            indexed.value.english.contains(positionQuery, ignoreCase = true) || indexed.value.hebrew.contains(positionQuery)
+        }.takeLast(20)
+    } else {
+        emptyList()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (hebrew) "תוכנית לימוד חדשה" else "New learning schedule", color = DeepBlue) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (hebrew) "בחר מחזור או בנה תוכנית אישית. ייווצרו 14 ימי לימוד קרובים." else "Choose a cycle or build a custom plan. We’ll create the next 14 learning days.", color = MutedInk)
+                Text(
+                    if (hebrew) "בחר מחזור מלא או בנה תוכנית אישית. תוכנית מחזור כוללת את כל היחידות מנקודת ההתחלה ועד סוף המחזור."
+                    else "Choose a complete cycle or build a custom plan. Presets include every unit from the selected position through the end of the cycle.",
+                    color = MutedInk,
+                )
                 Text(if (hebrew) "תוכנית" else "Program", fontWeight = FontWeight.Bold, color = DeepBlue)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    presets.forEachIndexed { index, preset ->
-                        FilterChip(
-                            selected = selectedPreset == index,
-                            onClick = {
-                                selectedPreset = index
-                                name = preset[0]
-                                material = preset[1]
-                                english = preset[2]
-                                hebrewReference = preset[3]
-                                paceText = preset[4]
-                            },
-                            label = { Text(preset[0]) },
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { programMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(program?.let { if (hebrew) it.nameHebrew else it.nameEnglish } ?: if (hebrew) "מותאם אישית" else "Custom")
+                    }
+                    DropdownMenu(expanded = programMenuExpanded, onDismissRequest = { programMenuExpanded = false }) {
+                        programs.forEachIndexed { index, item ->
+                            DropdownMenuItem(
+                                text = { Text(if (hebrew) item.nameHebrew else item.nameEnglish) },
+                                onClick = { selectedProgramIndex = index; programMenuExpanded = false },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(if (hebrew) "מותאם אישית" else "Custom") },
+                            onClick = { selectedProgramIndex = programs.size; programMenuExpanded = false },
                         )
                     }
                 }
-                OutlinedTextField(name, { name = it }, label = { Text(if (hebrew) "שם התוכנית" else "Schedule name") }, singleLine = true)
-                OutlinedTextField(material, { material = it }, label = { Text(if (hebrew) "ספר או נושא" else "Sefer or topic") }, singleLine = true)
-                OutlinedTextField(english, { english = it }, label = { Text(if (hebrew) "נקודת התחלה באנגלית" else "English starting reference") }, singleLine = true)
-                OutlinedTextField(hebrewReference, { hebrewReference = it }, label = { Text(if (hebrew) "נקודת התחלה בעברית" else "Hebrew starting reference") }, singleLine = true)
-                OutlinedTextField(paceText, { value -> paceText = value.filter(Char::isDigit).take(2) }, label = { Text(if (hebrew) "יחידות ליום" else "Units per learning day") }, singleLine = true)
-                Text(if (hebrew) "ימי לימוד" else "Learning days", fontWeight = FontWeight.Bold, color = DeepBlue)
-                val dayLabels = if (hebrew) listOf("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳") else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    dayLabels.forEachIndexed { index, label ->
+                if (program != null) {
+                    Card(colors = CardDefaults.cardColors(containerColor = DeepBlueContainer), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                if (hebrew) "מיקום הקטלוג נכון ל־${SharedPresetCatalog.positionAsOf}" else "Catalog position as of ${SharedPresetCatalog.positionAsOf}",
+                                color = MutedInk,
+                                fontSize = 13.sp,
+                            )
+                            Text(
+                                if (hebrew) program.currentReference.hebrew else program.currentReference.english,
+                                color = DeepBlue,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                if (hebrew) "${program.dailyQuantity} יחידות, ${program.units.size} יחידות במחזור"
+                                else "${program.dailyQuantity} per learning day · ${program.units.size} units in cycle",
+                                color = MutedInk,
+                                fontSize = 13.sp,
+                            )
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         FilterChip(
-                            selected = index in weekdays,
-                            onClick = {
-                                weekdays = if (index in weekdays && weekdays.size > 1) weekdays - index else weekdays + index
-                            },
-                            label = { Text(label) },
+                            selected = startIndex == program.currentIndex,
+                            onClick = { startIndex = program.currentIndex; positionQuery = "" },
+                            label = { Text(if (hebrew) "המיקום הנוכחי" else "Current position") },
                         )
+                        if (currentMasechtaStart != null && currentMasechtaStart < program.currentIndex) {
+                            FilterChip(
+                                selected = startIndex == currentMasechtaStart,
+                                onClick = { startIndex = currentMasechtaStart; positionQuery = "" },
+                                label = { Text(if (hebrew) "תחילת המסכת הנוכחית" else "Current tractate start") },
+                            )
+                        }
+                    }
+                    Text(
+                        (if (hebrew) "נקודת התחלה: " else "Starting position: ") +
+                            (if (hebrew) program.units[startIndex].hebrew else program.units[startIndex].english),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (startIndex != program.currentIndex) {
+                        Text(
+                            if (hebrew) "נקבע במקור ל־${SharedPresetCatalog.scheduledDate(program, startIndex)}"
+                            else "Originally scheduled for ${SharedPresetCatalog.scheduledDate(program, startIndex)}",
+                            color = MutedInk,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = positionQuery,
+                        onValueChange = { positionQuery = it },
+                        label = { Text(if (hebrew) "חפש מיקום מוקדם יותר" else "Find an earlier position") },
+                        supportingText = { Text(if (hebrew) "חפש באנגלית או בעברית" else "Search in English or Hebrew") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    positionMatches.forEach { indexed ->
+                        TextButton(
+                            onClick = { startIndex = indexed.index; positionQuery = "" },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                if (hebrew) indexed.value.hebrew else indexed.value.english,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start,
+                            )
+                        }
+                    }
+                } else {
+                    OutlinedTextField(customName, { customName = it }, label = { Text(if (hebrew) "שם התוכנית" else "Schedule name") }, singleLine = true)
+                    OutlinedTextField(customMaterial, { customMaterial = it }, label = { Text(if (hebrew) "ספר או נושא" else "Sefer or topic") }, singleLine = true)
+                    OutlinedTextField(customEnglish, { customEnglish = it }, label = { Text(if (hebrew) "נקודת התחלה באנגלית" else "English starting reference") }, singleLine = true)
+                    OutlinedTextField(customHebrew, { customHebrew = it }, label = { Text(if (hebrew) "נקודת התחלה בעברית" else "Hebrew starting reference") }, singleLine = true)
+                    OutlinedTextField(paceText, { value -> paceText = value.filter(Char::isDigit).take(2) }, label = { Text(if (hebrew) "יחידות ליום" else "Units per learning day") }, singleLine = true)
+                    Text(if (hebrew) "ימי לימוד" else "Learning days", fontWeight = FontWeight.Bold, color = DeepBlue)
+                    val dayLabels = if (hebrew) listOf("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳") else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        dayLabels.forEachIndexed { index, label ->
+                            FilterChip(
+                                selected = index in weekdays,
+                                onClick = { weekdays = if (index in weekdays && weekdays.size > 1) weekdays - index else weekdays + index },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+                if (program != null && program.id != "oraysa") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (hebrew) "חזרת סוף שבוע" else "Weekend chazarah", fontWeight = FontWeight.Bold)
+                            Text(if (hebrew) "ראשון–שני ביום שישי; שלישי–חמישי בשבת" else "Sunday–Monday on Friday; Tuesday–Thursday on Shabbos", color = MutedInk, fontSize = 13.sp)
+                        }
+                        Switch(checked = weekendChazarah, onCheckedChange = { weekendChazarah = it })
+                    }
+                }
+                if (program?.id == "oraysa") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (hebrew) "חזרת אורייתא הרשמית" else "Official Oraysa chazarah", fontWeight = FontWeight.Bold)
+                            Text(if (hebrew) "חזרה יומית וטווחי סוף שבוע" else "Daily review and weekend ranges", color = MutedInk, fontSize = 13.sp)
+                        }
+                        Switch(checked = weekendChazarah, onCheckedChange = { weekendChazarah = it })
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (hebrew) "חזרה מובנית" else "Built-in chazarah", fontWeight = FontWeight.Bold)
+                        Text(if (hebrew) "חזרה נוספת" else "Additional chazarah", fontWeight = FontWeight.Bold)
                         Text(if (hebrew) "אחרי יום ואחרי שבעה ימים" else "Review after 1 and 7 days", color = MutedInk, fontSize = 13.sp)
                     }
                     Switch(checked = chazarahEnabled, onCheckedChange = { chazarahEnabled = it })
@@ -1451,16 +1586,26 @@ private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreat
         confirmButton = {
             Button(
                 onClick = {
+                    val selected = program
                     onCreate(
                         ScheduleDraft(
-                            name.trim(), material.trim(), english.trim(), hebrewReference.trim(),
-                            paceText.toIntOrNull()?.coerceIn(1, 20) ?: 1,
-                            weekdays,
-                            if (chazarahEnabled) listOf(1, 7) else emptyList(),
+                            name = selected?.nameEnglish ?: customName.trim(),
+                            nameHebrew = selected?.nameHebrew.orEmpty(),
+                            material = selected?.materialType?.name ?: customMaterial.trim(),
+                            materialType = selected?.materialType?.name ?: "CUSTOM_UNIT",
+                            preset = selected,
+                            startIndex = startIndex,
+                            customReferenceEnglish = customEnglish.trim(),
+                            customReferenceHebrew = customHebrew.trim(),
+                            pace = selected?.dailyQuantity ?: (paceText.toIntOrNull()?.coerceIn(1, 20) ?: 1),
+                            weekdays = selected?.selectedWeekdays ?: weekdays,
+                            excludedDates = selected?.excludedDates.orEmpty(),
+                            chazarahOffsets = if (chazarahEnabled) listOf(1, 7) else emptyList(),
+                            includeWeekendChazarah = weekendChazarah,
                         ),
                     )
                 },
-                enabled = name.isNotBlank() && material.isNotBlank() && english.isNotBlank() && paceText.toIntOrNull() != null,
+                enabled = !custom || (customName.isNotBlank() && customMaterial.isNotBlank() && customEnglish.isNotBlank() && paceText.toIntOrNull() != null),
             ) {
                 Text(if (hebrew) "צור תוכנית" else "Create schedule")
             }

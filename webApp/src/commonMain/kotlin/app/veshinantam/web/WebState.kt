@@ -40,6 +40,8 @@ data class StoredSchedule(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val revision: Long = 0,
+    val sourceType: String = material,
+    val materialType: String = material,
 ) {
     fun domain() = LearningSchedule(id, name, material, pace, weekdays, chazarahOffsets, active, archived)
 }
@@ -154,8 +156,8 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
                 nameEnglish = schedule.name,
                 nameHebrew = schedule.nameHebrew,
                 kind = if (schedule.presetId == null) CanonicalScheduleKind.CUSTOM else CanonicalScheduleKind.PRESET,
-                sourceType = schedule.material,
-                materialType = canonicalMaterialType(schedule.material),
+                sourceType = schedule.sourceType,
+                materialType = canonicalMaterialType(schedule.materialType),
                 presetId = schedule.presetId,
                 startDate = schedule.startDate ?: scheduleTasks.minOfOrNull { it.dueDate } ?: today,
                 targetDate = schedule.targetDate ?: scheduleTasks.filter { it.type == "LEARNING" }.maxOfOrNull { it.dueDate },

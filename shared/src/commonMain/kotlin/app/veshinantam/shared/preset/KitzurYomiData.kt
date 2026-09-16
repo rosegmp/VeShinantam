@@ -1,4 +1,4 @@
-package app.veshinantam.domain.material
+package app.veshinantam.shared.preset
 
 /**
  * Kitzur Shulchan Aruch Yomi cycle for 24 Tishrei 5786 through 23 Tishrei 5787.
@@ -372,4 +372,3 @@ Klalim|כללים
 100:17-E|ק:יז-סוף
 """
 }
-
