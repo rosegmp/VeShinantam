@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
@@ -184,6 +185,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
+    var schedulePendingEdit by remember { mutableStateOf<StoredSchedule?>(null) }
     var bulkCompletionRequest by remember { mutableStateOf<BulkCompletionRequest?>(null) }
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
@@ -257,6 +259,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -310,6 +313,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -417,6 +421,19 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                 }
                 destination = Destination.TODAY
                 showCreate = false
+            },
+        )
+    }
+
+    schedulePendingEdit?.let { schedule ->
+        EditFutureScheduleDialog(
+            schedule = schedule,
+            today = todayIso,
+            hebrew = hebrew,
+            onDismiss = { schedulePendingEdit = null },
+            onSave = { edit ->
+                update { state -> editFutureSchedule(state, schedule.id, todayIso, edit, store.currentInstant()) }
+                schedulePendingEdit = null
             },
         )
     }
@@ -592,6 +609,7 @@ private fun AppContent(
     onArchiveSchedule: (String) -> Unit,
     onRestoreSchedule: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onRequestEdit: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
@@ -680,7 +698,7 @@ private fun AppContent(
                 hebrewCalendarPeriod = hebrewCalendarPeriod,
             )
             Destination.SCHEDULES -> SchedulesScreen(
-                state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestBulkCompletion,
+                state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit, onRequestBulkCompletion,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
         }
@@ -1228,6 +1246,7 @@ private fun SchedulesScreen(
     onArchive: (String) -> Unit,
     onRestore: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onRequestEdit: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
@@ -1291,7 +1310,12 @@ private fun SchedulesScreen(
                             }
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = Color(0xFFEEF0F4))
-                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                            FlowRow(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onRequestEdit(schedule.id) }) {
+                                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "ערוך עתיד" else "Edit future")
+                                }
                                 TextButton(onClick = { onSetActive(schedule.id, !schedule.active) }) {
                                     Icon(if (schedule.active) Icons.Default.Pause else Icons.Default.PlayArrow, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -1324,6 +1348,126 @@ private fun SchedulesScreen(
             }
         }
     }
+}
+
+@Composable
+private fun EditFutureScheduleDialog(
+    schedule: StoredSchedule,
+    today: String,
+    hebrew: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (WebFutureScheduleEdit) -> Unit,
+) {
+    var startDateText by remember(schedule.id) { mutableStateOf(maxOf(schedule.startDate ?: today, today)) }
+    var finishBy by remember(schedule.id) { mutableStateOf(false) }
+    var paceText by remember(schedule.id) { mutableStateOf(schedule.pace.coerceAtLeast(1).toString()) }
+    var targetDateText by remember(schedule.id) { mutableStateOf(maxOf(schedule.targetDate ?: today, startDateText)) }
+    var weekdays by remember(schedule.id) { mutableStateOf(schedule.weekdays.ifEmpty { (0..6).toSet() }) }
+    var weekendChazarah by remember(schedule.id) { mutableStateOf(schedule.officialOraysaChazarah) }
+    val startDate = IsoDate.parse(startDateText)
+    val targetDate = IsoDate.parse(targetDateText)
+    val pace = paceText.toIntOrNull()
+    val valid = startDate != null && startDate >= requireNotNull(IsoDate.parse(today)) && weekdays.isNotEmpty() &&
+        if (finishBy) targetDate != null && targetDate >= startDate else pace != null && pace > 0
+    val dayLabels = if (hebrew) listOf("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
+        else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (hebrew) "עריכת המשך התוכנית" else "Edit future schedule", color = DeepBlue) },
+        text = {
+            Column(
+                Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    if (hebrew) "רק משימות שלא הושלמו מהיום והלאה ייווצרו מחדש. היסטוריה ומשימות שהושלמו לא ישתנו."
+                    else "Only unfinished tasks from today forward will be regenerated. History and completed tasks will not change.",
+                    color = MutedInk,
+                )
+                OutlinedTextField(
+                    value = startDateText,
+                    onValueChange = { startDateText = it.take(10) },
+                    label = { Text(if (hebrew) "תאריך התחלה עתידי" else "Future start date") },
+                    supportingText = { Text("YYYY-MM-DD") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !finishBy,
+                        onClick = { finishBy = false },
+                        label = { Text(if (hebrew) "קצב יומי" else "Daily pace") },
+                    )
+                    FilterChip(
+                        selected = finishBy,
+                        onClick = { finishBy = true },
+                        label = { Text(if (hebrew) "סיום עד" else "Finish by") },
+                    )
+                }
+                if (finishBy) {
+                    OutlinedTextField(
+                        value = targetDateText,
+                        onValueChange = { targetDateText = it.take(10) },
+                        label = { Text(if (hebrew) "תאריך סיום" else "Completion date") },
+                        supportingText = { Text("YYYY-MM-DD") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = paceText,
+                        onValueChange = { paceText = it.filter(Char::isDigit).take(2) },
+                        label = { Text(if (hebrew) "יחידות ליום" else "Units per learning day") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Text(if (hebrew) "ימי לימוד" else "Learning days", fontWeight = FontWeight.Bold, color = DeepBlue)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    dayLabels.forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = index in weekdays,
+                            onClick = {
+                                weekdays = if (index in weekdays && weekdays.size > 1) weekdays - index else weekdays + index
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (schedule.presetId == "oraysa") {
+                                if (hebrew) "חזרת אורייתא הרשמית" else "Official Oraysa chazarah"
+                            } else {
+                                if (hebrew) "חזרת סוף שבוע" else "Weekend chazarah"
+                            },
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Switch(checked = weekendChazarah, onCheckedChange = { weekendChazarah = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = valid,
+                onClick = {
+                    onSave(
+                        WebFutureScheduleEdit(
+                            startDate = startDateText,
+                            dailyQuantity = pace ?: schedule.pace.coerceAtLeast(1),
+                            targetCompletionDate = targetDateText.takeIf { finishBy },
+                            selectedWeekdays = weekdays,
+                            includeWeekendChazarah = weekendChazarah,
+                        ),
+                    )
+                },
+            ) { Text(if (hebrew) "שמור שינויים" else "Save changes") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(if (hebrew) "ביטול" else "Cancel") } },
+    )
 }
 
 @Composable

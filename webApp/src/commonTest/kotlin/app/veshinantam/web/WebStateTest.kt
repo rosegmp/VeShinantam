@@ -166,4 +166,72 @@ class WebStateTest {
         assertEquals(app.veshinantam.shared.CanonicalMaterialType.DAF, canonical.materialType)
         assertEquals("daf-yomi-bavli", canonical.presetId)
     }
+
+    @Test
+    fun futureEditPreservesHistoryAndRegeneratesOnlyOpenFutureWork() {
+        val schedule = StoredSchedule(
+            id = "schedule",
+            name = "Mishnah Yomis",
+            material = "Mishnah",
+            pace = 2,
+            weekdays = (0..6).toSet(),
+            chazarahOffsets = listOf(1),
+            materialType = "MISHNAH",
+        )
+        val state = WebAppState(
+            schedules = listOf(schedule),
+            tasks = listOf(
+                StoredTask("history", "schedule", "Ohalos 2:1", "אהלות ב:א", "2026-09-13", "LEARNING", stableKey = "learning:u1:2026-09-13"),
+                StoredTask("completed", "schedule", "Ohalos 2:2", "אהלות ב:ב", today, "LEARNING", completed = true, stableKey = "learning:u2:$today"),
+                StoredTask("future-1", "schedule", "Ohalos 2:3", "אהלות ב:ג", today, "LEARNING", stableKey = "learning:u3:$today"),
+                StoredTask("future-2", "schedule", "Ohalos 2:4", "אהלות ב:ד", "2026-09-15", "LEARNING", stableKey = "learning:u4:2026-09-15"),
+                StoredTask("review-1", "schedule", "Ohalos 2:3", "אהלות ב:ג", "2026-09-15", "CHAZARAH", stableKey = "legacy-review", originalLearningDate = today, reviewIdentity = "day:1"),
+            ),
+        )
+
+        val updated = editFutureSchedule(
+            state = state,
+            scheduleId = "schedule",
+            today = today,
+            edit = WebFutureScheduleEdit(
+                startDate = "2026-09-16",
+                dailyQuantity = 1,
+                selectedWeekdays = setOf(1, 2, 3, 4, 5),
+            ),
+            updatedAt = now,
+        )
+
+        assertEquals(listOf("history", "completed"), updated.tasks.take(2).map { it.id })
+        assertEquals(
+            listOf("2026-09-16", "2026-09-17"),
+            updated.tasks.filter { it.type == "LEARNING" && !it.completed && it.dueDate >= today }.map { it.dueDate },
+        )
+        assertEquals(listOf("2026-09-17", "2026-09-18"), updated.tasks.filter { it.type == "CHAZARAH" }.map { it.dueDate })
+        assertEquals(2, updated.schedules.single().generationRevision)
+        assertEquals(setOf(1, 2, 3, 4, 5), updated.schedules.single().weekdays)
+    }
+
+    @Test
+    fun futureEditSupportsFinishByDistribution() {
+        val state = WebAppState(
+            schedules = listOf(StoredSchedule("schedule", "Plan", "Other", 1, chazarahOffsets = emptyList())),
+            tasks = (1..5).map { index ->
+                StoredTask("task-$index", "schedule", "Unit $index", "יחידה $index", today, "LEARNING")
+            },
+        )
+
+        val updated = editFutureSchedule(
+            state,
+            "schedule",
+            today,
+            WebFutureScheduleEdit(today, 1, "2026-09-16", setOf(1, 2, 3, 4, 5)),
+            now,
+        )
+
+        assertEquals(
+            listOf("2026-09-14", "2026-09-14", "2026-09-15", "2026-09-15", "2026-09-16"),
+            updated.tasks.map { it.dueDate },
+        )
+        assertEquals("2026-09-16", updated.schedules.single().targetDate)
+    }
 }

@@ -6,7 +6,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | --- | --- | --- | --- |
 | Today navigation and task completion | Complete | Complete | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, synchronized ordering, and browser-local day/time-zone re-evaluation |
 | Calendar | Complete | Complete | Gregorian/Hebrew month navigation, filter-aware statuses/counts, bilingual labels/details, schedule/type filters, and individual completion/undo |
-| Schedule list and archive | Complete | Partial | Pause/resume, archive/restore, confirmed deletion, and separately confirmed past-learning/past-chazarah completion are complete; future-only editing/regeneration remains |
+| Schedule list and archive | Complete | Complete | Pause/resume, archive/restore, confirmed deletion, separately confirmed past-learning/past-chazarah completion, and future-only editing/regeneration preserve history and completed work |
 | Preset creation | Complete | Complete | All 12 Android presets share exact bilingual units, positions, dates, cadence/exclusions, earlier-position search, and generated output |
 | Structured custom schedules | Complete | Partial | Same selectors, pace/finish-by, weekdays, exclusions, missed-work, and preview |
 | Chazarah planning | Complete | Partial | Finite, annual, weekend, and official Oraysa behavior |

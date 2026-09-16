@@ -17,6 +17,9 @@ import app.veshinantam.shared.CanonicalScheduleState
 import app.veshinantam.shared.CanonicalSefarimLanguage
 import app.veshinantam.shared.CanonicalTask
 import app.veshinantam.shared.CanonicalTaskType
+import app.veshinantam.shared.SharedMaterialUnit
+import app.veshinantam.shared.SharedScheduleEngine
+import app.veshinantam.shared.SharedScheduleRules
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -99,6 +102,14 @@ data class WebAppState(
         )
     }
 }
+
+data class WebFutureScheduleEdit(
+    val startDate: String,
+    val dailyQuantity: Int,
+    val targetCompletionDate: String? = null,
+    val selectedWeekdays: Set<Int>,
+    val includeWeekendChazarah: Boolean = false,
+)
 
 @Serializable
 data class WebBackup(
@@ -375,6 +386,126 @@ fun completePastTasks(
         }
     },
 )
+
+/**
+ * Regenerates only unfinished work scheduled for today or later. Completed and historical tasks
+ * are immutable, matching Android's future-edit contract.
+ */
+fun editFutureSchedule(
+    state: WebAppState,
+    scheduleId: String,
+    today: String,
+    edit: WebFutureScheduleEdit,
+    updatedAt: String,
+): WebAppState {
+    val todayDate = requireNotNull(IsoDate.parse(today))
+    val startDate = requireNotNull(IsoDate.parse(edit.startDate))
+    val targetDate = edit.targetCompletionDate?.let { requireNotNull(IsoDate.parse(it)) }
+    require(startDate >= todayDate) { "Future start date cannot precede today" }
+    require(targetDate == null || targetDate >= startDate) { "Completion date cannot precede the future start date" }
+    require(targetDate != null || edit.dailyQuantity > 0) { "Daily quantity must be positive" }
+    require(edit.selectedWeekdays.isNotEmpty() && edit.selectedWeekdays.all { it in 0..6 }) {
+        "At least one valid weekday must be selected"
+    }
+
+    val schedule = requireNotNull(state.schedules.firstOrNull { it.id == scheduleId })
+    val scheduleTasks = state.tasks.filter { it.scheduleId == scheduleId }
+    val editableLearning = scheduleTasks.filter { task ->
+        task.type == LearningTaskType.LEARNING.name && !task.completed && task.dueDate >= today
+    }
+    if (editableLearning.isEmpty()) return state
+
+    val editableStableKeys = editableLearning.mapTo(mutableSetOf()) { it.stableKey }
+    val editableReviewSources = editableLearning.mapTo(mutableSetOf()) {
+        listOf(it.originalLearningDate, it.referenceEnglish, it.referenceHebrew)
+    }
+    val affectedWeeks = editableLearning.mapTo(mutableSetOf()) { task ->
+        val learningDate = requireNotNull(IsoDate.parse(task.originalLearningDate))
+        learningDate.minusDays(GregorianCalendar.dayOfWeek(learningDate.year, learningDate.month, learningDate.day))
+    }
+    val reviewsToReplace = scheduleTasks.filter { task ->
+        if (task.type != LearningTaskType.CHAZARAH.name || task.completed || task.dueDate < today) {
+            false
+        } else if (
+            task.reviewIdentity?.startsWith("oraysa:weekly") == true ||
+            task.reviewIdentity?.startsWith("weekend:weekly") == true
+        ) {
+            val learningDate = requireNotNull(IsoDate.parse(task.originalLearningDate))
+            learningDate.minusDays(GregorianCalendar.dayOfWeek(learningDate.year, learningDate.month, learningDate.day)) in affectedWeeks
+        } else {
+            editableStableKeys.any { learningKey -> task.stableKey.startsWith("review:$learningKey:") } ||
+                listOf(task.originalLearningDate, task.referenceEnglish, task.referenceHebrew) in editableReviewSources
+        }
+    }
+
+    val revision = schedule.generationRevision + 1
+    val rules = SharedScheduleRules(edit.selectedWeekdays)
+    val material = editableLearning.mapIndexed { index, task ->
+        SharedMaterialUnit(
+            id = "$scheduleId-edit-$revision-unit-$index",
+            ordinal = index,
+            labelEnglish = task.referenceEnglish,
+            labelHebrew = task.referenceHebrew,
+            quantity = task.quantity,
+        )
+    }
+    val engine = SharedScheduleEngine()
+    val learning = targetDate?.let { engine.generateByCompletionDate(material, startDate, it, rules) }
+        ?: engine.generateByDailyQuantity(material, startDate, edit.dailyQuantity, rules)
+    val additionalReviews = engine.generateChazarah(
+        learningTasks = learning,
+        dayOffsets = schedule.chazarahOffsets,
+        repeatsAnnually = schedule.repeatsAnnually,
+        rules = rules,
+        annualReviewsThroughYear = startDate.year + if (schedule.repeatsAnnually) 10 else 0,
+    )
+    val weekendReviews = if (edit.includeWeekendChazarah) {
+        if (schedule.presetId == "oraysa") engine.generateOfficialOraysaChazarah(learning, rules)
+        else engine.generateWeekendChazarah(learning)
+    } else {
+        emptyList()
+    }
+    val replacements = (learning + weekendReviews + additionalReviews)
+        .distinctBy { task ->
+            listOf(task.type.name, task.originalLearningDate.toString(), task.plannedDate.toString(), task.material.labelEnglish)
+        }
+        .mapIndexed { index, task ->
+            StoredTask(
+                id = "$scheduleId-edit-$revision-${task.type.name.lowercase()}-${index + 1}",
+                scheduleId = scheduleId,
+                referenceEnglish = task.material.labelEnglish,
+                referenceHebrew = task.material.labelHebrew,
+                dueDate = task.plannedDate.toString(),
+                type = task.type.name,
+                stableKey = task.stableKey,
+                materialType = schedule.materialType,
+                quantity = task.material.quantity,
+                originalLearningDate = task.originalLearningDate.toString(),
+                reviewIdentity = task.reviewIdentity,
+                generationRevision = revision,
+                updatedAt = updatedAt,
+            )
+        }
+    val removedIds = (editableLearning + reviewsToReplace).mapTo(mutableSetOf()) { it.id }
+    val preservedTasks = state.tasks.filterNot { it.id in removedIds }
+    val target = (preservedTasks.asSequence()
+        .filter { it.scheduleId == scheduleId && it.type == LearningTaskType.LEARNING.name }
+        .map { it.dueDate } + learning.asSequence().map { it.plannedDate.toString() })
+        .maxOrNull()
+    val updatedSchedule = schedule.copy(
+        pace = edit.dailyQuantity.coerceAtLeast(1),
+        weekdays = edit.selectedWeekdays,
+        startDate = edit.startDate,
+        targetDate = target,
+        officialOraysaChazarah = edit.includeWeekendChazarah,
+        generationRevision = revision,
+        updatedAt = updatedAt,
+    )
+    return state.copy(
+        schedules = state.schedules.map { if (it.id == scheduleId) updatedSchedule else it },
+        tasks = preservedTasks + replacements,
+    )
+}
 
 private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (value.lowercase()) {
     "gemara", "daf" -> CanonicalMaterialType.DAF
