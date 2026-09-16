@@ -217,6 +217,15 @@ enum class WebTodaySection { NEW_LEARNING, CHAZARAH_TODAY, OVERDUE_LEARNING, OVE
 
 enum class WebTodaySortOrder { SCHEDULED_FIRST, NEWEST_DUE_FIRST, REFERENCE_ASCENDING, REFERENCE_DESCENDING }
 
+enum class WebCalendarDayStatus { NONE, INCOMPLETE, PARTIAL, COMPLETE }
+
+data class WebCalendarDaySummary(
+    val date: String,
+    val completedCount: Int,
+    val taskCount: Int,
+    val status: WebCalendarDayStatus,
+)
+
 data class WebTodayTask(val task: StoredTask, val section: WebTodaySection)
 
 fun todayTasks(tasks: List<StoredTask>, today: String, sortOrder: String, preferHebrew: Boolean): List<WebTodayTask> {
@@ -300,6 +309,28 @@ private val REFERENCE_LOCATION_MARKER = Regex(
     "(?i)\\s+(?:daf|page|perek|mishnah|siman|seif|chelek|דף|עמוד|פרק|משנה|סימן|סעיף|חלק)\\s+|\\s+\\d",
 )
 
+fun calendarDaySummaries(
+    tasks: List<StoredTask>,
+    scheduleId: String? = null,
+    taskType: String? = null,
+): Map<String, WebCalendarDaySummary> = tasks.asSequence()
+    .filter { scheduleId == null || it.scheduleId == scheduleId }
+    .filter { taskType == null || it.type == taskType }
+    .groupBy { it.dueDate }
+    .mapValues { (date, dateTasks) ->
+        val completed = dateTasks.count { it.completed }
+        WebCalendarDaySummary(
+            date = date,
+            completedCount = completed,
+            taskCount = dateTasks.size,
+            status = when {
+                completed == 0 -> WebCalendarDayStatus.INCOMPLETE
+                completed == dateTasks.size -> WebCalendarDayStatus.COMPLETE
+                else -> WebCalendarDayStatus.PARTIAL
+            },
+        )
+    }
+
 private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (value.lowercase()) {
     "gemara", "daf" -> CanonicalMaterialType.DAF
     "amud" -> CanonicalMaterialType.AMUD
@@ -315,6 +346,8 @@ interface BrowserStore {
     fun load(): WebAppState
     fun save(state: WebAppState)
     fun currentLocalDate(): String
+    fun hebrewDateLabel(date: String, hebrewUi: Boolean): String
+    fun hebrewDayLabel(date: String, hebrewUi: Boolean): String
     fun currentInstant(): String
     fun currentZoneId(): String
     fun exportBackup(state: WebAppState)

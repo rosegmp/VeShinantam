@@ -85,4 +85,27 @@ class WebStateTest {
 
         assertEquals(listOf("3a", "3b", "20a", "104b"), todayTasks(tasks, today, "REFERENCE_ASCENDING", false).map { it.task.id })
     }
+
+    @Test
+    fun calendarSummariesDistinguishStatusAndHonorFilters() {
+        val tasks = listOf(
+            StoredTask("learning-done", "daf-yomi", "Berachos 2", "ברכות ב", today, "LEARNING", completed = true),
+            StoredTask("review-open", "daf-yomi", "Berachos 2", "ברכות ב", today, "CHAZARAH"),
+            StoredTask("other-open", "mishnah", "Peah 1", "פאה א", today, "LEARNING"),
+            StoredTask("tomorrow-done", "daf-yomi", "Berachos 3", "ברכות ג", "2026-09-15", "LEARNING", completed = true),
+        )
+
+        val all = calendarDaySummaries(tasks)
+        assertEquals(WebCalendarDayStatus.PARTIAL, all.getValue(today).status)
+        assertEquals(1, all.getValue(today).completedCount)
+        assertEquals(3, all.getValue(today).taskCount)
+        assertEquals(WebCalendarDayStatus.COMPLETE, all.getValue("2026-09-15").status)
+
+        val learning = calendarDaySummaries(tasks, scheduleId = "daf-yomi", taskType = "LEARNING")
+        assertEquals(WebCalendarDayStatus.COMPLETE, learning.getValue(today).status)
+        assertEquals(1, learning.getValue(today).taskCount)
+
+        val chazarah = calendarDaySummaries(tasks, scheduleId = "daf-yomi", taskType = "CHAZARAH")
+        assertEquals(WebCalendarDayStatus.INCOMPLETE, chazarah.getValue(today).status)
+    }
 }

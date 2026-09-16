@@ -6,6 +6,8 @@ The repository also contains a Kotlin/Compose Multiplatform Web companion. Andro
 
 The web Today view now mirrors Android's separate new-learning, chazarah-due-today, overdue-learning, overdue-chazarah, and completed-today sections. Sections are collapsible, overdue work shows its due date, and the synchronized sort preference supports scheduled, newest-due, and natural reference ordering in English or Hebrew. The browser re-evaluates the local date after midnight, resume, and time-zone changes without requiring a reload.
 
+The web Calendar grid shows filter-aware incomplete, partial, and complete status for each day, including completed/total counts. Every cell includes its Hebrew day number, selected dates show full Gregorian and Hebrew dates, and schedule/type filters update both the grid and day details.
+
 The web app is deployed automatically from `main` to [GitHub Pages](https://rosegmp.github.io/VeShinantam/).
 
 ## What is implemented now

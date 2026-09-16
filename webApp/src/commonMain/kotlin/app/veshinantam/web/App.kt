@@ -243,6 +243,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
+                                hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
+                                hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
                             )
                         }
                     } else {
@@ -284,6 +286,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
+                                hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
+                                hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
                             )
                         }
                     }
@@ -497,6 +501,8 @@ private fun AppContent(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onAccount: () -> Unit,
+    hebrewDateLabel: (String) -> String,
+    hebrewDayLabel: (String) -> String,
 ) {
     var showDataMenu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
@@ -553,7 +559,14 @@ private fun AppContent(
         HorizontalDivider(color = Color(0xFFE4E7EC))
         when (destination) {
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate, onTodaySortOrder)
-            Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew, onToggle)
+            Destination.CALENDAR -> CalendarScreen(
+                state = state,
+                today = todayIso,
+                hebrew = hebrew,
+                onToggle = onToggle,
+                hebrewDateLabel = hebrewDateLabel,
+                hebrewDayLabel = hebrewDayLabel,
+            )
             Destination.SCHEDULES -> SchedulesScreen(
                 state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete,
             )
@@ -867,7 +880,14 @@ private fun EmptyToday(hebrew: Boolean, onCreate: () -> Unit) {
 }
 
 @Composable
-private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, onToggle: (String) -> Unit) {
+private fun CalendarScreen(
+    state: WebAppState,
+    today: String,
+    hebrew: Boolean,
+    onToggle: (String) -> Unit,
+    hebrewDateLabel: (String) -> String,
+    hebrewDayLabel: (String) -> String,
+) {
     val todayParts = today.split("-").mapNotNull { it.toIntOrNull() }
     var year by remember { mutableStateOf(todayParts.getOrElse(0) { 2026 }) }
     var month by remember { mutableStateOf(todayParts.getOrElse(1) { 9 }) }
@@ -876,6 +896,12 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
     var selectedScheduleId by remember { mutableStateOf<String?>(null) }
     var taskFilter by remember { mutableStateOf(CalendarTaskFilter.ALL) }
     val cells = GregorianCalendar.monthCells(year, month)
+    val filteredTaskType = when (taskFilter) {
+        CalendarTaskFilter.ALL -> null
+        CalendarTaskFilter.LEARNING -> LearningTaskType.LEARNING.name
+        CalendarTaskFilter.CHAZARAH -> LearningTaskType.CHAZARAH.name
+    }
+    val daySummaries = calendarDaySummaries(state.tasks, selectedScheduleId, filteredTaskType)
     LaunchedEffect(today) {
         if (followsToday) {
             val updatedParts = today.split("-").mapNotNull { it.toIntOrNull() }
@@ -926,20 +952,28 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                 cells.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { cell ->
-                            val taskCount = state.tasks.count { it.dueDate == cell.isoDate }
+                            val summary = cell.isoDate?.let(daySummaries::get)
                             val isToday = cell.isoDate == today
                             val isSelected = cell.isoDate == selectedDate
                             Box(
-                                Modifier.weight(1f).height(58.dp).padding(3.dp)
+                                Modifier.weight(1f).height(70.dp).padding(3.dp)
                                     .background(
                                         when {
                                             isSelected -> DeepBlue
+                                            summary?.status == WebCalendarDayStatus.COMPLETE -> Color(0xFFDFF3E8)
+                                            summary?.status == WebCalendarDayStatus.PARTIAL -> Color(0xFFFFF0CE)
+                                            summary?.status == WebCalendarDayStatus.INCOMPLETE -> Color(0xFFFFE8E8)
                                             isToday -> DeepBlueContainer
                                             else -> Color.Transparent
                                         },
                                         RoundedCornerShape(12.dp),
                                     )
-                                    .then(if (taskCount > 0 && !isToday && !isSelected) Modifier.border(1.dp, Color(0xFFDDE1E8), RoundedCornerShape(12.dp)) else Modifier)
+                                    .then(if (isToday && !isSelected) Modifier.border(2.dp, DeepBlue, RoundedCornerShape(12.dp)) else Modifier)
+                                    .semantics {
+                                        cell.isoDate?.let { date ->
+                                            contentDescription = calendarDayDescription(date, summary, hebrew)
+                                        }
+                                    }
                                     .clickable(enabled = cell.day != null) {
                                         cell.isoDate?.let {
                                             selectedDate = it
@@ -951,10 +985,15 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                                 if (cell.day != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         cell.day.toString(),
-                                        color = if (isSelected) Color.White else if (isToday) DeepBlue else Color(0xFF333841),
+                                        color = if (isSelected) Color.White else Color(0xFF333841),
                                         fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                                     )
-                                    if (taskCount > 0) Box(Modifier.padding(top = 4.dp).size(6.dp).background(if (isSelected) Color.White else WarmGold, CircleShape))
+                                    cell.isoDate?.let { date ->
+                                        Text(hebrewDayLabel(date), color = if (isSelected) Color.White.copy(alpha = .8f) else MutedInk, fontSize = 11.sp)
+                                    }
+                                    summary?.let {
+                                        Text("${it.completedCount}/${it.taskCount}", color = if (isSelected) Color.White else DeepBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -963,9 +1002,14 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text(if (hebrew) "הנקודה הזהובה מסמנת יום עם לימוד מתוכנן." else "A gold dot marks a day with scheduled learning.", color = MutedInk, fontSize = 14.sp)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            CalendarLegend(Color(0xFFFFE8E8), if (hebrew) "לא הושלם" else "Incomplete")
+            CalendarLegend(Color(0xFFFFF0CE), if (hebrew) "הושלם חלקית" else "Partial")
+            CalendarLegend(Color(0xFFDFF3E8), if (hebrew) "הושלם" else "Complete")
+        }
         Spacer(Modifier.height(20.dp))
         Text(friendlyDate(selectedDate, hebrew), color = DeepBlue, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Text(hebrewDateLabel(selectedDate), color = MutedInk, fontSize = 15.sp)
         Spacer(Modifier.height(12.dp))
         Text(if (hebrew) "תוכנית" else "Schedule", color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
@@ -1020,6 +1064,26 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
             }
         }
     }
+}
+
+@Composable
+private fun CalendarLegend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(12.dp).background(color, CircleShape).border(1.dp, Color(0xFFD3D7DE), CircleShape))
+        Spacer(Modifier.width(5.dp))
+        Text(label, color = MutedInk, fontSize = 13.sp)
+    }
+}
+
+private fun calendarDayDescription(date: String, summary: WebCalendarDaySummary?, hebrew: Boolean): String {
+    if (summary == null) return if (hebrew) "$date, אין משימות" else "$date, no tasks"
+    val status = when (summary.status) {
+        WebCalendarDayStatus.NONE -> if (hebrew) "אין משימות" else "no tasks"
+        WebCalendarDayStatus.INCOMPLETE -> if (hebrew) "לא הושלם" else "incomplete"
+        WebCalendarDayStatus.PARTIAL -> if (hebrew) "הושלם חלקית" else "partially complete"
+        WebCalendarDayStatus.COMPLETE -> if (hebrew) "הושלם" else "complete"
+    }
+    return if (hebrew) "$date, $status, ${summary.completedCount} מתוך ${summary.taskCount}" else "$date, $status, ${summary.completedCount} of ${summary.taskCount}"
 }
 
 private fun isoDate(year: Int, month: Int, day: Int): String =

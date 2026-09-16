@@ -25,6 +25,8 @@ private class LocalBrowserStore : BrowserStore {
     }
 
     override fun currentLocalDate(): String = currentIsoDate()
+    override fun hebrewDateLabel(date: String, hebrewUi: Boolean): String = formatHebrewDate(date, hebrewUi)
+    override fun hebrewDayLabel(date: String, hebrewUi: Boolean): String = formatHebrewDay(date, hebrewUi)
     override fun currentInstant(): String = currentIsoInstant()
     override fun currentZoneId(): String = browserTimeZone()
 
@@ -160,6 +162,26 @@ private external fun currentIsoInstant(): String
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'")
 private external fun browserTimeZone(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(iso, hebrewUi) => {
+    const value = new Date(iso + 'T12:00:00Z');
+    if (Number.isNaN(value.getTime())) return iso;
+    return new Intl.DateTimeFormat(hebrewUi ? 'he-IL-u-ca-hebrew' : 'en-US-u-ca-hebrew', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
+    }).format(value);
+}""")
+private external fun formatHebrewDate(iso: String, hebrewUi: Boolean): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(iso, hebrewUi) => {
+    const value = new Date(iso + 'T12:00:00Z');
+    if (Number.isNaN(value.getTime())) return '';
+    return new Intl.DateTimeFormat(hebrewUi ? 'he-IL-u-ca-hebrew' : 'en-US-u-ca-hebrew', {
+        day: 'numeric', timeZone: 'UTC'
+    }).format(value);
+}""")
+private external fun formatHebrewDay(iso: String, hebrewUi: Boolean): String
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
