@@ -8,8 +8,8 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Calendar | Complete | Complete | Gregorian/Hebrew month navigation, filter-aware statuses/counts, bilingual labels/details, schedule/type filters, and individual completion/undo |
 | Schedule list and archive | Complete | Complete | Pause/resume, archive/restore, confirmed deletion, separately confirmed past-learning/past-chazarah completion, and future-only editing/regeneration preserve history and completed work |
 | Preset creation | Complete | Complete | All 12 Android presets share exact bilingual units, positions, dates, cadence/exclusions, earlier-position search, and generated output |
-| Structured custom schedules | Complete | Partial | Same selectors, pace/finish-by, weekdays, exclusions, missed-work, and preview |
-| Chazarah planning | Complete | Partial | Finite, annual, weekend, and official Oraysa behavior |
+| Structured custom schedules | Complete | Complete | Shared exact-range selectors, pace/finish-by, weekdays, synchronized exclusions, missed-work behavior, and pre-save workload preview |
+| Chazarah planning | Complete | Complete | Finite offsets, annual reviews, weekend ranges, and official Oraysa behavior use the shared planner |
 | Deterministic planning engine | Complete | Partial | One `shared/commonMain` implementation with JVM/Wasm golden tests |
 | Progress statistics and streaks | Complete | Partial | Identical totals, streaks, milestones, goals, and workload |
 | English/Hebrew UI and RTL | Complete | Complete | Maintain browser accessibility and directional isolation |

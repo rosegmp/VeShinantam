@@ -37,6 +37,18 @@ class WebStateTest {
     }
 
     @Test
+    fun olderVersionTwoBackupRecoversCanonicalExclusions() {
+        val state = WebAppState.sample(today)
+        val canonical = state.toCanonical(now, today).copy(
+            exclusions = listOf(app.veshinantam.shared.CanonicalExclusion("daf-yomi", "2026-09-20", now)),
+        )
+
+        val restored = WebBackup(version = 2, state = state, canonical = canonical).validStateOrNull()
+
+        assertEquals(listOf("daf-yomi:2026-09-20"), restored?.exclusions?.map { it.id })
+    }
+
+    @Test
     fun todayTasksMatchAndroidSectionsAndHideOldCompletions() {
         val tasks = listOf(
             StoredTask("today-learning", "daf-yomi", "Berachos 18", "ברכות יח", today, "LEARNING"),
@@ -233,5 +245,32 @@ class WebStateTest {
             updated.tasks.map { it.dueDate },
         )
         assertEquals("2026-09-16", updated.schedules.single().targetDate)
+        assertEquals(0, updated.schedules.single().pace)
+    }
+
+    @Test
+    fun exclusionsRoundTripAndRemainActiveDuringFutureEdits() {
+        val state = WebAppState(
+            schedules = listOf(StoredSchedule("schedule", "Plan", "Other", 1, chazarahOffsets = emptyList())),
+            tasks = listOf(
+                StoredTask("task-1", "schedule", "Unit 1", "יחידה 1", today, "LEARNING"),
+                StoredTask("task-2", "schedule", "Unit 2", "יחידה 2", today, "LEARNING"),
+            ),
+            exclusions = listOf(StoredExclusion("schedule", "2026-09-15", now)),
+        )
+
+        val canonical = state.toCanonical(now, today)
+        val backup = WebBackup(state = state, canonical = canonical)
+        val updated = editFutureSchedule(
+            state,
+            "schedule",
+            today,
+            WebFutureScheduleEdit(today, 1, selectedWeekdays = (0..6).toSet()),
+            now,
+        )
+
+        assertEquals(listOf("schedule:2026-09-15"), canonical.exclusions.map { it.id })
+        assertEquals(state, backup.validStateOrNull())
+        assertEquals(listOf("2026-09-14", "2026-09-16"), updated.tasks.map { it.dueDate })
     }
 }

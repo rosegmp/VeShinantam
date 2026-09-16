@@ -3591,30 +3591,17 @@ private fun selectedUnitReferences(
     chelek: Int,
     mishnahBerurahUnit: MishnahBerurahUnit,
 ): List<UnitReference> {
-    requireNotNull(start)
-    requireNotNull(end)
-    val fullRange = when (choice) {
-        SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM -> {
-            val catalog = when (choice) {
-                SeferChoice.GEMARA -> MaterialCatalog.gemara
-                SeferChoice.YERUSHALMI -> MaterialCatalog.yerushalmi
-                SeferChoice.MISHNAH -> MaterialCatalog.mishnah
-                SeferChoice.RAMBAM -> MaterialCatalog.rambam
-                else -> error("Not a sectioned sefer")
-            }
-            require(fromMasechtaIndex in catalog.indices && toMasechtaIndex in fromMasechtaIndex..catalog.lastIndex)
-            catalog.subList(fromMasechtaIndex, toMasechtaIndex + 1).flatMap {
-                materialUnitOptions(choice, it, gemaraUnit, mishnahUnit, chelek, mishnahBerurahUnit)
-            }
-        }
-        SeferChoice.MISHNAH_BERURAH, SeferChoice.CHOFETZ_CHAIM, SeferChoice.TEHILLIM, SeferChoice.KITZUR ->
-            materialUnitOptions(choice, null, gemaraUnit, mishnahUnit, chelek, mishnahBerurahUnit)
-        SeferChoice.OTHER -> emptyList()
-    }
-    val startIndex = fullRange.indexOf(start)
-    val endIndex = fullRange.indexOf(end)
-    require(startIndex >= 0 && endIndex >= startIndex)
-    return fullRange.subList(startIndex, endIndex + 1)
+    return MaterialCatalog.selectedUnits(
+        choice = choice,
+        fromSectionIndex = fromMasechtaIndex,
+        toSectionIndex = toMasechtaIndex,
+        start = requireNotNull(start),
+        end = requireNotNull(end),
+        gemaraUnit = gemaraUnit,
+        mishnahUnit = mishnahUnit,
+        chelek = chelek,
+        mishnahBerurahUnit = mishnahBerurahUnit,
+    )
 }
 
 private fun materialUnitOptions(
@@ -3624,16 +3611,11 @@ private fun materialUnitOptions(
     mishnahUnit: MishnahUnit,
     chelek: Int,
     mishnahBerurahUnit: MishnahBerurahUnit,
-): List<UnitReference> = when (choice) {
-    SeferChoice.GEMARA -> requireNotNull(masechta).let {
-        MaterialCatalog.gemaraUnits(listOf(it), 2, it.lastLocation, gemaraUnit)
-    }
-    SeferChoice.YERUSHALMI -> MaterialCatalog.yerushalmiUnits(requireNotNull(masechta))
-    SeferChoice.MISHNAH -> MaterialCatalog.mishnahUnits(requireNotNull(masechta), mishnahUnit)
-    SeferChoice.MISHNAH_BERURAH -> MaterialCatalog.mishnahBerurahUnitOptions(chelek, mishnahBerurahUnit)
-    SeferChoice.RAMBAM -> MaterialCatalog.rambamUnits(requireNotNull(masechta))
-    SeferChoice.CHOFETZ_CHAIM -> MaterialCatalog.chofetzChaimUnits
-    SeferChoice.TEHILLIM -> MaterialCatalog.tehillimUnits
-    SeferChoice.KITZUR -> MaterialCatalog.simanim("Kitzur Shulchan Aruch", "קיצור שולחן ערוך", 1, 221)
-    SeferChoice.OTHER -> emptyList()
-}
+): List<UnitReference> = MaterialCatalog.unitOptions(
+    choice = choice,
+    section = masechta,
+    gemaraUnit = gemaraUnit,
+    mishnahUnit = mishnahUnit,
+    chelek = chelek,
+    mishnahBerurahUnit = mishnahBerurahUnit,
+)

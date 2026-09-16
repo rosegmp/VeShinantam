@@ -50,7 +50,7 @@
       presetId: schedule.presetId || undefined,
       startDate: schedule.startDate || allDates[0] || now.slice(0, 10),
       targetDate: schedule.targetDate || learningDates.at(-1) || undefined,
-      dailyQuantity: Number(schedule.pace || 1),
+      dailyQuantity: Number(schedule.pace ?? 1),
       selectedWeekdays: Array.from(schedule.weekdays || [0, 1, 2, 3, 4, 5, 6]),
       chazarahDayOffsets: Array.from(schedule.chazarahOffsets || []),
       repeatsAnnually: Boolean(schedule.repeatsAnnually),
@@ -83,6 +83,14 @@
     completionZoneId: task.completionZoneId || undefined,
     updatedAt: now,
     revision: Number(task.revision || 0),
+    deleted: false
+  });
+
+  const exclusionPayload = (exclusion, now) => ({
+    scheduleId: exclusion.scheduleId,
+    date: exclusion.date,
+    updatedAt: now,
+    revision: Number(exclusion.revision || 0),
     deleted: false
   });
 
@@ -141,6 +149,7 @@
     };
     await compareCollection('SCHEDULE', previous?.schedules, next?.schedules, schedulePayload);
     await compareCollection('TASK', previous?.tasks, next?.tasks, (task, _state, timestamp) => taskPayload(task, timestamp));
+    await compareCollection('EXCLUSION', previous?.exclusions, next?.exclusions, (exclusion, _state, timestamp) => exclusionPayload(exclusion, timestamp));
     if (!previous || previous.language !== next.language) {
       const payload = preferencesPayload(next, now);
       await queueMutation({
@@ -235,11 +244,17 @@
     completionZoneId: value.completionZoneId || null, updatedAt: value.updatedAt, revision: value.revision
   });
 
+  const exclusionFromCanonical = value => ({
+    id: `${value.scheduleId}:${value.date}`, scheduleId: value.scheduleId, date: value.date,
+    updatedAt: value.updatedAt, revision: value.revision
+  });
+
   window.veshinantamApplyEntityRecords = async records => {
     if (!database) throw new Error('IndexedDB is unavailable; cloud data cannot be stored safely in this browser.');
     const state = JSON.parse(readBrowserState() || '{"schedules":[],"tasks":[],"language":"en"}');
     const schedules = new Map((state.schedules || []).map(value => [value.id, value]));
     const tasks = new Map((state.tasks || []).map(value => [value.id, value]));
+    const exclusions = new Map((state.exclusions || []).map(value => [value.id, value]));
     const deletedScheduleIds = new Set();
     for (const record of records) {
       if (record.entity_type === 'SCHEDULE') {
@@ -252,6 +267,9 @@
       } else if (record.entity_type === 'TASK') {
         if (record.deleted) tasks.delete(record.entity_id);
         else if (record.payload) tasks.set(record.entity_id, taskFromCanonical({ ...record.payload, revision: record.revision }));
+      } else if (record.entity_type === 'EXCLUSION') {
+        if (record.deleted) exclusions.delete(record.entity_id);
+        else if (record.payload) exclusions.set(record.entity_id, exclusionFromCanonical({ ...record.payload, revision: record.revision }));
       } else if (record.entity_type === 'PREFERENCES' && !record.deleted && record.payload) {
         state.language = record.payload.appLanguage === 'he' ? 'he' : 'en';
         state.sefarimLanguage = record.payload.sefarimLanguage || 'BOTH';
@@ -263,6 +281,7 @@
     }
     state.schedules = Array.from(schedules.values());
     state.tasks = Array.from(tasks.values()).filter(task => !deletedScheduleIds.has(task.scheduleId));
+    state.exclusions = Array.from(exclusions.values()).filter(exclusion => !deletedScheduleIds.has(exclusion.scheduleId));
     const serialized = JSON.stringify(state);
     suppressDiff = true;
     cachedState = serialized;

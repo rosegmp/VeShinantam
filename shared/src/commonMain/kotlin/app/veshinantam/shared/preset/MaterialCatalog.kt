@@ -15,6 +15,8 @@ data class Masechta(
 data class UnitReference(val english: String, val hebrew: String)
 
 object MaterialCatalog {
+    val sectionedChoices = setOf(SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM)
+
     private val finalDafEndsOnAmudA = setOf(
         "Berachos", "Eruvin", "Yoma", "Rosh Hashanah", "Taanis", "Megillah", "Moed Katan",
         "Chagigah", "Bava Metzia", "Horayos", "Menachos", "Chullin", "Bechoros", "Arachin",
@@ -154,6 +156,59 @@ object MaterialCatalog {
                 }
             }
         }
+    }
+
+    fun sections(choice: SeferChoice): List<Masechta> = when (choice) {
+        SeferChoice.GEMARA -> gemara
+        SeferChoice.YERUSHALMI -> yerushalmi
+        SeferChoice.MISHNAH -> mishnah
+        SeferChoice.RAMBAM -> rambam
+        else -> emptyList()
+    }
+
+    fun unitOptions(
+        choice: SeferChoice,
+        section: Masechta? = null,
+        gemaraUnit: GemaraUnit = GemaraUnit.DAF,
+        mishnahUnit: MishnahUnit = MishnahUnit.MISHNAH,
+        chelek: Int = 1,
+        mishnahBerurahUnit: MishnahBerurahUnit = MishnahBerurahUnit.SIMAN,
+    ): List<UnitReference> = when (choice) {
+        SeferChoice.GEMARA -> requireNotNull(section).let { gemaraUnits(listOf(it), 2, it.lastLocation, gemaraUnit) }
+        SeferChoice.YERUSHALMI -> yerushalmiUnits(requireNotNull(section))
+        SeferChoice.MISHNAH -> mishnahUnits(requireNotNull(section), mishnahUnit)
+        SeferChoice.MISHNAH_BERURAH -> mishnahBerurahUnitOptions(chelek, mishnahBerurahUnit)
+        SeferChoice.RAMBAM -> rambamUnits(requireNotNull(section))
+        SeferChoice.CHOFETZ_CHAIM -> chofetzChaimUnits
+        SeferChoice.TEHILLIM -> tehillimUnits
+        SeferChoice.KITZUR -> simanim("Kitzur Shulchan Aruch", "קיצור שולחן ערוך", 1, 221)
+        SeferChoice.OTHER -> emptyList()
+    }
+
+    fun selectedUnits(
+        choice: SeferChoice,
+        fromSectionIndex: Int,
+        toSectionIndex: Int,
+        start: UnitReference,
+        end: UnitReference,
+        gemaraUnit: GemaraUnit = GemaraUnit.DAF,
+        mishnahUnit: MishnahUnit = MishnahUnit.MISHNAH,
+        chelek: Int = 1,
+        mishnahBerurahUnit: MishnahBerurahUnit = MishnahBerurahUnit.SIMAN,
+    ): List<UnitReference> {
+        val fullRange = if (choice in sectionedChoices) {
+            val catalog = sections(choice)
+            require(fromSectionIndex in catalog.indices && toSectionIndex in fromSectionIndex..catalog.lastIndex)
+            catalog.subList(fromSectionIndex, toSectionIndex + 1).flatMap { section ->
+                unitOptions(choice, section, gemaraUnit, mishnahUnit, chelek, mishnahBerurahUnit)
+            }
+        } else {
+            unitOptions(choice, null, gemaraUnit, mishnahUnit, chelek, mishnahBerurahUnit)
+        }
+        val startIndex = fullRange.indexOf(start)
+        val endIndex = fullRange.indexOf(end)
+        require(startIndex >= 0 && endIndex >= startIndex)
+        return fullRange.subList(startIndex, endIndex + 1)
     }
 
     private fun ranged(selected: List<Masechta>, start: Int, end: Int, minimum: Int): List<Pair<Masechta, Int>> {

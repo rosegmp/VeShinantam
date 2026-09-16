@@ -7,6 +7,7 @@ import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.CanonicalDataSet
 import app.veshinantam.shared.CanonicalDataValidator
+import app.veshinantam.shared.CanonicalExclusion
 import app.veshinantam.shared.CanonicalMaterialType
 import app.veshinantam.shared.CanonicalMissedWorkBehavior
 import app.veshinantam.shared.CanonicalPreferences
@@ -46,7 +47,7 @@ data class StoredSchedule(
     val sourceType: String = material,
     val materialType: String = material,
 ) {
-    fun domain() = LearningSchedule(id, name, material, pace, weekdays, chazarahOffsets, active, archived)
+    fun domain() = LearningSchedule(id, name, material, pace.coerceAtLeast(1), weekdays, chazarahOffsets, active, archived)
 }
 
 @Serializable
@@ -77,9 +78,19 @@ data class StoredTask(
 }
 
 @Serializable
+data class StoredExclusion(
+    val scheduleId: String,
+    val date: String,
+    val updatedAt: String? = null,
+    val revision: Long = 0,
+    val id: String = "$scheduleId:$date",
+)
+
+@Serializable
 data class WebAppState(
     val schedules: List<StoredSchedule> = emptyList(),
     val tasks: List<StoredTask> = emptyList(),
+    val exclusions: List<StoredExclusion> = emptyList(),
     val language: String = "en",
     val sefarimLanguage: String = "BOTH",
     val primaryCalendar: String = "GREGORIAN",
@@ -132,11 +143,11 @@ fun WebBackup.validStateOrNull(): WebAppState? {
         state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it <= 0 }
     ) return null
     if (version >= 2 && (canonical == null || CanonicalDataValidator.validate(canonical).isNotEmpty())) return null
-    if (state.schedules.size > 500 || state.tasks.size > 50_000) return null
+    if (state.schedules.size > 500 || state.tasks.size > 50_000 || state.exclusions.size > 10_000) return null
     val scheduleIds = state.schedules.map { it.id }
     if (scheduleIds.any { it.isBlank() } || scheduleIds.distinct().size != scheduleIds.size) return null
     if (state.schedules.any { schedule ->
-            schedule.name.isBlank() || schedule.material.isBlank() || schedule.pace !in 1..20 ||
+            schedule.name.isBlank() || schedule.material.isBlank() || schedule.pace !in 0..20 ||
                 schedule.weekdays.isEmpty() || schedule.weekdays.any { it !in 0..6 } ||
                 schedule.chazarahOffsets.any { it !in 1..3650 }
         }
@@ -149,12 +160,29 @@ fun WebBackup.validStateOrNull(): WebAppState? {
                 task.type !in LearningTaskType.entries.map { it.name } || IsoDate.parse(task.dueDate) == null
         }
     ) return null
+    if (state.exclusions.any { exclusion ->
+            exclusion.scheduleId !in knownSchedules || IsoDate.parse(exclusion.date) == null ||
+                exclusion.id != "${exclusion.scheduleId}:${exclusion.date}"
+        } || state.exclusions.map { it.id }.distinct().size != state.exclusions.size
+    ) return null
     if (version >= 2 && canonical?.let { value ->
             value.schedules.map { it.id }.toSet() != scheduleIds.toSet() ||
-                value.tasks.map { it.id }.toSet() != taskIds.toSet()
+                value.tasks.map { it.id }.toSet() != taskIds.toSet() ||
+                state.exclusions.isNotEmpty() && value.exclusions.map { it.id }.toSet() != state.exclusions.map { it.id }.toSet()
         } == true
     ) return null
-    return state
+    return if (state.exclusions.isEmpty() && canonical?.exclusions?.isNotEmpty() == true) {
+        state.copy(exclusions = canonical.exclusions.map { exclusion ->
+            StoredExclusion(
+                scheduleId = exclusion.scheduleId,
+                date = exclusion.date,
+                updatedAt = exclusion.updatedAt,
+                revision = exclusion.revision,
+            )
+        })
+    } else {
+        state
+    }
 }
 
 fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
@@ -211,6 +239,14 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
                 completionZoneId = task.completionZoneId ?: "browser-local".takeIf { task.completed },
                 updatedAt = task.updatedAt ?: now,
                 revision = task.revision,
+            )
+        },
+        exclusions = exclusions.map { exclusion ->
+            CanonicalExclusion(
+                scheduleId = exclusion.scheduleId,
+                date = exclusion.date,
+                updatedAt = exclusion.updatedAt ?: now,
+                revision = exclusion.revision,
             )
         },
         preferences = CanonicalPreferences(
@@ -439,7 +475,11 @@ fun editFutureSchedule(
     }
 
     val revision = schedule.generationRevision + 1
-    val rules = SharedScheduleRules(edit.selectedWeekdays)
+    val excludedDates = state.exclusions.asSequence()
+        .filter { it.scheduleId == scheduleId }
+        .mapNotNull { IsoDate.parse(it.date) }
+        .toSet()
+    val rules = SharedScheduleRules(edit.selectedWeekdays, excludedDates)
     val material = editableLearning.mapIndexed { index, task ->
         SharedMaterialUnit(
             id = "$scheduleId-edit-$revision-unit-$index",
@@ -493,7 +533,7 @@ fun editFutureSchedule(
         .map { it.dueDate } + learning.asSequence().map { it.plannedDate.toString() })
         .maxOrNull()
     val updatedSchedule = schedule.copy(
-        pace = edit.dailyQuantity.coerceAtLeast(1),
+        pace = if (targetDate == null) edit.dailyQuantity.coerceAtLeast(1) else 0,
         weekdays = edit.selectedWeekdays,
         startDate = edit.startDate,
         targetDate = target,
