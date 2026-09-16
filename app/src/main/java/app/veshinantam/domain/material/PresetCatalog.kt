@@ -75,10 +75,26 @@ object PresetCatalog {
         activeUpdate = null
     }
 
-    fun scheduledDate(program: PresetProgram, unitIndex: Int): LocalDate {
+    fun programAtDate(program: PresetProgram, date: LocalDate): PresetProgram =
+        program.copy(currentIndex = positionIndexOn(program, date))
+
+    fun positionIndexOn(program: PresetProgram, date: LocalDate): Int {
+        require(date >= positionAsOf) { "Preset positions before $positionAsOf use scheduledDate" }
+        var index = program.currentIndex
+        var cursor = positionAsOf
+        while (cursor < date && index < program.units.lastIndex) {
+            cursor = cursor.plusDays(1)
+            if (cursor.dayOfWeek in program.selectedWeekdays && cursor !in program.excludedDates) {
+                index = (index + program.dailyQuantity).coerceAtMost(program.units.lastIndex)
+            }
+        }
+        return index
+    }
+
+    fun scheduledDate(program: PresetProgram, unitIndex: Int, anchorDate: LocalDate = positionAsOf): LocalDate {
         require(unitIndex in 0..program.currentIndex)
         var learningDaysBack = (program.currentIndex - unitIndex + program.dailyQuantity - 1) / program.dailyQuantity
-        var date = positionAsOf
+        var date = anchorDate
         while (learningDaysBack > 0) {
             date = date.minusDays(1)
             if (date.dayOfWeek in program.selectedWeekdays && date !in program.excludedDates) learningDaysBack--

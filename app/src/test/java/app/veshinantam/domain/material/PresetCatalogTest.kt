@@ -76,6 +76,23 @@ class PresetCatalogTest {
     }
 
     @Test
+    fun `Mishnah Yomis advances the bundled position to the requested date`() {
+        val bundled = PresetCatalog.programs.first { it.id == "mishnah-yomis" }
+        val septemberSixteenth = PresetCatalog.programAtDate(bundled, java.time.LocalDate.of(2026, 9, 16))
+
+        assertEquals("Ohalos 2:2", septemberSixteenth.currentReference.english)
+        assertEquals("Ohalos 2:3", septemberSixteenth.units[septemberSixteenth.currentIndex + 1].english)
+        assertEquals(
+            java.time.LocalDate.of(2026, 9, 14),
+            PresetCatalog.scheduledDate(
+                septemberSixteenth,
+                septemberSixteenth.currentIndex - 4,
+                java.time.LocalDate.of(2026, 9, 16),
+            ),
+        )
+    }
+
+    @Test
     fun `current masechta option resolves its first unit and original start date`() {
         val oraysa = PresetCatalog.programs.first { it.id == "oraysa" }
         val startIndex = requireNotNull(PresetCatalog.currentMasechtaStartIndex(oraysa))

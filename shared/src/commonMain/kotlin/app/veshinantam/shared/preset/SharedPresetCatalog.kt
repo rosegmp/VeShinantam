@@ -134,10 +134,33 @@ object SharedPresetCatalog {
         )
     }
 
-    fun scheduledDate(program: SharedPresetProgram, unitIndex: Int): IsoDate {
+    /** Official preset cycles do not add interval chazarah unless the learner opts in. */
+    fun defaultAdditionalChazarahOffsets(programId: String): List<Int> {
+        require(programs.any { it.id == programId }) { "Unknown preset: $programId" }
+        return emptyList()
+    }
+
+    fun programAtDate(program: SharedPresetProgram, date: IsoDate): SharedPresetProgram =
+        program.copy(currentIndex = positionIndexOn(program, date))
+
+    fun positionIndexOn(program: SharedPresetProgram, date: IsoDate): Int {
+        require(date >= positionAsOf) { "Preset positions before $positionAsOf use scheduledDate" }
+        var index = program.currentIndex
+        var cursor = positionAsOf
+        while (cursor < date && index < program.units.lastIndex) {
+            cursor = cursor.plusDays(1)
+            val weekday = app.veshinantam.shared.GregorianCalendar.dayOfWeek(cursor.year, cursor.month, cursor.day)
+            if (weekday in program.selectedWeekdays && cursor !in program.excludedDates) {
+                index = (index + program.dailyQuantity).coerceAtMost(program.units.lastIndex)
+            }
+        }
+        return index
+    }
+
+    fun scheduledDate(program: SharedPresetProgram, unitIndex: Int, anchorDate: IsoDate = positionAsOf): IsoDate {
         require(unitIndex in 0..program.currentIndex)
         var learningDaysBack = (program.currentIndex - unitIndex + program.dailyQuantity - 1) / program.dailyQuantity
-        var date = positionAsOf
+        var date = anchorDate
         while (learningDaysBack > 0) {
             date = date.minusDays(1)
             val weekday = app.veshinantam.shared.GregorianCalendar.dayOfWeek(date.year, date.month, date.day)

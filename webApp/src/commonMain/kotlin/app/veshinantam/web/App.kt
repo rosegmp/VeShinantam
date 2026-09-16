@@ -335,6 +335,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     if (showCreate) {
         CreateScheduleDialog(
             hebrew = hebrew,
+            today = todayIso,
             onDismiss = { showCreate = false },
             onCreate = { draft ->
                 val id = nextScheduleId(appState.schedules)
@@ -1418,10 +1419,14 @@ private fun ProgressMetric(label: String, value: String) {
 }
 
 @Composable
-private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
+private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
     val programs = remember { SharedPresetCatalog.programs }
+    val catalogPositionDate = remember(today) { requireNotNull(IsoDate.parse(today)) }
     var selectedProgramIndex by remember { mutableStateOf(0) }
-    val program = programs.getOrNull(selectedProgramIndex)
+    val baseProgram = programs.getOrNull(selectedProgramIndex)
+    val program = remember(baseProgram, catalogPositionDate) {
+        baseProgram?.let { SharedPresetCatalog.programAtDate(it, catalogPositionDate) }
+    }
     val custom = program == null
     var programMenuExpanded by remember { mutableStateOf(false) }
     var startIndex by remember(selectedProgramIndex) { mutableStateOf(program?.currentIndex ?: 0) }
@@ -1432,7 +1437,9 @@ private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreat
     var customHebrew by remember { mutableStateOf("") }
     var paceText by remember(selectedProgramIndex) { mutableStateOf((program?.dailyQuantity ?: 1).toString()) }
     var weekdays by remember(selectedProgramIndex) { mutableStateOf(program?.selectedWeekdays ?: (0..6).toSet()) }
-    var chazarahEnabled by remember(selectedProgramIndex) { mutableStateOf(program?.id != "oraysa") }
+    var chazarahEnabled by remember(selectedProgramIndex) {
+        mutableStateOf(program?.let { SharedPresetCatalog.defaultAdditionalChazarahOffsets(it.id).isNotEmpty() } ?: true)
+    }
     var weekendChazarah by remember(selectedProgramIndex) { mutableStateOf(program?.id == "oraysa") }
     val currentMasechtaStart = program?.let(SharedPresetCatalog::currentMasechtaStartIndex)
     val positionMatches = if (program != null && positionQuery.length >= 2) {
@@ -1474,7 +1481,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreat
                     Card(colors = CardDefaults.cardColors(containerColor = DeepBlueContainer), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                if (hebrew) "מיקום הקטלוג נכון ל־${SharedPresetCatalog.positionAsOf}" else "Catalog position as of ${SharedPresetCatalog.positionAsOf}",
+                                if (hebrew) "מיקום הקטלוג נכון ל־$catalogPositionDate" else "Catalog position as of $catalogPositionDate",
                                 color = MutedInk,
                                 fontSize = 13.sp,
                             )
@@ -1512,8 +1519,8 @@ private fun CreateScheduleDialog(hebrew: Boolean, onDismiss: () -> Unit, onCreat
                     )
                     if (startIndex != program.currentIndex) {
                         Text(
-                            if (hebrew) "נקבע במקור ל־${SharedPresetCatalog.scheduledDate(program, startIndex)}"
-                            else "Originally scheduled for ${SharedPresetCatalog.scheduledDate(program, startIndex)}",
+                            if (hebrew) "נקבע במקור ל־${SharedPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}"
+                            else "Originally scheduled for ${SharedPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}",
                             color = MutedInk,
                             fontSize = 13.sp,
                         )

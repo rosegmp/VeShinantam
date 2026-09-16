@@ -143,6 +143,7 @@ import app.veshinantam.domain.material.Masechta
 import app.veshinantam.domain.material.SeferChoice
 import app.veshinantam.domain.material.UnitReference
 import app.veshinantam.domain.material.PresetCatalog
+import app.veshinantam.shared.preset.SharedPresetCatalog
 import app.veshinantam.domain.material.PresetProgram
 import app.veshinantam.localization.AppLanguage
 import app.veshinantam.localization.BidiText
@@ -2249,16 +2250,22 @@ private fun PresetScheduleCreator(
     val defaultChazarahOffsets = LocalDefaultChazarahOffsets.current
     val programs = PresetCatalog.programs
     var programIndex by remember(initialProgramIndex) { mutableStateOf(initialProgramIndex.coerceIn(programs.indices)) }
-    val program = programs[programIndex]
+    val catalogPositionDate = remember { LocalDate.now() }
+    val baseProgram = programs[programIndex]
+    val program = remember(baseProgram, catalogPositionDate) { PresetCatalog.programAtDate(baseProgram, catalogPositionDate) }
     var startIndex by remember(programIndex) { mutableStateOf(program.currentIndex) }
-    var startDate by remember { mutableStateOf(LocalDate.now()) }
-    val currentMasechtaStartIndex = remember(program.id) { PresetCatalog.currentMasechtaStartIndex(program) }
-    val currentMasechtaStartDate = currentMasechtaStartIndex?.let { PresetCatalog.scheduledDate(program, it) }
+    var startDate by remember { mutableStateOf(catalogPositionDate) }
+    val currentMasechtaStartIndex = remember(program.id, program.currentIndex) { PresetCatalog.currentMasechtaStartIndex(program) }
+    val currentMasechtaStartDate = currentMasechtaStartIndex?.let {
+        PresetCatalog.scheduledDate(program, it, catalogPositionDate)
+    }
     val startsWithCurrentMasechta = startIndex == currentMasechtaStartIndex && startDate == currentMasechtaStartDate
     var choosingPosition by remember { mutableStateOf(false) }
     var choosingDate by remember { mutableStateOf(false) }
     var weekendChazarah by remember(programIndex) { mutableStateOf(program.id == "oraysa") }
-    var chazarahEnabled by remember(programIndex) { mutableStateOf(program.id != "oraysa") }
+    var chazarahEnabled by remember(programIndex) {
+        mutableStateOf(SharedPresetCatalog.defaultAdditionalChazarahOffsets(program.id).isNotEmpty())
+    }
     var offsetsText by remember(defaultChazarahOffsets) {
         mutableStateOf(ChazarahDefaults.format(defaultChazarahOffsets))
     }
@@ -2294,6 +2301,7 @@ private fun PresetScheduleCreator(
     if (choosingPosition) {
         PresetPositionDialog(
             program = program,
+            anchorDate = catalogPositionDate,
             selectedIndex = startIndex,
             locale = locale,
             onSelected = { startIndex = it; choosingPosition = false },
@@ -2350,7 +2358,7 @@ private fun PresetScheduleCreator(
                     Text(
                         stringResource(
                             R.string.catalog_position_as_of,
-                            displayDate(PresetCatalog.positionAsOf, primaryCalendar, locale),
+                            displayDate(catalogPositionDate, primaryCalendar, locale),
                         ),
                         style = MaterialTheme.typography.labelLarge,
                     )
@@ -2396,7 +2404,7 @@ private fun PresetScheduleCreator(
                 Text(
                     stringResource(
                         R.string.originally_scheduled,
-                        displayDate(PresetCatalog.scheduledDate(program, startIndex), primaryCalendar, locale),
+                        displayDate(PresetCatalog.scheduledDate(program, startIndex, catalogPositionDate), primaryCalendar, locale),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2549,6 +2557,7 @@ private fun PresetScheduleCreator(
 @Composable
 private fun PresetPositionDialog(
     program: PresetProgram,
+    anchorDate: LocalDate,
     selectedIndex: Int,
     locale: Locale,
     onSelected: (Int) -> Unit,
@@ -2595,7 +2604,7 @@ private fun PresetPositionDialog(
                                 Column {
                                     Text(referenceLabel(indexed.value.english, indexed.value.hebrew, locale))
                                     Text(
-                                        displayDate(PresetCatalog.scheduledDate(program, indexed.index), primaryCalendar, locale),
+                                        displayDate(PresetCatalog.scheduledDate(program, indexed.index, anchorDate), primaryCalendar, locale),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

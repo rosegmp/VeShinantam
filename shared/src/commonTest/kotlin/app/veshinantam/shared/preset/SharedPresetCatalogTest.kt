@@ -1,6 +1,9 @@
 package app.veshinantam.shared.preset
 
 import app.veshinantam.shared.IsoDate
+import app.veshinantam.shared.SharedMaterialUnit
+import app.veshinantam.shared.SharedScheduleEngine
+import app.veshinantam.shared.SharedScheduleRules
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -53,5 +56,25 @@ class SharedPresetCatalogTest {
         assertEquals("Yevamos 2a", oraysa.units[masechtaStart].english)
         assertEquals(IsoDate(2025, 11, 26), SharedPresetCatalog.scheduledDate(oraysa, masechtaStart))
         assertEquals(SharedPresetCatalog.positionAsOf, SharedPresetCatalog.scheduledDate(oraysa, oraysa.currentIndex))
+    }
+
+    @Test
+    fun mishnahYomisDefaultsToTwoLearningAssignmentsWithoutAutomaticChazarah() {
+        val bundled = SharedPresetCatalog.programs.first { it.id == "mishnah-yomis" }
+        val program = SharedPresetCatalog.programAtDate(bundled, IsoDate(2026, 9, 16))
+        val units = program.units.subList(program.currentIndex, program.currentIndex + 4).mapIndexed { index, reference ->
+            SharedMaterialUnit("mishnah-$index", index, reference.english, reference.hebrew)
+        }
+        val learning = SharedScheduleEngine().generateByDailyQuantity(
+            units = units,
+            startDate = IsoDate(2026, 9, 16),
+            unitsPerDay = program.dailyQuantity,
+            rules = SharedScheduleRules(program.selectedWeekdays),
+        )
+
+        assertEquals("Ohalos 2:2", program.currentReference.english)
+        assertEquals("Ohalos 2:3", program.units[program.currentIndex + 1].english)
+        assertEquals(2, learning.count { it.plannedDate == IsoDate(2026, 9, 16) })
+        assertEquals(emptyList(), SharedPresetCatalog.defaultAdditionalChazarahOffsets(program.id))
     }
 }
