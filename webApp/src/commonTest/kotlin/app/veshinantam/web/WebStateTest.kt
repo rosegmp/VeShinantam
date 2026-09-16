@@ -119,4 +119,27 @@ class WebStateTest {
         assertEquals(29, dates.size)
         assertEquals(35, cells.size)
     }
+
+    @Test
+    fun bulkCompletionOnlyCompletesPastTasksOfRequestedType() {
+        val state = WebAppState(
+            schedules = listOf(StoredSchedule("schedule", "Daf Yomi", "Gemara", 1)),
+            tasks = listOf(
+                StoredTask("past-learning", "schedule", "Berachos 2", "ברכות ב", "2026-09-13", "LEARNING"),
+                StoredTask("today-learning", "schedule", "Berachos 3", "ברכות ג", today, "LEARNING"),
+                StoredTask("past-review", "schedule", "Berachos 1", "ברכות א", "2026-09-12", "CHAZARAH"),
+                StoredTask("already-done", "schedule", "Berachos 1", "ברכות א", "2026-09-11", "LEARNING", completed = true, completedAt = "2026-09-12T10:00:00Z", completionLocalDate = "2026-09-12", completionZoneId = "UTC"),
+            ),
+        )
+
+        val updated = completePastTasks(state, "schedule", "LEARNING", today, now, "America/New_York")
+
+        val completed = updated.tasks.associateBy { it.id }
+        assertTrue(completed.getValue("past-learning").completed)
+        assertEquals(today, completed.getValue("past-learning").completionLocalDate)
+        assertEquals("America/New_York", completed.getValue("past-learning").completionZoneId)
+        assertTrue(!completed.getValue("today-learning").completed)
+        assertTrue(!completed.getValue("past-review").completed)
+        assertEquals("2026-09-12T10:00:00Z", completed.getValue("already-done").completedAt)
+    }
 }

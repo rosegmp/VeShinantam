@@ -351,6 +351,29 @@ fun calendarRangeCells(startDate: String, endDate: String): List<WebCalendarCell
     return cells
 }
 
+fun completePastTasks(
+    state: WebAppState,
+    scheduleId: String,
+    taskType: String,
+    today: String,
+    completedAt: String,
+    zoneId: String,
+): WebAppState = state.copy(
+    tasks = state.tasks.map { task ->
+        if (task.scheduleId == scheduleId && task.type == taskType && task.dueDate < today && !task.completed) {
+            task.copy(
+                completed = true,
+                completedAt = completedAt,
+                completionLocalDate = today,
+                completionZoneId = zoneId,
+                updatedAt = completedAt,
+            )
+        } else {
+            task
+        }
+    },
+)
+
 private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (value.lowercase()) {
     "gemara", "daf" -> CanonicalMaterialType.DAF
     "amud" -> CanonicalMaterialType.AMUD

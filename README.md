@@ -8,6 +8,8 @@ The web Today view now mirrors Android's separate new-learning, chazarah-due-tod
 
 The web Calendar grid shows filter-aware incomplete, partial, and complete status for each day, including completed/total counts. Users can choose Gregorian or Hebrew as the primary calendar, navigate real Hebrew-month boundaries, see both calendar dates in every view, and apply schedule/type filters to both the grid and day details.
 
+Web schedule management supports pause/resume, archive/restore, confirmed permanent deletion, and separate confirmed bulk completion of overdue learning or chazarah. Bulk completion records the browser-local completion date, instant, and time zone so Android and web retain equivalent history.
+
 The web app is deployed automatically from `main` to [GitHub Pages](https://rosegmp.github.io/VeShinantam/).
 
 ## What is implemented now

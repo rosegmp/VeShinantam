@@ -161,6 +161,12 @@ private data class ScheduleDraft(
     val chazarahOffsets: List<Int>,
 )
 
+private data class BulkCompletionRequest(
+    val schedule: StoredSchedule,
+    val taskType: LearningTaskType,
+    val taskCount: Int,
+)
+
 @Composable
 fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     val initialImportResult = remember { store.consumeBackupImport() }
@@ -169,6 +175,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
+    var bulkCompletionRequest by remember { mutableStateOf<BulkCompletionRequest?>(null) }
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
     var accountState by remember { mutableStateOf(cloudAccount.state()) }
@@ -241,6 +248,14 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestBulkCompletion = { scheduleId, taskType ->
+                                    val count = appState.tasks.count {
+                                        it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
+                                    }
+                                    appState.schedules.firstOrNull { it.id == scheduleId }?.takeIf { count > 0 }?.let {
+                                        bulkCompletionRequest = BulkCompletionRequest(it, taskType, count)
+                                    }
+                                },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
@@ -286,6 +301,14 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = true, archived = false) else it }) }
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestBulkCompletion = { scheduleId, taskType ->
+                                    val count = appState.tasks.count {
+                                        it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
+                                    }
+                                    appState.schedules.firstOrNull { it.id == scheduleId }?.takeIf { count > 0 }?.let {
+                                        bulkCompletionRequest = BulkCompletionRequest(it, taskType, count)
+                                    }
+                                },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
@@ -388,6 +411,36 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
             },
             dismissButton = {
                 OutlinedButton(onClick = { schedulePendingDelete = null }) { Text(if (hebrew) "ביטול" else "Cancel") }
+            },
+        )
+    }
+
+    bulkCompletionRequest?.let { request ->
+        val typeLabel = if (request.taskType == LearningTaskType.LEARNING) {
+            if (hebrew) "לימוד" else "learning"
+        } else {
+            if (hebrew) "חזרה" else "chazarah"
+        }
+        AlertDialog(
+            onDismissRequest = { bulkCompletionRequest = null },
+            icon = { Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen) },
+            title = { Text(if (hebrew) "לסמן משימות קודמות כהושלמו?" else "Complete past tasks?") },
+            text = {
+                Text(
+                    if (hebrew) "${request.taskCount} משימות $typeLabel קודמות בתוכנית ${request.schedule.name} יסומנו כהושלמו היום."
+                    else "${request.taskCount} past $typeLabel tasks in ${request.schedule.name} will be marked complete today.",
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val now = store.currentInstant()
+                    val zone = store.currentZoneId()
+                    update { state -> completePastTasks(state, request.schedule.id, request.taskType.name, todayIso, now, zone) }
+                    bulkCompletionRequest = null
+                }) { Text(if (hebrew) "סמן כהושלם" else "Mark complete") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { bulkCompletionRequest = null }) { Text(if (hebrew) "ביטול" else "Cancel") }
             },
         )
     }
@@ -503,6 +556,7 @@ private fun AppContent(
     onArchiveSchedule: (String) -> Unit,
     onRestoreSchedule: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onAccount: () -> Unit,
@@ -590,7 +644,7 @@ private fun AppContent(
                 hebrewCalendarPeriod = hebrewCalendarPeriod,
             )
             Destination.SCHEDULES -> SchedulesScreen(
-                state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete,
+                state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestBulkCompletion,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
         }
@@ -1131,12 +1185,14 @@ private fun nextScheduleId(schedules: List<StoredSchedule>): String {
 @Composable
 private fun SchedulesScreen(
     state: WebAppState,
+    today: String,
     hebrew: Boolean,
     onCreate: () -> Unit,
     onSetActive: (String, Boolean) -> Unit,
     onArchive: (String) -> Unit,
     onRestore: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1161,6 +1217,8 @@ private fun SchedulesScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(state.schedules, key = { it.id }) { schedule ->
                 val scheduleTasks = state.tasks.filter { it.scheduleId == schedule.id }
+                val overdueLearning = scheduleTasks.count { it.type == LearningTaskType.LEARNING.name && it.dueDate < today && !it.completed }
+                val overdueChazarah = scheduleTasks.count { it.type == LearningTaskType.CHAZARAH.name && it.dueDate < today && !it.completed }
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1180,6 +1238,21 @@ private fun SchedulesScreen(
                             Text("${scheduleTasks.count { it.completed }}/${scheduleTasks.size}", color = SuccessGreen, fontWeight = FontWeight.Bold)
                         }
                         if (!schedule.archived) {
+                            if (overdueLearning > 0 || overdueChazarah > 0) {
+                                Spacer(Modifier.height(12.dp))
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (overdueLearning > 0) {
+                                        OutlinedButton(onClick = { onRequestBulkCompletion(schedule.id, LearningTaskType.LEARNING) }) {
+                                            Text(if (hebrew) "השלם לימוד קודם ($overdueLearning)" else "Complete past learning ($overdueLearning)")
+                                        }
+                                    }
+                                    if (overdueChazarah > 0) {
+                                        OutlinedButton(onClick = { onRequestBulkCompletion(schedule.id, LearningTaskType.CHAZARAH) }) {
+                                            Text(if (hebrew) "השלם חזרה קודמת ($overdueChazarah)" else "Complete past chazarah ($overdueChazarah)")
+                                        }
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = Color(0xFFEEF0F4))
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
