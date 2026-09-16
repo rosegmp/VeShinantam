@@ -108,4 +108,15 @@ class WebStateTest {
         val chazarah = calendarDaySummaries(tasks, scheduleId = "daf-yomi", taskType = "CHAZARAH")
         assertEquals(WebCalendarDayStatus.INCOMPLETE, chazarah.getValue(today).status)
     }
+
+    @Test
+    fun calendarRangeCellsSupportsHebrewMonthsCrossingGregorianBoundaries() {
+        val cells = calendarRangeCells("2026-09-12", "2026-10-10")
+        val dates = cells.mapNotNull { it.isoDate }
+
+        assertEquals("2026-09-12", dates.first())
+        assertEquals("2026-10-10", dates.last())
+        assertEquals(29, dates.size)
+        assertEquals(35, cells.size)
+    }
 }

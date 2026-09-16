@@ -4,6 +4,7 @@ import app.veshinantam.shared.LearningSchedule
 import app.veshinantam.shared.LearningTask
 import app.veshinantam.shared.LearningTaskType
 import app.veshinantam.shared.IsoDate
+import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.CanonicalDataSet
 import app.veshinantam.shared.CanonicalDataValidator
 import app.veshinantam.shared.CanonicalMaterialType
@@ -226,6 +227,11 @@ data class WebCalendarDaySummary(
     val status: WebCalendarDayStatus,
 )
 
+@Serializable
+data class WebCalendarPeriod(val startDate: String, val endDate: String, val title: String)
+
+data class WebCalendarCell(val isoDate: String?, val gregorianDay: Int?)
+
 data class WebTodayTask(val task: StoredTask, val section: WebTodaySection)
 
 fun todayTasks(tasks: List<StoredTask>, today: String, sortOrder: String, preferHebrew: Boolean): List<WebTodayTask> {
@@ -331,6 +337,20 @@ fun calendarDaySummaries(
         )
     }
 
+fun calendarRangeCells(startDate: String, endDate: String): List<WebCalendarCell> {
+    val start = requireNotNull(IsoDate.parse(startDate))
+    val end = requireNotNull(IsoDate.parse(endDate))
+    require(start <= end)
+    val cells = MutableList(GregorianCalendar.dayOfWeek(start.year, start.month, start.day)) { WebCalendarCell(null, null) }
+    var date = start
+    while (date <= end) {
+        cells += WebCalendarCell(date.toString(), date.day)
+        date = date.plusDays(1)
+    }
+    while (cells.size % 7 != 0) cells += WebCalendarCell(null, null)
+    return cells
+}
+
 private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (value.lowercase()) {
     "gemara", "daf" -> CanonicalMaterialType.DAF
     "amud" -> CanonicalMaterialType.AMUD
@@ -348,6 +368,7 @@ interface BrowserStore {
     fun currentLocalDate(): String
     fun hebrewDateLabel(date: String, hebrewUi: Boolean): String
     fun hebrewDayLabel(date: String, hebrewUi: Boolean): String
+    fun hebrewCalendarPeriod(date: String, hebrewUi: Boolean): WebCalendarPeriod
     fun currentInstant(): String
     fun currentZoneId(): String
     fun exportBackup(state: WebAppState)

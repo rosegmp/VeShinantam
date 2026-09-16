@@ -27,6 +27,9 @@ private class LocalBrowserStore : BrowserStore {
     override fun currentLocalDate(): String = currentIsoDate()
     override fun hebrewDateLabel(date: String, hebrewUi: Boolean): String = formatHebrewDate(date, hebrewUi)
     override fun hebrewDayLabel(date: String, hebrewUi: Boolean): String = formatHebrewDay(date, hebrewUi)
+    override fun hebrewCalendarPeriod(date: String, hebrewUi: Boolean): WebCalendarPeriod =
+        runCatching { json.decodeFromString<WebCalendarPeriod>(hebrewCalendarPeriodJson(date, hebrewUi)) }
+            .getOrElse { WebCalendarPeriod(date, date, formatHebrewDate(date, hebrewUi)) }
     override fun currentInstant(): String = currentIsoInstant()
     override fun currentZoneId(): String = browserTimeZone()
 
@@ -182,6 +185,45 @@ private external fun formatHebrewDate(iso: String, hebrewUi: Boolean): String
     }).format(value);
 }""")
 private external fun formatHebrewDay(iso: String, hebrewUi: Boolean): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(iso, hebrewUi) => {
+    const atNoon = value => new Date(value + 'T12:00:00Z');
+    const toIso = value => value.toISOString().slice(0, 10);
+    const addDays = (value, days) => {
+        const result = atNoon(value);
+        result.setUTCDate(result.getUTCDate() + days);
+        return toIso(result);
+    };
+    const partsFormatter = new Intl.DateTimeFormat('en-US-u-ca-hebrew', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
+    });
+    const signature = value => {
+        const parts = partsFormatter.formatToParts(atNoon(value));
+        const month = parts.find(part => part.type === 'month')?.value || '';
+        const year = parts.find(part => part.type === 'year' || part.type === 'relatedYear')?.value || '';
+        return month + '|' + year;
+    };
+    if (Number.isNaN(atNoon(iso).getTime())) return JSON.stringify({ startDate: iso, endDate: iso, title: iso });
+    const expected = signature(iso);
+    let start = iso;
+    let end = iso;
+    for (let count = 0; count < 35; count++) {
+        const previous = addDays(start, -1);
+        if (signature(previous) !== expected) break;
+        start = previous;
+    }
+    for (let count = 0; count < 35; count++) {
+        const next = addDays(end, 1);
+        if (signature(next) !== expected) break;
+        end = next;
+    }
+    const title = new Intl.DateTimeFormat(hebrewUi ? 'he-IL-u-ca-hebrew' : 'en-US-u-ca-hebrew', {
+        month: 'long', year: 'numeric', timeZone: 'UTC'
+    }).format(atNoon(start));
+    return JSON.stringify({ startDate: start, endDate: end, title });
+}""")
+private external fun hebrewCalendarPeriodJson(iso: String, hebrewUi: Boolean): String
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {

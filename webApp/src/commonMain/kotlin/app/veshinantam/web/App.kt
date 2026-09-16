@@ -227,6 +227,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
+                                onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
@@ -245,6 +246,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
                                 hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
                                 hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
+                                hebrewCalendarPeriod = { date -> store.hebrewCalendarPeriod(date, hebrew) },
                             )
                         }
                     } else {
@@ -270,6 +272,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
+                                onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
@@ -288,6 +291,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
                                 hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
                                 hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
+                                hebrewCalendarPeriod = { date -> store.hebrewCalendarPeriod(date, hebrew) },
                             )
                         }
                     }
@@ -491,6 +495,7 @@ private fun AppContent(
     hebrew: Boolean,
     onLanguage: () -> Unit,
     onSefarimLanguage: (String) -> Unit,
+    onPrimaryCalendar: (String) -> Unit,
     onTodaySortOrder: (String) -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
@@ -503,6 +508,7 @@ private fun AppContent(
     onAccount: () -> Unit,
     hebrewDateLabel: (String) -> String,
     hebrewDayLabel: (String) -> String,
+    hebrewCalendarPeriod: (String) -> WebCalendarPeriod,
 ) {
     var showDataMenu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
@@ -539,6 +545,21 @@ private fun AppContent(
                     }
                     HorizontalDivider()
                     DropdownMenuItem(
+                        text = { Text(if (hebrew) "לוח שנה ראשי" else "Primary calendar", fontWeight = FontWeight.Bold) },
+                        enabled = false,
+                        onClick = {},
+                    )
+                    listOf(
+                        "GREGORIAN" to (if (hebrew) "לועזי" else "Gregorian"),
+                        "HEBREW" to (if (hebrew) "עברי" else "Hebrew"),
+                    ).forEach { (value, label) ->
+                        DropdownMenuItem(
+                            text = { Text((if (state.primaryCalendar == value) "✓  " else "    ") + label) },
+                            onClick = { onPrimaryCalendar(value); showDataMenu = false },
+                        )
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
                         text = { Text(if (hebrew) "חשבון וסנכרון" else "Account and sync") },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         onClick = { showDataMenu = false; onAccount() },
@@ -566,6 +587,7 @@ private fun AppContent(
                 onToggle = onToggle,
                 hebrewDateLabel = hebrewDateLabel,
                 hebrewDayLabel = hebrewDayLabel,
+                hebrewCalendarPeriod = hebrewCalendarPeriod,
             )
             Destination.SCHEDULES -> SchedulesScreen(
                 state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete,
@@ -887,15 +909,26 @@ private fun CalendarScreen(
     onToggle: (String) -> Unit,
     hebrewDateLabel: (String) -> String,
     hebrewDayLabel: (String) -> String,
+    hebrewCalendarPeriod: (String) -> WebCalendarPeriod,
 ) {
     val todayParts = today.split("-").mapNotNull { it.toIntOrNull() }
-    var year by remember { mutableStateOf(todayParts.getOrElse(0) { 2026 }) }
-    var month by remember { mutableStateOf(todayParts.getOrElse(1) { 9 }) }
+    var periodAnchor by remember { mutableStateOf(today) }
     var selectedDate by remember { mutableStateOf(today) }
     var followsToday by remember { mutableStateOf(true) }
     var selectedScheduleId by remember { mutableStateOf<String?>(null) }
     var taskFilter by remember { mutableStateOf(CalendarTaskFilter.ALL) }
-    val cells = GregorianCalendar.monthCells(year, month)
+    val period = if (state.primaryCalendar == "HEBREW") {
+        hebrewCalendarPeriod(periodAnchor)
+    } else {
+        val anchor = IsoDate.parse(periodAnchor) ?: IsoDate(todayParts.getOrElse(0) { 2026 }, todayParts.getOrElse(1) { 9 }, 1)
+        val start = IsoDate(anchor.year, anchor.month, 1)
+        WebCalendarPeriod(
+            startDate = start.toString(),
+            endDate = IsoDate(anchor.year, anchor.month, GregorianCalendar.daysInMonth(anchor.year, anchor.month)).toString(),
+            title = monthName(anchor.month, hebrew) + " ${anchor.year}",
+        )
+    }
+    val cells = calendarRangeCells(period.startDate, period.endDate)
     val filteredTaskType = when (taskFilter) {
         CalendarTaskFilter.ALL -> null
         CalendarTaskFilter.LEARNING -> LearningTaskType.LEARNING.name
@@ -905,10 +938,12 @@ private fun CalendarScreen(
     LaunchedEffect(today) {
         if (followsToday) {
             val updatedParts = today.split("-").mapNotNull { it.toIntOrNull() }
-            year = updatedParts.getOrElse(0) { year }
-            month = updatedParts.getOrElse(1) { month }
+            periodAnchor = today
             selectedDate = today
         }
+    }
+    LaunchedEffect(state.primaryCalendar) {
+        periodAnchor = selectedDate
     }
     val selectedTasks = state.tasks.asSequence()
         .filter { it.dueDate == selectedDate }
@@ -925,21 +960,17 @@ private fun CalendarScreen(
             Column(Modifier.padding(20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
-                        GregorianCalendar.previous(year, month).also {
-                            year = it.first
-                            month = it.second
-                            selectedDate = isoDate(year, month, 1)
-                            followsToday = false
-                        }
+                        val previous = requireNotNull(IsoDate.parse(period.startDate)).minusDays(1).toString()
+                        periodAnchor = previous
+                        selectedDate = previous
+                        followsToday = false
                     }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, if (hebrew) "החודש הקודם" else "Previous month") }
-                    Text(monthName(month, hebrew) + " $year", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                    Text(period.title, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 19.sp)
                     IconButton(onClick = {
-                        GregorianCalendar.next(year, month).also {
-                            year = it.first
-                            month = it.second
-                            selectedDate = isoDate(year, month, 1)
-                            followsToday = false
-                        }
+                        val next = requireNotNull(IsoDate.parse(period.endDate)).plusDays(1).toString()
+                        periodAnchor = next
+                        selectedDate = next
+                        followsToday = false
                     }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, if (hebrew) "החודש הבא" else "Next month") }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -974,7 +1005,7 @@ private fun CalendarScreen(
                                             contentDescription = calendarDayDescription(date, summary, hebrew)
                                         }
                                     }
-                                    .clickable(enabled = cell.day != null) {
+                                    .clickable(enabled = cell.gregorianDay != null) {
                                         cell.isoDate?.let {
                                             selectedDate = it
                                             followsToday = it == today
@@ -982,14 +1013,18 @@ private fun CalendarScreen(
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                if (cell.day != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (cell.gregorianDay != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        cell.day.toString(),
+                                        if (state.primaryCalendar == "HEBREW") hebrewDayLabel(requireNotNull(cell.isoDate)) else cell.gregorianDay.toString(),
                                         color = if (isSelected) Color.White else Color(0xFF333841),
                                         fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                                     )
                                     cell.isoDate?.let { date ->
-                                        Text(hebrewDayLabel(date), color = if (isSelected) Color.White.copy(alpha = .8f) else MutedInk, fontSize = 11.sp)
+                                        Text(
+                                            if (state.primaryCalendar == "HEBREW") cell.gregorianDay.toString() else hebrewDayLabel(date),
+                                            color = if (isSelected) Color.White.copy(alpha = .8f) else MutedInk,
+                                            fontSize = 11.sp,
+                                        )
                                     }
                                     summary?.let {
                                         Text("${it.completedCount}/${it.taskCount}", color = if (isSelected) Color.White else DeepBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1008,8 +1043,10 @@ private fun CalendarScreen(
             CalendarLegend(Color(0xFFDFF3E8), if (hebrew) "הושלם" else "Complete")
         }
         Spacer(Modifier.height(20.dp))
-        Text(friendlyDate(selectedDate, hebrew), color = DeepBlue, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
-        Text(hebrewDateLabel(selectedDate), color = MutedInk, fontSize = 15.sp)
+        val primaryDate = if (state.primaryCalendar == "HEBREW") hebrewDateLabel(selectedDate) else friendlyDate(selectedDate, hebrew)
+        val alternateDate = if (state.primaryCalendar == "HEBREW") friendlyDate(selectedDate, hebrew) else hebrewDateLabel(selectedDate)
+        Text(primaryDate, color = DeepBlue, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Text(alternateDate, color = MutedInk, fontSize = 15.sp)
         Spacer(Modifier.height(12.dp))
         Text(if (hebrew) "תוכנית" else "Schedule", color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
@@ -1085,9 +1122,6 @@ private fun calendarDayDescription(date: String, summary: WebCalendarDaySummary?
     }
     return if (hebrew) "$date, $status, ${summary.completedCount} מתוך ${summary.taskCount}" else "$date, $status, ${summary.completedCount} of ${summary.taskCount}"
 }
-
-private fun isoDate(year: Int, month: Int, day: Int): String =
-    "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
 private fun nextScheduleId(schedules: List<StoredSchedule>): String {
     val largest = schedules.mapNotNull { it.id.removePrefix("schedule-").toIntOrNull() }.maxOrNull() ?: 0

@@ -5,7 +5,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Capability | Android | Web | Target / acceptance note |
 | --- | --- | --- | --- |
 | Today navigation and task completion | Complete | Complete | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, synchronized ordering, and browser-local day/time-zone re-evaluation |
-| Calendar | Complete | Partial | Filter-aware statuses/counts, bilingual day labels, selected-date details, unrestricted Gregorian navigation, filters, and completion are complete; primary Hebrew-month navigation remains |
+| Calendar | Complete | Complete | Gregorian/Hebrew month navigation, filter-aware statuses/counts, bilingual labels/details, schedule/type filters, and individual completion/undo |
 | Schedule list and archive | Complete | Partial | Full lifecycle, pause/resume, restore, delete, and bulk past completion |
 | Preset creation | Complete | Partial | All Android presets, positions, dates, and exact generated output |
 | Structured custom schedules | Complete | Partial | Same selectors, pace/finish-by, weekdays, exclusions, missed-work, and preview |
