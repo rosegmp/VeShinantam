@@ -2,6 +2,7 @@ package app.veshinantam.web
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
+import androidx.compose.runtime.remember
 import kotlinx.browser.document
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -10,23 +11,25 @@ import kotlin.js.ExperimentalWasmJsInterop
 private const val PendingImportKey = "veshinantam.web.pending-import"
 private const val InvalidImportMarker = "__VESHINANTAM_INVALID_BACKUP__"
 
-private class LocalBrowserStore(private val today: String) : BrowserStore {
+private class LocalBrowserStore : BrowserStore {
     private val json = Json { ignoreUnknownKeys = true }
     private val backupJson = Json { prettyPrint = true }
 
     override fun load(): WebAppState {
-        val raw = readBrowserState() ?: return WebAppState.sample(today).also(::save)
-        return runCatching { json.decodeFromString<WebAppState>(raw) }.getOrElse { WebAppState.sample(today) }
+        val raw = readBrowserState() ?: return WebAppState.sample(currentIsoDate()).also(::save)
+        return runCatching { json.decodeFromString<WebAppState>(raw) }.getOrElse { WebAppState.sample(currentIsoDate()) }
     }
 
     override fun save(state: WebAppState) {
         writeBrowserState(json.encodeToString(state))
     }
 
+    override fun currentLocalDate(): String = currentIsoDate()
     override fun currentInstant(): String = currentIsoInstant()
     override fun currentZoneId(): String = browserTimeZone()
 
     override fun exportBackup(state: WebAppState) {
+        val today = currentIsoDate()
         val now = currentIsoInstant()
         downloadTextFile(
             "veshinantam-backup-$today.json",
@@ -160,8 +163,9 @@ private external fun browserTimeZone(): String
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val today = currentIsoDate()
     ComposeViewport(document.body!!) {
-        WebApp(LocalBrowserStore(today), SupabaseCloudAccount(), today)
+        val store = remember { LocalBrowserStore() }
+        val cloudAccount = remember { SupabaseCloudAccount() }
+        WebApp(store, cloudAccount)
     }
 }

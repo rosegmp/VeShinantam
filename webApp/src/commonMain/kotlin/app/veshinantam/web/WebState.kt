@@ -314,6 +314,7 @@ private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (
 interface BrowserStore {
     fun load(): WebAppState
     fun save(state: WebAppState)
+    fun currentLocalDate(): String
     fun currentInstant(): String
     fun currentZoneId(): String
     fun exportBackup(state: WebAppState)

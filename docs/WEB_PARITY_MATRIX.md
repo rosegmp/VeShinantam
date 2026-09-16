@@ -4,7 +4,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 
 | Capability | Android | Web | Target / acceptance note |
 | --- | --- | --- | --- |
-| Today navigation and task completion | Complete | Partial | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, and synchronized ordering are complete; automatic day/time-zone re-evaluation remains |
+| Today navigation and task completion | Complete | Complete | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, synchronized ordering, and browser-local day/time-zone re-evaluation |
 | Calendar | Complete | Partial | Gregorian/Hebrew month, statuses, filters, and completion |
 | Schedule list and archive | Complete | Partial | Full lifecycle, pause/resume, restore, delete, and bulk past completion |
 | Preset creation | Complete | Partial | All Android presets, positions, dates, and exact generated output |

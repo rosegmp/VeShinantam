@@ -162,9 +162,10 @@ private data class ScheduleDraft(
 )
 
 @Composable
-fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
+fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     val initialImportResult = remember { store.consumeBackupImport() }
     var appState by remember { mutableStateOf(store.load()) }
+    var todayIso by remember { mutableStateOf(store.currentLocalDate()) }
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
@@ -173,6 +174,13 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
     var accountState by remember { mutableStateOf(cloudAccount.state()) }
     var showAccount by remember { mutableStateOf(accountState.status != null || accountState.conflict) }
     val hebrew = appState.language == "he"
+
+    LaunchedEffect(store) {
+        while (true) {
+            delay(30_000)
+            todayIso = store.currentLocalDate()
+        }
+    }
 
     LaunchedEffect(showAccount) {
         while (showAccount) {
@@ -864,9 +872,18 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
     var year by remember { mutableStateOf(todayParts.getOrElse(0) { 2026 }) }
     var month by remember { mutableStateOf(todayParts.getOrElse(1) { 9 }) }
     var selectedDate by remember { mutableStateOf(today) }
+    var followsToday by remember { mutableStateOf(true) }
     var selectedScheduleId by remember { mutableStateOf<String?>(null) }
     var taskFilter by remember { mutableStateOf(CalendarTaskFilter.ALL) }
     val cells = GregorianCalendar.monthCells(year, month)
+    LaunchedEffect(today) {
+        if (followsToday) {
+            val updatedParts = today.split("-").mapNotNull { it.toIntOrNull() }
+            year = updatedParts.getOrElse(0) { year }
+            month = updatedParts.getOrElse(1) { month }
+            selectedDate = today
+        }
+    }
     val selectedTasks = state.tasks.asSequence()
         .filter { it.dueDate == selectedDate }
         .filter { selectedScheduleId == null || it.scheduleId == selectedScheduleId }
@@ -886,6 +903,7 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                             year = it.first
                             month = it.second
                             selectedDate = isoDate(year, month, 1)
+                            followsToday = false
                         }
                     }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, if (hebrew) "החודש הקודם" else "Previous month") }
                     Text(monthName(month, hebrew) + " $year", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 19.sp)
@@ -894,6 +912,7 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                             year = it.first
                             month = it.second
                             selectedDate = isoDate(year, month, 1)
+                            followsToday = false
                         }
                     }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, if (hebrew) "החודש הבא" else "Next month") }
                 }
@@ -921,7 +940,12 @@ private fun CalendarScreen(state: WebAppState, today: String, hebrew: Boolean, o
                                         RoundedCornerShape(12.dp),
                                     )
                                     .then(if (taskCount > 0 && !isToday && !isSelected) Modifier.border(1.dp, Color(0xFFDDE1E8), RoundedCornerShape(12.dp)) else Modifier)
-                                    .clickable(enabled = cell.day != null) { cell.isoDate?.let { selectedDate = it } },
+                                    .clickable(enabled = cell.day != null) {
+                                        cell.isoDate?.let {
+                                            selectedDate = it
+                                            followsToday = it == today
+                                        }
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (cell.day != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {

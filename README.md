@@ -4,7 +4,7 @@ VeShinantam is a standalone, private, offline-first Android app for planning Tor
 
 The repository also contains a Kotlin/Compose Multiplatform Web companion. Android and web can use the same optional Supabase account with email/password authentication, preserve device-local offline data, and require an explicit choice before resolving divergent cloud and device copies.
 
-The web Today view now mirrors Android's separate new-learning, chazarah-due-today, overdue-learning, overdue-chazarah, and completed-today sections. Sections are collapsible, overdue work shows its due date, and the synchronized sort preference supports scheduled, newest-due, and natural reference ordering in English or Hebrew.
+The web Today view now mirrors Android's separate new-learning, chazarah-due-today, overdue-learning, overdue-chazarah, and completed-today sections. Sections are collapsible, overdue work shows its due date, and the synchronized sort preference supports scheduled, newest-due, and natural reference ordering in English or Hebrew. The browser re-evaluates the local date after midnight, resume, and time-zone changes without requiring a reload.
 
 The web app is deployed automatically from `main` to [GitHub Pages](https://rosegmp.github.io/VeShinantam/).
 
