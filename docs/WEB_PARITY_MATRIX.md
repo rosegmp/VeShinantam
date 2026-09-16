@@ -4,7 +4,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 
 | Capability | Android | Web | Target / acceptance note |
 | --- | --- | --- | --- |
-| Today navigation and task completion | Complete | Partial | Same grouping, ordering, history, completion timestamp, and undo |
+| Today navigation and task completion | Complete | Partial | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, and synchronized ordering are complete; automatic day/time-zone re-evaluation remains |
 | Calendar | Complete | Partial | Gregorian/Hebrew month, statuses, filters, and completion |
 | Schedule list and archive | Complete | Partial | Full lifecycle, pause/resume, restore, delete, and bulk past completion |
 | Preset creation | Complete | Partial | All Android presets, positions, dates, and exact generated output |
@@ -13,7 +13,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Deterministic planning engine | Complete | Partial | One `shared/commonMain` implementation with JVM/Wasm golden tests |
 | Progress statistics and streaks | Complete | Partial | Identical totals, streaks, milestones, goals, and workload |
 | English/Hebrew UI and RTL | Complete | Complete | Maintain browser accessibility and directional isolation |
-| Sefarim display language | Complete | Missing | English, Hebrew, or both, independently from UI language |
+| Sefarim display language | Complete | Complete | English, Hebrew, or both, independently from UI language; preference is backed up and synchronized |
 | Hebrew references/numerals | Complete | Partial | Shared formatter and reference snapshots |
 | Offline persistence | Room | IndexedDB foundation | IndexedDB authoritative store with migrations and outbox |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |

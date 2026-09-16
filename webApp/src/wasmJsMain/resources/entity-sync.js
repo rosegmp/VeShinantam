@@ -94,7 +94,7 @@
     reminderEnabled: false,
     reminderHour: 20,
     reminderMinute: 0,
-    todaySortOrder: 'SCHEDULED_FIRST',
+    todaySortOrder: state.todaySortOrder || 'SCHEDULED_FIRST',
     automaticPresetUpdates: false,
     updatedAt: now,
     revision: Number(state.preferencesRevision || 0)
@@ -256,6 +256,7 @@
         state.sefarimLanguage = record.payload.sefarimLanguage || 'BOTH';
         state.primaryCalendar = record.payload.primaryCalendar || 'GREGORIAN';
         state.defaultChazarahOffsets = record.payload.defaultChazarahOffsets || [1, 7, 30, 90];
+        state.todaySortOrder = record.payload.todaySortOrder || 'SCHEDULED_FIRST';
         state.preferencesRevision = record.revision;
       }
     }

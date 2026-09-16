@@ -78,6 +78,7 @@ data class WebAppState(
     val sefarimLanguage: String = "BOTH",
     val primaryCalendar: String = "GREGORIAN",
     val defaultChazarahOffsets: List<Int> = listOf(1, 7, 30, 90),
+    val todaySortOrder: String = "SCHEDULED_FIRST",
     val preferencesRevision: Long = 0,
 ) {
     companion object {
@@ -113,6 +114,7 @@ fun WebBackup.validStateOrNull(): WebAppState? {
     if (version !in 1..2 || state.language !in setOf("en", "he")) return null
     if (state.sefarimLanguage !in CanonicalSefarimLanguage.entries.map { it.name } ||
         state.primaryCalendar !in CanonicalPrimaryCalendar.entries.map { it.name } ||
+        state.todaySortOrder !in WebTodaySortOrder.entries.map { it.name } ||
         state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it <= 0 }
     ) return null
     if (version >= 2 && (canonical == null || CanonicalDataValidator.validate(canonical).isNotEmpty())) return null
@@ -204,11 +206,99 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
             primaryCalendar = runCatching { CanonicalPrimaryCalendar.valueOf(primaryCalendar) }
                 .getOrDefault(CanonicalPrimaryCalendar.GREGORIAN),
             defaultChazarahOffsets = defaultChazarahOffsets,
+            todaySortOrder = todaySortOrder,
             updatedAt = now,
             revision = preferencesRevision,
         ),
     )
 }
+
+enum class WebTodaySection { NEW_LEARNING, CHAZARAH_TODAY, OVERDUE_LEARNING, OVERDUE_CHAZARAH, COMPLETED_TODAY }
+
+enum class WebTodaySortOrder { SCHEDULED_FIRST, NEWEST_DUE_FIRST, REFERENCE_ASCENDING, REFERENCE_DESCENDING }
+
+data class WebTodayTask(val task: StoredTask, val section: WebTodaySection)
+
+fun todayTasks(tasks: List<StoredTask>, today: String, sortOrder: String, preferHebrew: Boolean): List<WebTodayTask> {
+    val order = runCatching { WebTodaySortOrder.valueOf(sortOrder) }.getOrDefault(WebTodaySortOrder.SCHEDULED_FIRST)
+    return tasks.asSequence()
+        .filter { task ->
+            task.dueDate <= today &&
+                (task.dueDate == today || !task.completed || task.completionLocalDate == today)
+        }
+        .map { task ->
+            WebTodayTask(
+                task = task,
+                section = when {
+                    task.dueDate == today && task.type == LearningTaskType.LEARNING.name -> WebTodaySection.NEW_LEARNING
+                    task.dueDate == today -> WebTodaySection.CHAZARAH_TODAY
+                    task.completed -> WebTodaySection.COMPLETED_TODAY
+                    task.type == LearningTaskType.LEARNING.name -> WebTodaySection.OVERDUE_LEARNING
+                    else -> WebTodaySection.OVERDUE_CHAZARAH
+                },
+            )
+        }
+        .sortedWith(compareBy<WebTodayTask> { it.section.ordinal }.thenComparator { left, right ->
+            compareTodayTasks(left.task, right.task, order, preferHebrew)
+        })
+        .toList()
+}
+
+private fun compareTodayTasks(left: StoredTask, right: StoredTask, order: WebTodaySortOrder, preferHebrew: Boolean): Int {
+    val result = when (order) {
+        WebTodaySortOrder.SCHEDULED_FIRST -> left.dueDate.compareTo(right.dueDate)
+        WebTodaySortOrder.NEWEST_DUE_FIRST -> right.dueDate.compareTo(left.dueDate)
+        WebTodaySortOrder.REFERENCE_ASCENDING,
+        WebTodaySortOrder.REFERENCE_DESCENDING,
+        -> compareReferenceLabels(left, right, preferHebrew)
+    }
+    val directed = if (order == WebTodaySortOrder.REFERENCE_DESCENDING) -result else result
+    return directed.takeIf { it != 0 } ?: left.id.compareTo(right.id)
+}
+
+private fun displayedReference(task: StoredTask, preferHebrew: Boolean): String =
+    if (preferHebrew) task.referenceHebrew.ifBlank { task.referenceEnglish }
+    else task.referenceEnglish.ifBlank { task.referenceHebrew }
+
+private fun compareReferenceLabels(left: StoredTask, right: StoredTask, preferHebrew: Boolean): Int {
+    val leftDisplayed = displayedReference(left, preferHebrew)
+    val rightDisplayed = displayedReference(right, preferHebrew)
+    referenceTitle(leftDisplayed).compareTo(referenceTitle(rightDisplayed), ignoreCase = true).takeIf { it != 0 }?.let { return it }
+    compareIntegerLists(NUMBER.findAll(left.referenceEnglish).map { it.value.toInt() }.toList(), NUMBER.findAll(right.referenceEnglish).map { it.value.toInt() }.toList())
+        .takeIf { it != 0 }?.let { return it }
+    compareIntegerLists(AMUD_SIDE.findAll(left.referenceEnglish).map { if (it.groupValues[1].equals("a", true)) 0 else 1 }.toList(), AMUD_SIDE.findAll(right.referenceEnglish).map { if (it.groupValues[1].equals("a", true)) 0 else 1 }.toList())
+        .takeIf { it != 0 }?.let { return it }
+    return naturalTextCompare(leftDisplayed, rightDisplayed)
+}
+
+private fun referenceTitle(label: String): String {
+    val marker = REFERENCE_LOCATION_MARKER.find(label)?.range?.first ?: label.length
+    return label.substring(0, marker).trim().trimEnd(',', '–', '-')
+}
+
+private fun compareIntegerLists(left: List<Int>, right: List<Int>): Int {
+    repeat(minOf(left.size, right.size)) { index -> left[index].compareTo(right[index]).takeIf { it != 0 }?.let { return it } }
+    return left.size.compareTo(right.size)
+}
+
+private fun naturalTextCompare(left: String, right: String): Int {
+    val leftParts = NATURAL_PART.findAll(left.lowercase()).map { it.value }.toList()
+    val rightParts = NATURAL_PART.findAll(right.lowercase()).map { it.value }.toList()
+    repeat(minOf(leftParts.size, rightParts.size)) { index ->
+        val leftPart = leftParts[index]
+        val rightPart = rightParts[index]
+        val comparison = if (leftPart.all(Char::isDigit) && rightPart.all(Char::isDigit)) leftPart.toLong().compareTo(rightPart.toLong()) else leftPart.compareTo(rightPart)
+        if (comparison != 0) return comparison
+    }
+    return leftParts.size.compareTo(rightParts.size)
+}
+
+private val NUMBER = Regex("\\d+")
+private val AMUD_SIDE = Regex("\\d+([ab])", RegexOption.IGNORE_CASE)
+private val NATURAL_PART = Regex("\\d+|\\D+")
+private val REFERENCE_LOCATION_MARKER = Regex(
+    "(?i)\\s+(?:daf|page|perek|mishnah|siman|seif|chelek|דף|עמוד|פרק|משנה|סימן|סעיף|חלק)\\s+|\\s+\\d",
+)
 
 private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (value.lowercase()) {
     "gemara", "daf" -> CanonicalMaterialType.DAF

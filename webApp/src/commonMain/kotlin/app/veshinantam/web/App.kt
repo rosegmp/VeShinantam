@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
@@ -217,6 +219,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
+                                onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -257,6 +260,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount, todayIso: String) {
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
+                                onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -475,6 +479,7 @@ private fun AppContent(
     hebrew: Boolean,
     onLanguage: () -> Unit,
     onSefarimLanguage: (String) -> Unit,
+    onTodaySortOrder: (String) -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
@@ -539,7 +544,7 @@ private fun AppContent(
         }
         HorizontalDivider(color = Color(0xFFE4E7EC))
         when (destination) {
-            Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate)
+            Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate, onTodaySortOrder)
             Destination.CALENDAR -> CalendarScreen(state, todayIso, hebrew, onToggle)
             Destination.SCHEDULES -> SchedulesScreen(
                 state, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete,
@@ -655,10 +660,24 @@ private fun AccountDialog(
 }
 
 @Composable
-private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onToggle: (String) -> Unit, onCreate: () -> Unit) {
+private fun TodayScreen(
+    state: WebAppState,
+    today: String,
+    hebrew: Boolean,
+    onToggle: (String) -> Unit,
+    onCreate: () -> Unit,
+    onSortOrder: (String) -> Unit,
+) {
     val activeScheduleIds = state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
-    val tasks = LearningPlanner.tasksForDate(state.tasks.map { it.domain() }.filter { it.scheduleId in activeScheduleIds }, today)
+    val sectionedTasks = todayTasks(
+        tasks = state.tasks.filter { it.scheduleId in activeScheduleIds },
+        today = today,
+        sortOrder = state.todaySortOrder,
+        preferHebrew = state.sefarimLanguage == "HEBREW" || state.sefarimLanguage == "BOTH" && hebrew,
+    )
+    val tasks = sectionedTasks.map { it.task.domain() }
     val progress = LearningPlanner.progress(tasks)
+    var collapsedSections by remember { mutableStateOf(emptySet<String>()) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
@@ -672,6 +691,24 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
                 }
                 Surface(shape = RoundedCornerShape(99.dp), color = DeepBlueContainer) {
                     Text("${progress.completed}/${progress.total}", modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), color = DeepBlue, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        item {
+            var sortMenuExpanded by remember { mutableStateOf(false) }
+            Box {
+                OutlinedButton(onClick = { sortMenuExpanded = true }) {
+                    Text(todaySortLabel(state.todaySortOrder, hebrew))
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Default.ExpandMore, null, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                    WebTodaySortOrder.entries.forEach { order ->
+                        DropdownMenuItem(
+                            text = { Text((if (state.todaySortOrder == order.name) "✓  " else "    ") + todaySortLabel(order.name, hebrew)) },
+                            onClick = { onSortOrder(order.name); sortMenuExpanded = false },
+                        )
+                    }
                 }
             }
         }
@@ -697,28 +734,35 @@ private fun TodayScreen(state: WebAppState, today: String, hebrew: Boolean, onTo
             item { EmptyToday(hebrew, onCreate) }
         } else {
             state.schedules.filter { it.active && !it.archived }.forEach { schedule ->
-                val scheduleTasks = tasks.filter { it.scheduleId == schedule.id }
+                val scheduleTasks = sectionedTasks.filter { it.task.scheduleId == schedule.id }
                 if (scheduleTasks.isNotEmpty()) {
                     item {
                         Text(schedule.name, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp).semantics { heading() })
                     }
-                    item {
-                        TaskGroup(
-                            title = if (hebrew) "לימוד חדש" else "New learning",
-                            tasks = scheduleTasks.filter { it.type == LearningTaskType.LEARNING },
-                            hebrew = hebrew,
-                            sefarimLanguage = state.sefarimLanguage,
-                            onToggle = onToggle,
-                        )
-                    }
-                    item {
-                        TaskGroup(
-                            title = if (hebrew) "חזרה" else "Chazarah",
-                            tasks = scheduleTasks.filter { it.type == LearningTaskType.CHAZARAH },
-                            hebrew = hebrew,
-                            sefarimLanguage = state.sefarimLanguage,
-                            onToggle = onToggle,
-                        )
+                    WebTodaySection.entries.forEach { section ->
+                        val sectionTasks = scheduleTasks.filter { it.section == section }.map { it.task.domain() }
+                        if (sectionTasks.isNotEmpty()) {
+                            val sectionKey = "${schedule.id}-${section.name}"
+                            val expanded = sectionKey !in collapsedSections
+                            item {
+                                TaskGroup(
+                                    title = todaySectionLabel(section, hebrew),
+                                    tasks = sectionTasks,
+                                    hebrew = hebrew,
+                                    sefarimLanguage = state.sefarimLanguage,
+                                    onToggle = onToggle,
+                                    expanded = expanded,
+                                    onExpandToggle = {
+                                        if (expanded) {
+                                            collapsedSections = collapsedSections + sectionKey
+                                        } else {
+                                            collapsedSections = collapsedSections - sectionKey
+                                        }
+                                    },
+                                    showDueDate = section == WebTodaySection.OVERDUE_LEARNING || section == WebTodaySection.OVERDUE_CHAZARAH,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -739,11 +783,21 @@ private fun TaskGroup(
     hebrew: Boolean,
     sefarimLanguage: String,
     onToggle: (String) -> Unit,
+    expanded: Boolean = true,
+    onExpandToggle: (() -> Unit)? = null,
+    showDueDate: Boolean = false,
 ) {
     if (tasks.isEmpty()) return
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
         Column {
-            Text(title, modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp), color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth().then(if (onExpandToggle != null) Modifier.clickable(onClick = onExpandToggle) else Modifier).padding(horizontal = 18.dp, vertical = 14.dp).semantics { heading() },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("$title (${tasks.size})", modifier = Modifier.weight(1f), color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                if (onExpandToggle != null) Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = DeepBlue)
+            }
+            if (!expanded) return@Column
             HorizontalDivider(color = Color(0xFFEEF0F4))
             tasks.forEachIndexed { index, task ->
                 Row(
@@ -763,6 +817,11 @@ private fun TaskGroup(
                         } else null
                         Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else Color(0xFF22262D))
                         secondary?.takeIf { it.isNotBlank() }?.let { Text(it, color = MutedInk, fontSize = 14.sp) }
+                        if (showDueDate) Text(
+                            if (hebrew) "לתאריך ${friendlyDate(task.dueDate, true)}" else "Due ${friendlyDate(task.dueDate, false)}",
+                            color = Color(0xFF9B2C2C),
+                            fontSize = 13.sp,
+                        )
                     }
                     if (task.completed) Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(21.dp))
                 }
@@ -770,6 +829,21 @@ private fun TaskGroup(
             }
         }
     }
+}
+
+private fun todaySectionLabel(section: WebTodaySection, hebrew: Boolean): String = when (section) {
+    WebTodaySection.NEW_LEARNING -> if (hebrew) "לימוד חדש" else "New learning"
+    WebTodaySection.CHAZARAH_TODAY -> if (hebrew) "חזרה להיום" else "Chazarah due today"
+    WebTodaySection.OVERDUE_LEARNING -> if (hebrew) "לימוד באיחור" else "Overdue learning"
+    WebTodaySection.OVERDUE_CHAZARAH -> if (hebrew) "חזרה באיחור" else "Overdue chazarah"
+    WebTodaySection.COMPLETED_TODAY -> if (hebrew) "הושלם היום" else "Completed today"
+}
+
+private fun todaySortLabel(value: String, hebrew: Boolean): String = when (value) {
+    WebTodaySortOrder.NEWEST_DUE_FIRST.name -> if (hebrew) "החדש ביותר קודם" else "Newest due first"
+    WebTodaySortOrder.REFERENCE_ASCENDING.name -> if (hebrew) "מראה מקום עולה" else "Reference A–Z"
+    WebTodaySortOrder.REFERENCE_DESCENDING.name -> if (hebrew) "מראה מקום יורד" else "Reference Z–A"
+    else -> if (hebrew) "לפי התאריך המתוכנן" else "Scheduled first"
 }
 
 @Composable
