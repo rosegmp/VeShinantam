@@ -8,6 +8,7 @@ import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.CanonicalDataSet
 import app.veshinantam.shared.CanonicalDataValidator
 import app.veshinantam.shared.CanonicalExclusion
+import app.veshinantam.shared.CanonicalGoal
 import app.veshinantam.shared.CanonicalMaterialType
 import app.veshinantam.shared.CanonicalMissedWorkBehavior
 import app.veshinantam.shared.CanonicalPreferences
@@ -87,10 +88,20 @@ data class StoredExclusion(
 )
 
 @Serializable
+data class StoredGoal(
+    val kind: String,
+    val target: Double,
+    val updatedAt: String? = null,
+    val revision: Long = 0,
+    val id: String = kind,
+)
+
+@Serializable
 data class WebAppState(
     val schedules: List<StoredSchedule> = emptyList(),
     val tasks: List<StoredTask> = emptyList(),
     val exclusions: List<StoredExclusion> = emptyList(),
+    val goals: List<StoredGoal> = emptyList(),
     val language: String = "en",
     val sefarimLanguage: String = "BOTH",
     val primaryCalendar: String = "GREGORIAN",
@@ -143,7 +154,7 @@ fun WebBackup.validStateOrNull(): WebAppState? {
         state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it <= 0 }
     ) return null
     if (version >= 2 && (canonical == null || CanonicalDataValidator.validate(canonical).isNotEmpty())) return null
-    if (state.schedules.size > 500 || state.tasks.size > 50_000 || state.exclusions.size > 10_000) return null
+    if (state.schedules.size > 500 || state.tasks.size > 50_000 || state.exclusions.size > 10_000 || state.goals.size > 20) return null
     val scheduleIds = state.schedules.map { it.id }
     if (scheduleIds.any { it.isBlank() } || scheduleIds.distinct().size != scheduleIds.size) return null
     if (state.schedules.any { schedule ->
@@ -165,24 +176,32 @@ fun WebBackup.validStateOrNull(): WebAppState? {
                 exclusion.id != "${exclusion.scheduleId}:${exclusion.date}"
         } || state.exclusions.map { it.id }.distinct().size != state.exclusions.size
     ) return null
+    if (state.goals.any { goal ->
+            goal.kind !in setOf("COMPLETION", "STREAK", "LEARNING_UNITS") || goal.id != goal.kind ||
+                !goal.target.isFinite() || goal.target <= 0 || goal.kind == "COMPLETION" && goal.target > 100
+        } || state.goals.map { it.id }.distinct().size != state.goals.size
+    ) return null
     if (version >= 2 && canonical?.let { value ->
             value.schedules.map { it.id }.toSet() != scheduleIds.toSet() ||
                 value.tasks.map { it.id }.toSet() != taskIds.toSet() ||
-                state.exclusions.isNotEmpty() && value.exclusions.map { it.id }.toSet() != state.exclusions.map { it.id }.toSet()
+                state.exclusions.isNotEmpty() && value.exclusions.map { it.id }.toSet() != state.exclusions.map { it.id }.toSet() ||
+                state.goals.isNotEmpty() && value.goals.map { it.id }.toSet() != state.goals.map { it.id }.toSet()
         } == true
     ) return null
-    return if (state.exclusions.isEmpty() && canonical?.exclusions?.isNotEmpty() == true) {
-        state.copy(exclusions = canonical.exclusions.map { exclusion ->
+    val recoveredExclusions = if (state.exclusions.isEmpty() && canonical?.exclusions?.isNotEmpty() == true) {
+        canonical.exclusions.map { exclusion ->
             StoredExclusion(
                 scheduleId = exclusion.scheduleId,
                 date = exclusion.date,
                 updatedAt = exclusion.updatedAt,
                 revision = exclusion.revision,
             )
-        })
-    } else {
-        state
-    }
+        }
+    } else state.exclusions
+    val recoveredGoals = if (state.goals.isEmpty() && canonical?.goals?.isNotEmpty() == true) {
+        canonical.goals.map { goal -> StoredGoal(goal.kind, goal.target, goal.updatedAt, goal.revision) }
+    } else state.goals
+    return state.copy(exclusions = recoveredExclusions, goals = recoveredGoals)
 }
 
 fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
@@ -247,6 +266,15 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
                 date = exclusion.date,
                 updatedAt = exclusion.updatedAt ?: now,
                 revision = exclusion.revision,
+            )
+        },
+        goals = goals.map { goal ->
+            CanonicalGoal(
+                id = goal.id,
+                kind = goal.kind,
+                target = goal.target,
+                updatedAt = goal.updatedAt ?: now,
+                revision = goal.revision,
             )
         },
         preferences = CanonicalPreferences(

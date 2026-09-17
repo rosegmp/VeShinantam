@@ -8,6 +8,10 @@ import app.veshinantam.data.local.ProgressTaskRow
 import app.veshinantam.data.local.ProgressGoalEntity
 import app.veshinantam.domain.model.ScheduleState
 import app.veshinantam.domain.model.TaskType
+import app.veshinantam.shared.LearningTaskType
+import app.veshinantam.shared.SharedProgressCalculator
+import app.veshinantam.shared.SharedProgressTask
+import app.veshinantam.shared.SharedSavedGoal
 import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -44,61 +48,35 @@ data class ProgressUiState(
 
 object ProgressCalculator {
     fun calculate(rows: List<ProgressTaskRow>, today: LocalDate, savedGoals: List<ProgressGoalEntity> = emptyList()): ProgressUiState {
-        val due = rows.filter { it.plannedDate <= today }
-        val completedDue = due.filter { it.completedAt != null }
-        val scheduledDays = due.filter { it.scheduleState == ScheduleState.ACTIVE }
-            .groupBy { it.plannedDate }
-            .toSortedMap(reverseOrder())
-        var streak = 0
-        for ((_, tasks) in scheduledDays) {
-            if (tasks.all { it.completedAt != null }) streak++ else break
-        }
-        var runningStreak = 0
-        var longestStreak = 0
-        scheduledDays.toSortedMap().values.forEach { tasks ->
-            if (tasks.all { it.completedAt != null }) {
-                runningStreak++
-                longestStreak = maxOf(longestStreak, runningStreak)
-            } else {
-                runningStreak = 0
-            }
-        }
-        val completedLearningUnits = completedDue.filter { it.type == TaskType.LEARNING }.sumOf { it.quantity }
-        val completedReviews = completedDue.count { it.type == TaskType.CHAZARAH }
-        val milestones = buildList {
-            listOf(7, 30, 100).forEach { add(ProgressMilestone(MilestoneKind.STREAK, it, longestStreak.toDouble(), longestStreak >= it)) }
-            listOf(10, 50, 100, 500).forEach { add(ProgressMilestone(MilestoneKind.LEARNING_UNITS, it, completedLearningUnits, completedLearningUnits >= it)) }
-            listOf(10, 50, 100, 500).forEach { add(ProgressMilestone(MilestoneKind.REVIEWS, it, completedReviews.toDouble(), completedReviews >= it)) }
-        }
-        val upcoming = rows.asSequence()
-            .filter {
-                it.scheduleState == ScheduleState.ACTIVE && it.type == TaskType.CHAZARAH &&
-                    it.completedAt == null && it.plannedDate > today && it.plannedDate <= today.plusDays(30)
-            }
-            .groupingBy { it.plannedDate }
-            .eachCount()
-            .toSortedMap()
-            .map { ReviewWorkload(it.key, it.value) }
-        val goals = savedGoals.mapNotNull { saved ->
-            val kind = runCatching { ProgressGoalKind.valueOf(saved.kind) }.getOrNull() ?: return@mapNotNull null
-            val current = when (kind) {
-                ProgressGoalKind.COMPLETION -> if (due.isEmpty()) 0.0 else completedDue.size * 100.0 / due.size
-                ProgressGoalKind.STREAK -> streak.toDouble()
-                ProgressGoalKind.LEARNING_UNITS -> completedLearningUnits
-            }
-            ProgressGoal(kind, saved.target, current)
-        }
+        val shared = SharedProgressCalculator.calculate(
+            tasks = rows.map { row ->
+                SharedProgressTask(
+                    id = row.taskId,
+                    plannedDate = row.plannedDate.toString(),
+                    type = if (row.type == TaskType.LEARNING) LearningTaskType.LEARNING else LearningTaskType.CHAZARAH,
+                    quantity = row.quantity,
+                    completed = row.completedAt != null,
+                    scheduleActive = row.scheduleState == ScheduleState.ACTIVE,
+                )
+            },
+            today = today.toString(),
+            savedGoals = savedGoals.map { SharedSavedGoal(it.kind, it.target) },
+        )
         return ProgressUiState(
-            dueCount = due.size,
-            completedDueCount = completedDue.size,
-            completionPercent = if (due.isEmpty()) 0 else (completedDue.size * 100.0 / due.size).toInt(),
-            completedLearningUnits = completedLearningUnits,
-            completedReviews = completedReviews,
-            currentStreak = streak,
-            longestStreak = longestStreak,
-            milestones = milestones,
-            goals = goals,
-            upcomingReviews = upcoming,
+            dueCount = shared.dueCount,
+            completedDueCount = shared.completedDueCount,
+            completionPercent = shared.completionPercent,
+            completedLearningUnits = shared.completedLearningUnits,
+            completedReviews = shared.completedReviews,
+            currentStreak = shared.currentStreak,
+            longestStreak = shared.longestStreak,
+            milestones = shared.milestones.map {
+                ProgressMilestone(MilestoneKind.valueOf(it.kind.name), it.target, it.current, it.unlocked)
+            },
+            goals = shared.goals.map {
+                ProgressGoal(ProgressGoalKind.valueOf(it.kind.name), it.target, it.current)
+            },
+            upcomingReviews = shared.upcomingReviews.map { ReviewWorkload(LocalDate.parse(it.date), it.count) },
         )
     }
 }

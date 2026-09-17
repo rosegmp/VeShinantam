@@ -49,6 +49,41 @@ class WebStateTest {
     }
 
     @Test
+    fun goalsRoundTripThroughCanonicalBackup() {
+        val state = WebAppState.sample(today).copy(
+            goals = listOf(
+                StoredGoal("COMPLETION", 85.0, now),
+                StoredGoal("STREAK", 30.0, now),
+                StoredGoal("LEARNING_UNITS", 100.0, now),
+            ),
+        )
+
+        val canonical = state.toCanonical(now, today)
+
+        assertEquals(state.goals.map { it.kind }, canonical.goals.map { it.kind })
+        assertEquals(state, WebBackup(state = state, canonical = canonical).validStateOrNull())
+    }
+
+    @Test
+    fun olderVersionTwoBackupRecoversCanonicalGoals() {
+        val state = WebAppState.sample(today)
+        val canonical = state.toCanonical(now, today).copy(
+            goals = listOf(app.veshinantam.shared.CanonicalGoal("STREAK", kind = "STREAK", target = 7.0, updatedAt = now)),
+        )
+
+        val restored = WebBackup(version = 2, state = state, canonical = canonical).validStateOrNull()
+
+        assertEquals(listOf(StoredGoal("STREAK", 7.0, now)), restored?.goals)
+    }
+
+    @Test
+    fun backupRejectsInvalidProgressGoals() {
+        val state = WebAppState.sample(today).copy(goals = listOf(StoredGoal("COMPLETION", 101.0, now)))
+
+        assertEquals(null, WebBackup(version = 1, state = state).validStateOrNull())
+    }
+
+    @Test
     fun todayTasksMatchAndroidSectionsAndHideOldCompletions() {
         val tasks = listOf(
             StoredTask("today-learning", "daf-yomi", "Berachos 18", "ברכות יח", today, "LEARNING"),

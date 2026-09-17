@@ -103,6 +103,13 @@ import app.veshinantam.shared.LearningTaskType
 import app.veshinantam.shared.SharedMaterialUnit
 import app.veshinantam.shared.SharedScheduleEngine
 import app.veshinantam.shared.SharedScheduleRules
+import app.veshinantam.shared.SharedProgressCalculator
+import app.veshinantam.shared.SharedProgressGoal
+import app.veshinantam.shared.SharedProgressGoalKind
+import app.veshinantam.shared.SharedProgressMilestone
+import app.veshinantam.shared.SharedProgressMilestoneKind
+import app.veshinantam.shared.SharedProgressTask
+import app.veshinantam.shared.SharedSavedGoal
 import app.veshinantam.shared.preset.SharedPresetCatalog
 import app.veshinantam.shared.preset.SharedPresetProgram
 import app.veshinantam.shared.preset.GemaraUnit
@@ -245,6 +252,21 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         })
     }
 
+    fun saveGoals(completion: Double?, streak: Double?, learningUnits: Double?) {
+        val now = store.currentInstant()
+        val existing = appState.goals.associateBy { it.kind }
+        fun stored(kind: SharedProgressGoalKind, target: Double): StoredGoal {
+            val prior = existing[kind.name]
+            return StoredGoal(kind.name, target, now, revision = prior?.revision ?: 0, id = prior?.id ?: kind.name)
+        }
+        val goals = listOfNotNull(
+            completion?.takeIf { it > 0 }?.let { stored(SharedProgressGoalKind.COMPLETION, it.coerceAtMost(100.0)) },
+            streak?.takeIf { it > 0 }?.let { stored(SharedProgressGoalKind.STREAK, it) },
+            learningUnits?.takeIf { it > 0 }?.let { stored(SharedProgressGoalKind.LEARNING_UNITS, it) },
+        )
+        update { it.copy(goals = goals) }
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(typography = appTypography()) {
             Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
@@ -263,6 +285,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onSaveGoals = ::saveGoals,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -317,6 +340,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onSaveGoals = ::saveGoals,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -616,6 +640,7 @@ private fun AppContent(
     onSefarimLanguage: (String) -> Unit,
     onPrimaryCalendar: (String) -> Unit,
     onTodaySortOrder: (String) -> Unit,
+    onSaveGoals: (Double?, Double?, Double?) -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
@@ -713,7 +738,7 @@ private fun AppContent(
             Destination.SCHEDULES -> SchedulesScreen(
                 state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit, onRequestBulkCompletion,
             )
-            Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew)
+            Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew, onSaveGoals)
         }
     }
 }
@@ -1489,51 +1514,106 @@ private fun EditFutureScheduleDialog(
 }
 
 @Composable
-private fun ProgressScreen(state: WebAppState, today: String, hebrew: Boolean) {
+private fun ProgressScreen(
+    state: WebAppState,
+    today: String,
+    hebrew: Boolean,
+    onSaveGoals: (Double?, Double?, Double?) -> Unit,
+) {
     val domainTasks = state.tasks.map { it.domain() }
-    val progress = LearningPlanner.progress(domainTasks)
-    val streak = LearningPlanner.scheduledDayStreak(domainTasks, today)
-    val workload = LearningPlanner.upcomingWorkload(domainTasks, today)
-    val maximumWorkload = workload.maxOfOrNull { it.total }?.coerceAtLeast(1) ?: 1
+    val schedulesById = state.schedules.associateBy { it.id }
+    val progress = SharedProgressCalculator.calculate(
+        tasks = state.tasks.map { task ->
+            SharedProgressTask(
+                id = task.id,
+                plannedDate = task.dueDate,
+                type = LearningTaskType.valueOf(task.type),
+                quantity = task.quantity,
+                completed = task.completed,
+                scheduleActive = schedulesById[task.scheduleId]?.let { it.active && !it.archived } == true,
+            )
+        },
+        today = today,
+        savedGoals = state.goals.map { SharedSavedGoal(it.kind, it.target) },
+    )
+    var editingGoals by remember { mutableStateOf(false) }
+    if (editingGoals) {
+        ProgressGoalsDialog(
+            goals = progress.goals,
+            hebrew = hebrew,
+            onSave = { completion, streak, units ->
+                onSaveGoals(completion, streak, units)
+                editingGoals = false
+            },
+            onDismiss = { editingGoals = false },
+        )
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text(if (hebrew) "ההתקדמות שלך" else "Your progress", color = DeepBlue, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(18.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepBlue), shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(24.dp)) {
                 Text(if (hebrew) "הושלם בסך הכול" else "Overall completion", color = Color.White.copy(alpha = .72f))
-                Text("${progress.percent}%", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+                Text("${progress.completionPercent}%", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(progress = { progress.fraction }, modifier = Modifier.fillMaxWidth().height(9.dp), color = WarmGold, trackColor = Color.White.copy(alpha = .18f))
+                LinearProgressIndicator(progress = { progress.completionPercent / 100f }, modifier = Modifier.fillMaxWidth().height(9.dp), color = WarmGold, trackColor = Color.White.copy(alpha = .18f))
             }
         }
         Spacer(Modifier.height(16.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProgressMetric(if (hebrew) "משימות שהושלמו" else "Tasks completed", progress.completed.toString())
-            ProgressMetric(if (hebrew) "לימוד חדש" else "New learning", progress.learningCompleted.toString())
-            ProgressMetric(if (hebrew) "חזרות" else "Chazarah", progress.chazarahCompleted.toString())
-            ProgressMetric(if (hebrew) "תוכניות פעילות" else "Active schedules", state.schedules.count { it.active }.toString())
-            ProgressMetric(if (hebrew) "רצף ימי לימוד" else "Scheduled-day streak", streak.toString())
+            ProgressMetric(if (hebrew) "משימות שהושלמו" else "Tasks completed", "${progress.completedDueCount}/${progress.dueCount}")
+            ProgressMetric(if (hebrew) "יחידות לימוד" else "Learning units", formatProgressNumber(progress.completedLearningUnits))
+            ProgressMetric(if (hebrew) "חזרות" else "Reviews", progress.completedReviews.toString())
+            ProgressMetric(if (hebrew) "רצף נוכחי" else "Current streak", progress.currentStreak.toString())
+            ProgressMetric(if (hebrew) "הרצף הארוך ביותר" else "Longest streak", progress.longestStreak.toString())
         }
         Spacer(Modifier.height(24.dp))
-        Text(if (hebrew) "עומס החזרות הקרוב" else "Upcoming workload", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (hebrew) "יעדים" else "Goals", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
+            TextButton(onClick = { editingGoals = true }) {
+                Icon(Icons.Default.Edit, null)
+                Spacer(Modifier.width(5.dp))
+                Text(if (hebrew) "עריכה" else "Edit")
+            }
+        }
+        if (progress.goals.isEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                Text(
+                    if (hebrew) "הגדר יעדים לאחוז השלמה, רצף ויחידות לימוד." else "Set goals for completion, streak, and learning units.",
+                    modifier = Modifier.fillMaxWidth().padding(18.dp), color = MutedInk,
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                progress.goals.forEach { ProgressGoalCard(it, hebrew) }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(if (hebrew) "אבני דרך" else "Milestones", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val visibleMilestones = progress.milestones.filter { it.unlocked } +
+                SharedProgressMilestoneKind.entries.mapNotNull { kind -> progress.milestones.firstOrNull { it.kind == kind && !it.unlocked } }
+            visibleMilestones.distinct().forEach { ProgressMilestoneCard(it, hebrew) }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(if (hebrew) "עומס החזרות ב־30 הימים הקרובים" else "30-day chazarah workload", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(10.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                workload.forEach { day ->
+                if (progress.upcomingReviews.isEmpty()) Text(if (hebrew) "אין חזרות מתוכננות." else "No upcoming reviews.", color = MutedInk)
+                val maximumWorkload = progress.upcomingReviews.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+                progress.upcomingReviews.forEach { day ->
                     Column {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(friendlyDate(day.date, hebrew), modifier = Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (hebrew) "${day.learning} לימוד · ${day.chazarah} חזרה" else "${day.learning} learning · ${day.chazarah} chazarah",
-                                color = MutedInk,
-                                fontSize = 13.sp,
-                            )
+                            Text(if (hebrew) "${day.count} חזרות" else "${day.count} reviews", color = MutedInk, fontSize = 13.sp)
                         }
                         Spacer(Modifier.height(6.dp))
                         LinearProgressIndicator(
-                            progress = { day.total.toFloat() / maximumWorkload },
+                            progress = { day.count.toFloat() / maximumWorkload },
                             modifier = Modifier.fillMaxWidth().height(7.dp),
-                            color = if (day.chazarah > day.learning) WarmGold else DeepBlue,
+                            color = WarmGold,
                             trackColor = Color(0xFFE8EBF1),
                         )
                     }
@@ -1569,6 +1649,92 @@ private fun ProgressScreen(state: WebAppState, today: String, hebrew: Boolean) {
         Spacer(Modifier.height(24.dp))
     }
 }
+
+@Composable
+private fun ProgressGoalsDialog(
+    goals: List<SharedProgressGoal>,
+    hebrew: Boolean,
+    onSave: (Double?, Double?, Double?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    fun value(kind: SharedProgressGoalKind): String = goals.firstOrNull { it.kind == kind }?.target?.let(::formatProgressNumber).orEmpty()
+    var completionText by remember(goals) { mutableStateOf(value(SharedProgressGoalKind.COMPLETION)) }
+    var streakText by remember(goals) { mutableStateOf(value(SharedProgressGoalKind.STREAK)) }
+    var unitsText by remember(goals) { mutableStateOf(value(SharedProgressGoalKind.LEARNING_UNITS)) }
+    var invalid by remember { mutableStateOf(false) }
+    fun parsed(value: String): Double? = value.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (hebrew) "עריכת יעדים" else "Edit goals") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(completionText, { completionText = it; invalid = false }, label = { Text(if (hebrew) "אחוז השלמה" else "Completion percent") }, singleLine = true)
+                OutlinedTextField(streakText, { streakText = it; invalid = false }, label = { Text(if (hebrew) "ימי רצף" else "Streak days") }, singleLine = true)
+                OutlinedTextField(unitsText, { unitsText = it; invalid = false }, label = { Text(if (hebrew) "יחידות לימוד" else "Learning units") }, singleLine = true)
+                if (invalid) Text(if (hebrew) "הזן מספרים חיוביים; אחוז ההשלמה לא יעלה על 100." else "Enter positive numbers; completion cannot exceed 100.", color = Color(0xFF9B2C2C), fontSize = 13.sp)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val completion = parsed(completionText)
+                val streak = parsed(streakText)
+                val units = parsed(unitsText)
+                val valid = listOf(completionText to completion, streakText to streak, unitsText to units).all { (text, number) ->
+                    text.isBlank() || number != null && number > 0
+                } && (completion == null || completion <= 100)
+                if (valid) onSave(completion, streak, units) else invalid = true
+            }) { Text(if (hebrew) "שמור" else "Save") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(if (hebrew) "ביטול" else "Cancel") } },
+    )
+}
+
+@Composable
+private fun ProgressGoalCard(goal: SharedProgressGoal, hebrew: Boolean) {
+    val label = when (goal.kind) {
+        SharedProgressGoalKind.COMPLETION -> if (hebrew) "יעד השלמה" else "Completion goal"
+        SharedProgressGoalKind.STREAK -> if (hebrew) "יעד רצף" else "Streak goal"
+        SharedProgressGoalKind.LEARNING_UNITS -> if (hebrew) "יעד יחידות לימוד" else "Learning-units goal"
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                Text(label, modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Text("${formatProgressNumber(goal.current)}/${formatProgressNumber(goal.target)}", color = DeepBlue, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { (goal.current / goal.target).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(7.dp), color = WarmGold, trackColor = Color(0xFFE8EBF1),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProgressMilestoneCard(milestone: SharedProgressMilestone, hebrew: Boolean) {
+    val label = when (milestone.kind) {
+        SharedProgressMilestoneKind.STREAK -> if (hebrew) "ימי רצף" else "day streak"
+        SharedProgressMilestoneKind.LEARNING_UNITS -> if (hebrew) "יחידות לימוד" else "learning units"
+        SharedProgressMilestoneKind.REVIEWS -> if (hebrew) "חזרות" else "reviews"
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = if (milestone.unlocked) Color(0xFFFFF0CE) else Color.White),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text("${milestone.target} $label", fontWeight = FontWeight.Bold)
+            Text(if (milestone.unlocked) (if (hebrew) "הושג" else "Earned") else (if (hebrew) "הבא" else "Next"), color = MutedInk, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { (milestone.current / milestone.target).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(7.dp), color = if (milestone.unlocked) WarmGold else DeepBlue, trackColor = Color(0xFFE8EBF1),
+            )
+        }
+    }
+}
+
+private fun formatProgressNumber(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
 
 @Composable
 private fun ProgressMetric(label: String, value: String) {

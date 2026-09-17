@@ -94,6 +94,16 @@
     deleted: false
   });
 
+  const goalPayload = (goal, now) => ({
+    id: goal.id || goal.kind,
+    kind: goal.kind,
+    target: Number(goal.target),
+    completed: false,
+    updatedAt: now,
+    revision: Number(goal.revision || 0),
+    deleted: false
+  });
+
   const preferencesPayload = (state, now) => ({
     appLanguage: state.language === 'he' ? 'he' : 'en',
     sefarimLanguage: state.sefarimLanguage || 'BOTH',
@@ -150,6 +160,7 @@
     await compareCollection('SCHEDULE', previous?.schedules, next?.schedules, schedulePayload);
     await compareCollection('TASK', previous?.tasks, next?.tasks, (task, _state, timestamp) => taskPayload(task, timestamp));
     await compareCollection('EXCLUSION', previous?.exclusions, next?.exclusions, (exclusion, _state, timestamp) => exclusionPayload(exclusion, timestamp));
+    await compareCollection('GOAL', previous?.goals, next?.goals, (goal, _state, timestamp) => goalPayload(goal, timestamp));
     if (!previous || previous.language !== next.language) {
       const payload = preferencesPayload(next, now);
       await queueMutation({
@@ -249,12 +260,18 @@
     updatedAt: value.updatedAt, revision: value.revision
   });
 
+  const goalFromCanonical = value => ({
+    id: value.id || value.kind, kind: value.kind, target: Number(value.target),
+    updatedAt: value.updatedAt, revision: value.revision
+  });
+
   window.veshinantamApplyEntityRecords = async records => {
     if (!database) throw new Error('IndexedDB is unavailable; cloud data cannot be stored safely in this browser.');
     const state = JSON.parse(readBrowserState() || '{"schedules":[],"tasks":[],"language":"en"}');
     const schedules = new Map((state.schedules || []).map(value => [value.id, value]));
     const tasks = new Map((state.tasks || []).map(value => [value.id, value]));
     const exclusions = new Map((state.exclusions || []).map(value => [value.id, value]));
+    const goals = new Map((state.goals || []).map(value => [value.id, value]));
     const deletedScheduleIds = new Set();
     for (const record of records) {
       if (record.entity_type === 'SCHEDULE') {
@@ -270,6 +287,9 @@
       } else if (record.entity_type === 'EXCLUSION') {
         if (record.deleted) exclusions.delete(record.entity_id);
         else if (record.payload) exclusions.set(record.entity_id, exclusionFromCanonical({ ...record.payload, revision: record.revision }));
+      } else if (record.entity_type === 'GOAL') {
+        if (record.deleted) goals.delete(record.entity_id);
+        else if (record.payload) goals.set(record.entity_id, goalFromCanonical({ ...record.payload, revision: record.revision }));
       } else if (record.entity_type === 'PREFERENCES' && !record.deleted && record.payload) {
         state.language = record.payload.appLanguage === 'he' ? 'he' : 'en';
         state.sefarimLanguage = record.payload.sefarimLanguage || 'BOTH';
@@ -282,6 +302,7 @@
     state.schedules = Array.from(schedules.values());
     state.tasks = Array.from(tasks.values()).filter(task => !deletedScheduleIds.has(task.scheduleId));
     state.exclusions = Array.from(exclusions.values()).filter(exclusion => !deletedScheduleIds.has(exclusion.scheduleId));
+    state.goals = Array.from(goals.values());
     const serialized = JSON.stringify(state);
     suppressDiff = true;
     cachedState = serialized;

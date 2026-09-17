@@ -11,7 +11,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Structured custom schedules | Complete | Complete | Shared exact-range selectors, pace/finish-by, weekdays, synchronized exclusions, missed-work behavior, and pre-save workload preview |
 | Chazarah planning | Complete | Complete | Finite offsets, annual reviews, weekend ranges, and official Oraysa behavior use the shared planner |
 | Deterministic planning engine | Complete | Partial | One `shared/commonMain` implementation with JVM/Wasm golden tests |
-| Progress statistics and streaks | Complete | Partial | Identical totals, streaks, milestones, goals, and workload |
+| Progress statistics and streaks | Complete | Complete | Shared due-through-today totals, learning quantities, reviews, current/longest streaks, milestones, synchronized goals, and 30-day chazarah workload |
 | English/Hebrew UI and RTL | Complete | Complete | Maintain browser accessibility and directional isolation |
 | Sefarim display language | Complete | Complete | English, Hebrew, or both, independently from UI language; preference is backed up and synchronized |
 | Hebrew references/numerals | Complete | Partial | Shared formatter and reference snapshots |
