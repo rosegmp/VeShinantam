@@ -109,11 +109,11 @@
     sefarimLanguage: state.sefarimLanguage || 'BOTH',
     primaryCalendar: state.primaryCalendar || 'GREGORIAN',
     defaultChazarahOffsets: state.defaultChazarahOffsets || [1, 7, 30, 90],
-    reminderEnabled: false,
-    reminderHour: 20,
-    reminderMinute: 0,
+    reminderEnabled: Boolean(state.reminderEnabled),
+    reminderHour: Number(state.reminderHour ?? 20),
+    reminderMinute: Number(state.reminderMinute ?? 0),
     todaySortOrder: state.todaySortOrder || 'SCHEDULED_FIRST',
-    automaticPresetUpdates: false,
+    automaticPresetUpdates: Boolean(state.automaticPresetUpdates),
     updatedAt: now,
     revision: Number(state.preferencesRevision || 0)
   });
@@ -161,8 +161,9 @@
     await compareCollection('TASK', previous?.tasks, next?.tasks, (task, _state, timestamp) => taskPayload(task, timestamp));
     await compareCollection('EXCLUSION', previous?.exclusions, next?.exclusions, (exclusion, _state, timestamp) => exclusionPayload(exclusion, timestamp));
     await compareCollection('GOAL', previous?.goals, next?.goals, (goal, _state, timestamp) => goalPayload(goal, timestamp));
-    if (!previous || previous.language !== next.language) {
-      const payload = preferencesPayload(next, now);
+    const payload = preferencesPayload(next, now);
+    const previousPayload = previous ? preferencesPayload(previous, now) : null;
+    if (!previous || comparable(previousPayload) !== comparable(payload)) {
       await queueMutation({
         mutationId: newMutationId(), entityType: 'PREFERENCES', entityId: 'preferences',
         baseRevision: Number(next.preferencesRevision || 0), payload, deleted: false, createdAt: now
@@ -295,7 +296,11 @@
         state.sefarimLanguage = record.payload.sefarimLanguage || 'BOTH';
         state.primaryCalendar = record.payload.primaryCalendar || 'GREGORIAN';
         state.defaultChazarahOffsets = record.payload.defaultChazarahOffsets || [1, 7, 30, 90];
+        state.reminderEnabled = Boolean(record.payload.reminderEnabled);
+        state.reminderHour = Number(record.payload.reminderHour ?? 20);
+        state.reminderMinute = Number(record.payload.reminderMinute ?? 0);
         state.todaySortOrder = record.payload.todaySortOrder || 'SCHEDULED_FIRST';
+        state.automaticPresetUpdates = Boolean(record.payload.automaticPresetUpdates);
         state.preferencesRevision = record.revision;
       }
     }

@@ -37,6 +37,59 @@ class WebStateTest {
     }
 
     @Test
+    fun allCanonicalPreferencesRoundTripWithoutPlatformClobbering() {
+        val state = WebAppState.sample(today).copy(
+            language = "he",
+            sefarimLanguage = "HEBREW",
+            primaryCalendar = "HEBREW",
+            defaultChazarahOffsets = listOf(2, 14, 45),
+            reminderEnabled = true,
+            reminderHour = 6,
+            reminderMinute = 35,
+            todaySortOrder = "REFERENCE_ASCENDING",
+            automaticPresetUpdates = true,
+            preferencesRevision = 12,
+        )
+
+        val canonical = state.toCanonical(now, today).preferences
+
+        assertEquals(true, canonical.reminderEnabled)
+        assertEquals(6, canonical.reminderHour)
+        assertEquals(35, canonical.reminderMinute)
+        assertEquals(true, canonical.automaticPresetUpdates)
+        assertEquals(12, canonical.revision)
+        assertEquals(state, WebBackup(state = state, canonical = state.toCanonical(now, today)).validStateOrNull())
+    }
+
+    @Test
+    fun olderVersionTwoStateRecoversPlatformPreferencesFromCanonicalData() {
+        val state = WebAppState.sample(today)
+        val canonical = state.toCanonical(now, today).copy(
+            preferences = state.toCanonical(now, today).preferences.copy(
+                reminderEnabled = true,
+                reminderHour = 7,
+                reminderMinute = 15,
+                automaticPresetUpdates = true,
+                revision = 9,
+            ),
+        )
+
+        val restored = WebBackup(state = state, canonical = canonical).validStateOrNull()
+
+        assertEquals(true, restored?.reminderEnabled)
+        assertEquals(7, restored?.reminderHour)
+        assertEquals(15, restored?.reminderMinute)
+        assertEquals(true, restored?.automaticPresetUpdates)
+        assertEquals(9, restored?.preferencesRevision)
+    }
+
+    @Test
+    fun backupRejectsInvalidReminderAndChazarahPreferences() {
+        assertEquals(null, WebBackup(version = 1, state = WebAppState.sample(today).copy(reminderHour = 24)).validStateOrNull())
+        assertEquals(null, WebBackup(version = 1, state = WebAppState.sample(today).copy(defaultChazarahOffsets = listOf(7, 7))).validStateOrNull())
+    }
+
+    @Test
     fun olderVersionTwoBackupRecoversCanonicalExclusions() {
         val state = WebAppState.sample(today)
         val canonical = state.toCanonical(now, today).copy(

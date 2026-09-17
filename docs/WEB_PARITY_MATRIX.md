@@ -14,13 +14,14 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. “Partial�
 | Progress statistics and streaks | Complete | Complete | Shared due-through-today totals, learning quantities, reviews, current/longest streaks, milestones, synchronized goals, and 30-day chazarah workload |
 | English/Hebrew UI and RTL | Complete | Complete | Maintain browser accessibility and directional isolation |
 | Sefarim display language | Complete | Complete | English, Hebrew, or both, independently from UI language; preference is backed up and synchronized |
+| Preferences and settings | Complete | Complete | Language, reference language, primary calendar, default chazarah, Today sort, reminder time/state, and preset-update preference round-trip and synchronize without clobbering platform-specific behavior |
 | Hebrew references/numerals | Complete | Partial | Shared formatter and reference snapshots |
 | Offline persistence | Room | IndexedDB foundation | IndexedDB authoritative store with migrations and outbox |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |
 | Cross-device sync | Incremental client (rollout-gated) | Incremental client (rollout-gated) | Distribute the updated APK, then enable both clients together |
 | Backup and restore | Complete | Partial | One canonical format and lossless Android ↔ web round trip |
 | Printable schedule | Complete | Missing | Equivalent browser print/PDF output |
-| Reminders | Complete | Missing | Best-effort notification; Web Push for closed-app delivery if enabled |
+| Reminders | Complete | Preference only | Preference is preserved and synchronized; best-effort browser notification and Web Push delivery remain planned |
 | Home-screen presence | Android widget | Installable PWA | Accepted platform exception; add badges/fast Today launch where supported |
 | Signed preset updates | Complete | Missing | Shared validated catalog and cached fallback |
 | Light/dark mode | Complete | Partial | Follow system preference on web with matching brand tokens |

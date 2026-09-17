@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.UploadFile
@@ -194,6 +195,18 @@ private data class CustomSchedulePreview(
     val completionDate: String,
 )
 
+private data class WebPreferencesEdit(
+    val language: String,
+    val sefarimLanguage: String,
+    val primaryCalendar: String,
+    val defaultChazarahOffsets: List<Int>,
+    val reminderEnabled: Boolean,
+    val reminderHour: Int,
+    val reminderMinute: Int,
+    val todaySortOrder: String,
+    val automaticPresetUpdates: Boolean,
+)
+
 private data class BulkCompletionRequest(
     val schedule: StoredSchedule,
     val taskType: LearningTaskType,
@@ -267,6 +280,22 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         update { it.copy(goals = goals) }
     }
 
+    fun savePreferences(edit: WebPreferencesEdit) {
+        update { state ->
+            state.copy(
+                language = edit.language,
+                sefarimLanguage = edit.sefarimLanguage,
+                primaryCalendar = edit.primaryCalendar,
+                defaultChazarahOffsets = edit.defaultChazarahOffsets,
+                reminderEnabled = edit.reminderEnabled,
+                reminderHour = edit.reminderHour,
+                reminderMinute = edit.reminderMinute,
+                todaySortOrder = edit.todaySortOrder,
+                automaticPresetUpdates = edit.automaticPresetUpdates,
+            )
+        }
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(typography = appTypography()) {
             Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
@@ -286,6 +315,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onSaveGoals = ::saveGoals,
+                                onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -341,6 +371,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onSaveGoals = ::saveGoals,
+                                onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
@@ -641,6 +672,7 @@ private fun AppContent(
     onPrimaryCalendar: (String) -> Unit,
     onTodaySortOrder: (String) -> Unit,
     onSaveGoals: (Double?, Double?, Double?) -> Unit,
+    onSavePreferences: (WebPreferencesEdit) -> Unit,
     onToggle: (String) -> Unit,
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
@@ -657,6 +689,7 @@ private fun AppContent(
     hebrewCalendarPeriod: (String) -> WebCalendarPeriod,
 ) {
     var showDataMenu by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 13.dp),
@@ -706,6 +739,11 @@ private fun AppContent(
                     }
                     HorizontalDivider()
                     DropdownMenuItem(
+                        text = { Text(if (hebrew) "הגדרות" else "Settings") },
+                        leadingIcon = { Icon(Icons.Default.Settings, null) },
+                        onClick = { showDataMenu = false; showSettings = true },
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (hebrew) "חשבון וסנכרון" else "Account and sync") },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         onClick = { showDataMenu = false; onAccount() },
@@ -739,6 +777,148 @@ private fun AppContent(
                 state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit, onRequestBulkCompletion,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew, onSaveGoals)
+        }
+    }
+    if (showSettings) {
+        WebSettingsDialog(
+            state = state,
+            hebrew = hebrew,
+            onSave = { edit -> onSavePreferences(edit); showSettings = false },
+            onDismiss = { showSettings = false },
+        )
+    }
+}
+
+@Composable
+private fun WebSettingsDialog(
+    state: WebAppState,
+    hebrew: Boolean,
+    onSave: (WebPreferencesEdit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var language by remember(state) { mutableStateOf(state.language) }
+    var sefarimLanguage by remember(state) { mutableStateOf(state.sefarimLanguage) }
+    var primaryCalendar by remember(state) { mutableStateOf(state.primaryCalendar) }
+    var chazarahText by remember(state) { mutableStateOf(state.defaultChazarahOffsets.joinToString(", ")) }
+    var reminderEnabled by remember(state) { mutableStateOf(state.reminderEnabled) }
+    var reminderHourText by remember(state) { mutableStateOf(state.reminderHour.toString().padStart(2, '0')) }
+    var reminderMinuteText by remember(state) { mutableStateOf(state.reminderMinute.toString().padStart(2, '0')) }
+    var sortOrder by remember(state) { mutableStateOf(state.todaySortOrder) }
+    var automaticPresetUpdates by remember(state) { mutableStateOf(state.automaticPresetUpdates) }
+    val offsets = chazarahText.split(',').mapNotNull { value -> value.trim().takeIf { it.isNotEmpty() }?.toIntOrNull() }
+    val hour = reminderHourText.toIntOrNull()
+    val minute = reminderMinuteText.toIntOrNull()
+    val valid = offsets.isNotEmpty() && offsets.size == chazarahText.split(',').count { it.trim().isNotEmpty() } &&
+        offsets.all { it in 1..3650 } && offsets.distinct().size == offsets.size &&
+        hour != null && hour in 0..23 && minute != null && minute in 0..59
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Settings, null, tint = DeepBlue) },
+        title = { Text(if (hebrew) "הגדרות" else "Settings", color = DeepBlue) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SettingsLabel(if (hebrew) "שפת הממשק" else "Interface language")
+                SettingsChoices(
+                    options = listOf("en" to "English", "he" to "עברית"),
+                    selected = language,
+                    onSelected = { language = it },
+                )
+                SettingsLabel(if (hebrew) "שפת מראי המקומות" else "Reference language")
+                SettingsChoices(
+                    options = listOf("ENGLISH" to "English", "HEBREW" to "עברית", "BOTH" to if (hebrew) "שתיהן" else "Both"),
+                    selected = sefarimLanguage,
+                    onSelected = { sefarimLanguage = it },
+                )
+                SettingsLabel(if (hebrew) "לוח שנה ראשי" else "Primary calendar")
+                SettingsChoices(
+                    options = listOf("GREGORIAN" to if (hebrew) "לועזי" else "Gregorian", "HEBREW" to if (hebrew) "עברי" else "Hebrew"),
+                    selected = primaryCalendar,
+                    onSelected = { primaryCalendar = it },
+                )
+                OutlinedTextField(
+                    value = chazarahText,
+                    onValueChange = { chazarahText = it },
+                    label = { Text(if (hebrew) "ימי חזרה כברירת מחדל" else "Default chazarah days") },
+                    supportingText = { Text(if (hebrew) "ימים מופרדים בפסיקים, לדוגמה 1, 7, 30, 90" else "Comma-separated days, for example 1, 7, 30, 90") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsLabel(if (hebrew) "מיון מסך היום" else "Today sorting")
+                SettingsChoices(
+                    options = WebTodaySortOrder.entries.map { it.name to todaySortLabel(it.name, hebrew) },
+                    selected = sortOrder,
+                    onSelected = { sortOrder = it },
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (hebrew) "תזכורת יומית" else "Daily reminder", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (hebrew) "ההעדפה מסתנכרנת עם Android; התראות דפדפן עדיין אינן זמינות."
+                            else "This preference syncs with Android; browser notifications are not available yet.",
+                            color = MutedInk, fontSize = 12.sp,
+                        )
+                    }
+                    Switch(checked = reminderEnabled, onCheckedChange = { reminderEnabled = it })
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = reminderHourText,
+                        onValueChange = { reminderHourText = it.filter(Char::isDigit).take(2) },
+                        label = { Text(if (hebrew) "שעה" else "Hour") }, singleLine = true, modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = reminderMinuteText,
+                        onValueChange = { reminderMinuteText = it.filter(Char::isDigit).take(2) },
+                        label = { Text(if (hebrew) "דקה" else "Minute") }, singleLine = true, modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (hebrew) "עדכוני קטלוג אוטומטיים" else "Automatic catalog updates", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (hebrew) "ההעדפה מסתנכרנת עם Android; אתר האינטרנט משתמש בקטלוג המאומת המצורף."
+                            else "This preference syncs with Android; web uses its bundled validated catalog.",
+                            color = MutedInk, fontSize = 12.sp,
+                        )
+                    }
+                    Switch(checked = automaticPresetUpdates, onCheckedChange = { automaticPresetUpdates = it })
+                }
+                if (!valid) Text(
+                    if (hebrew) "בדוק את ימי החזרה ואת שעת התזכורת." else "Check the chazarah days and reminder time.",
+                    color = Color(0xFF9B2C2C), fontSize = 13.sp,
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = valid,
+                onClick = {
+                    onSave(
+                        WebPreferencesEdit(
+                            language, sefarimLanguage, primaryCalendar, offsets,
+                            reminderEnabled, requireNotNull(hour), requireNotNull(minute), sortOrder, automaticPresetUpdates,
+                        ),
+                    )
+                },
+            ) { Text(if (hebrew) "שמור" else "Save") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(if (hebrew) "ביטול" else "Cancel") } },
+    )
+}
+
+@Composable
+private fun SettingsLabel(value: String) {
+    Text(value, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+}
+
+@Composable
+private fun SettingsChoices(options: List<Pair<String, String>>, selected: String, onSelected: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        options.forEach { (value, label) ->
+            FilterChip(selected = selected == value, onClick = { onSelected(value) }, label = { Text(label) })
         }
     }
 }

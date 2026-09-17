@@ -106,7 +106,11 @@ data class WebAppState(
     val sefarimLanguage: String = "BOTH",
     val primaryCalendar: String = "GREGORIAN",
     val defaultChazarahOffsets: List<Int> = listOf(1, 7, 30, 90),
+    val reminderEnabled: Boolean = false,
+    val reminderHour: Int = 20,
+    val reminderMinute: Int = 0,
     val todaySortOrder: String = "SCHEDULED_FIRST",
+    val automaticPresetUpdates: Boolean = false,
     val preferencesRevision: Long = 0,
 ) {
     companion object {
@@ -151,7 +155,9 @@ fun WebBackup.validStateOrNull(): WebAppState? {
     if (state.sefarimLanguage !in CanonicalSefarimLanguage.entries.map { it.name } ||
         state.primaryCalendar !in CanonicalPrimaryCalendar.entries.map { it.name } ||
         state.todaySortOrder !in WebTodaySortOrder.entries.map { it.name } ||
-        state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it <= 0 }
+        state.defaultChazarahOffsets.isEmpty() || state.defaultChazarahOffsets.any { it !in 1..3650 } ||
+        state.defaultChazarahOffsets.distinct().size != state.defaultChazarahOffsets.size ||
+        state.reminderHour !in 0..23 || state.reminderMinute !in 0..59
     ) return null
     if (version >= 2 && (canonical == null || CanonicalDataValidator.validate(canonical).isNotEmpty())) return null
     if (state.schedules.size > 500 || state.tasks.size > 50_000 || state.exclusions.size > 10_000 || state.goals.size > 20) return null
@@ -201,7 +207,22 @@ fun WebBackup.validStateOrNull(): WebAppState? {
     val recoveredGoals = if (state.goals.isEmpty() && canonical?.goals?.isNotEmpty() == true) {
         canonical.goals.map { goal -> StoredGoal(goal.kind, goal.target, goal.updatedAt, goal.revision) }
     } else state.goals
-    return state.copy(exclusions = recoveredExclusions, goals = recoveredGoals)
+    val canonicalPreferences = canonical?.preferences
+    return state.copy(
+        exclusions = recoveredExclusions,
+        goals = recoveredGoals,
+        language = canonicalPreferences?.appLanguage ?: state.language,
+        sefarimLanguage = canonicalPreferences?.sefarimLanguage?.name ?: state.sefarimLanguage,
+        primaryCalendar = canonicalPreferences?.primaryCalendar?.name ?: state.primaryCalendar,
+        defaultChazarahOffsets = canonicalPreferences?.defaultChazarahOffsets ?: state.defaultChazarahOffsets,
+        reminderEnabled = canonicalPreferences?.reminderEnabled ?: state.reminderEnabled,
+        reminderHour = canonicalPreferences?.reminderHour ?: state.reminderHour,
+        reminderMinute = canonicalPreferences?.reminderMinute ?: state.reminderMinute,
+        todaySortOrder = canonicalPreferences?.todaySortOrder?.takeIf { it in WebTodaySortOrder.entries.map { entry -> entry.name } }
+            ?: state.todaySortOrder,
+        automaticPresetUpdates = canonicalPreferences?.automaticPresetUpdates ?: state.automaticPresetUpdates,
+        preferencesRevision = canonicalPreferences?.revision ?: state.preferencesRevision,
+    )
 }
 
 fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
@@ -284,7 +305,11 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
             primaryCalendar = runCatching { CanonicalPrimaryCalendar.valueOf(primaryCalendar) }
                 .getOrDefault(CanonicalPrimaryCalendar.GREGORIAN),
             defaultChazarahOffsets = defaultChazarahOffsets,
+            reminderEnabled = reminderEnabled,
+            reminderHour = reminderHour,
+            reminderMinute = reminderMinute,
             todaySortOrder = todaySortOrder,
+            automaticPresetUpdates = automaticPresetUpdates,
             updatedAt = now,
             revision = preferencesRevision,
         ),
