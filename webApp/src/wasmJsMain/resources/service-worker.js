@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'veshinantam-web-';
-const CACHE = 'veshinantam-web-v29';
+const CACHE = 'veshinantam-web-v30';
 const PRECACHE = [
   './',
   './index.html',
@@ -50,5 +50,17 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => cacheResponse(request, response)))
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './?view=today', self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(client => new URL(client.url).origin === self.location.origin);
+      if (existing) return existing.navigate(target).then(client => client?.focus());
+      return self.clients.openWindow(target);
+    })
   );
 });

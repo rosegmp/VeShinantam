@@ -92,6 +92,20 @@ private class LocalBrowserStore : BrowserStore {
         setApplicationBadge(dueBadgeCount(state, today))
     }
 
+    override fun requestReminderPermission() {
+        requestNotificationPermission()
+    }
+
+    override fun updateBrowserReminder(state: WebAppState, today: String) {
+        scheduleBrowserReminder(
+            enabled = state.reminderEnabled,
+            hour = state.reminderHour,
+            minute = state.reminderMinute,
+            dueCount = dueBadgeCount(state, today),
+            hebrew = state.language == "he",
+        )
+    }
+
     private fun printDateLabel(date: String, state: WebAppState): String {
         val gregorian = formatGregorianDate(date, state.language == "he")
         val hebrew = formatHebrewDate(date, state.language == "he")
@@ -200,6 +214,50 @@ private external fun openPrintDocument(html: String)
     } catch (_) { /* Badging is best-effort and unavailable in some browsers. */ }
 }""")
 private external fun setApplicationBadge(count: Int)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Promise.resolve(Notification.requestPermission()).catch(() => {});
+    }
+}""")
+private external fun requestNotificationPermission()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(enabled, hour, minute, dueCount, hebrew) => {
+    if (window.__veshinantamReminderTimer) {
+        clearTimeout(window.__veshinantamReminderTimer);
+        window.__veshinantamReminderTimer = 0;
+    }
+    if (!enabled || !('Notification' in window)) return;
+    const scheduleNext = () => {
+        const now = new Date();
+        const next = new Date(now);
+        next.setHours(hour, minute, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1);
+        const delay = Math.max(1000, next.getTime() - now.getTime());
+        window.__veshinantamReminderTimer = setTimeout(async () => {
+            if (Notification.permission === 'granted' && dueCount > 0) {
+                const title = hebrew ? 'הגיע זמן הלימוד' : 'Time for today’s learning';
+                const body = hebrew
+                    ? dueCount + ' משימות לימוד וחזרה ממתינות לך.'
+                    : dueCount + ' learning and chazarah ' + (dueCount === 1 ? 'task is' : 'tasks are') + ' waiting.';
+                const options = { body, icon: './icon.svg', badge: './icon.svg', tag: 'veshinantam-daily-reminder', renotify: true, data: { url: './?view=today' } };
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const registration = await navigator.serviceWorker.ready;
+                        await registration.showNotification(title, options);
+                    } else {
+                        new Notification(title, options);
+                    }
+                } catch (_) { /* Notification delivery is best-effort. */ }
+            }
+            scheduleNext();
+        }, delay);
+    };
+    scheduleNext();
+}""")
+private external fun scheduleBrowserReminder(enabled: Boolean, hour: Int, minute: Int, dueCount: Int, hebrew: Boolean)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => window.veshinantamAccountState()")

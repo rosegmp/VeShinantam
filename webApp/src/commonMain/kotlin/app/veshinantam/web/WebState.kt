@@ -872,6 +872,8 @@ interface BrowserStore {
     fun consumeBackupImport(): BackupImportResult
     fun printSchedule(state: WebAppState, dayCount: Int)
     fun updateDueBadge(state: WebAppState, today: String)
+    fun requestReminderPermission()
+    fun updateBrowserReminder(state: WebAppState, today: String)
 }
 
 @Serializable

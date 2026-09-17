@@ -246,6 +246,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
 
     LaunchedEffect(appState, todayIso) {
         store.updateDueBadge(appState, todayIso)
+        store.updateBrowserReminder(appState, todayIso)
     }
 
     fun update(transform: (WebAppState) -> WebAppState) {
@@ -286,6 +287,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     }
 
     fun savePreferences(edit: WebPreferencesEdit) {
+        if (edit.reminderEnabled) store.requestReminderPermission()
         update { state ->
             state.copy(
                 language = edit.language,
@@ -911,8 +913,8 @@ private fun WebSettingsDialog(
                     Column(Modifier.weight(1f)) {
                         Text(if (hebrew) "תזכורת יומית" else "Daily reminder", fontWeight = FontWeight.Bold)
                         Text(
-                            if (hebrew) "ההעדפה מסתנכרנת עם Android; התראות דפדפן עדיין אינן זמינות."
-                            else "This preference syncs with Android; browser notifications are not available yet.",
+                            if (hebrew) "כאשר האתר פתוח, הדפדפן יתריע בשעה שנבחרה. התראות כשהאתר סגור דורשות Web Push ואינן זמינות עדיין."
+                            else "While the site is open, the browser will notify at this time. Closed-app reminders require Web Push and are not available yet.",
                             color = MutedInk, fontSize = 12.sp,
                         )
                     }
