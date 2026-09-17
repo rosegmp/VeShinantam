@@ -2,11 +2,23 @@
   "name": "VeShinantam",
   "short_name": "VeShinantam",
   "description": "Private, offline-first Torah learning and chazarah planning.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F7F8FC",
   "theme_color": "#173B67",
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Today's learning",
+      "short_name": "Today",
+      "description": "Open today's learning and chazarah tasks.",
+      "url": "./?view=today",
+      "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]

@@ -12,6 +12,27 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun appBadgeMatchesAndroidActiveIncompleteDueCount() {
+        val state = WebAppState(
+            schedules = listOf(
+                StoredSchedule("active", "Active", "Mishnah", 2),
+                StoredSchedule("paused", "Paused", "Mishnah", 2, active = false),
+                StoredSchedule("archived", "Archived", "Mishnah", 2, archived = true),
+            ),
+            tasks = listOf(
+                StoredTask("overdue", "active", "A", "א", "2026-09-13", "LEARNING"),
+                StoredTask("today", "active", "B", "ב", today, "CHAZARAH"),
+                StoredTask("done", "active", "C", "ג", today, "LEARNING", completed = true),
+                StoredTask("future", "active", "D", "ד", "2026-09-15", "LEARNING"),
+                StoredTask("paused-task", "paused", "E", "ה", today, "LEARNING"),
+                StoredTask("archived-task", "archived", "F", "ו", today, "LEARNING"),
+            ),
+        )
+
+        assertEquals(2, dueBadgeCount(state, today))
+    }
+
+    @Test
     fun printableScheduleMatchesAndroidRangeAndActiveScheduleRules() {
         val state = WebAppState(
             schedules = listOf(

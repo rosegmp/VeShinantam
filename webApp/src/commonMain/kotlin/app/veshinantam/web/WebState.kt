@@ -133,6 +133,13 @@ data class WebAppState(
     }
 }
 
+fun dueBadgeCount(state: WebAppState, today: String): Int {
+    val activeScheduleIds = state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
+    return state.tasks.count { task ->
+        task.scheduleId in activeScheduleIds && task.dueDate <= today && !task.completed
+    }
+}
+
 data class WebFutureScheduleEdit(
     val startDate: String,
     val dailyQuantity: Int,
@@ -864,6 +871,7 @@ interface BrowserStore {
     fun requestBackupImport()
     fun consumeBackupImport(): BackupImportResult
     fun printSchedule(state: WebAppState, dayCount: Int)
+    fun updateDueBadge(state: WebAppState, today: String)
 }
 
 @Serializable

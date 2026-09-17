@@ -88,6 +88,10 @@ private class LocalBrowserStore : BrowserStore {
         openPrintDocument(html)
     }
 
+    override fun updateDueBadge(state: WebAppState, today: String) {
+        setApplicationBadge(dueBadgeCount(state, today))
+    }
+
     private fun printDateLabel(date: String, state: WebAppState): String {
         val gregorian = formatGregorianDate(date, state.language == "he")
         val hebrew = formatHebrewDate(date, state.language == "he")
@@ -187,6 +191,15 @@ private external fun chooseBackupFile(key: String, invalidMarker: String)
     popup.focus();
 }""")
 private external fun openPrintDocument(html: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(count) => {
+    try {
+        if (count > 0 && typeof navigator.setAppBadge === 'function') navigator.setAppBadge(count).catch(() => {});
+        else if (typeof navigator.clearAppBadge === 'function') navigator.clearAppBadge().catch(() => {});
+    } catch (_) { /* Badging is best-effort and unavailable in some browsers. */ }
+}""")
+private external fun setApplicationBadge(count: Int)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => window.veshinantamAccountState()")

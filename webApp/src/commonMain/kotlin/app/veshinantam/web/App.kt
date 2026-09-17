@@ -244,6 +244,10 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         }
     }
 
+    LaunchedEffect(appState, todayIso) {
+        store.updateDueBadge(appState, todayIso)
+    }
+
     fun update(transform: (WebAppState) -> WebAppState) {
         appState = transform(appState)
         store.save(appState)
