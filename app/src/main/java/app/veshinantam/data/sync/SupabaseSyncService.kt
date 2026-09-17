@@ -37,6 +37,7 @@ class SupabaseSyncService(
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val deviceSyncPreferences = appContext.getSharedPreferences(DEVICE_SYNC_PREFERENCES, Context.MODE_PRIVATE)
+    private val tokenRefreshLock = Any()
     private val entitySync = AndroidEntitySync(appContext, dao) { path, method, body ->
         request(path, method, body)
     }
@@ -333,15 +334,15 @@ class SupabaseSyncService(
             .putString(KEY_STATUS, "Synced successfully.").apply()
     }
 
-    private fun authenticatedToken(): String {
+    private fun authenticatedToken(): String = synchronized(tokenRefreshLock) {
         val accessToken = preferences.getString(KEY_ACCESS_TOKEN, null) ?: error("Please sign in again.")
         val expiresAt = preferences.getLong(KEY_EXPIRES_AT, 0)
-        if (expiresAt > System.currentTimeMillis() + 60_000) return accessToken
+        if (expiresAt > System.currentTimeMillis() + 60_000) return@synchronized accessToken
         val refreshToken = preferences.getString(KEY_REFRESH_TOKEN, null) ?: error("Please sign in again.")
         val body = JSONObject().put("refresh_token", refreshToken).toString()
         val response = JSONObject(request("/auth/v1/token?grant_type=refresh_token", "POST", body, authenticated = false))
         saveSession(response.getString("access_token"), response.getString("refresh_token"))
-        return preferences.getString(KEY_ACCESS_TOKEN, null) ?: error("Please sign in again.")
+        preferences.getString(KEY_ACCESS_TOKEN, null) ?: error("Please sign in again.")
     }
 
     private fun request(path: String, method: String = "GET", body: String? = null, authenticated: Boolean = true): String {

@@ -15,7 +15,7 @@ device checks below are complete.
 
 ## Phase 2 — install and seed Android
 
-1. Install version 0.1.5 (version code 6) over the existing app. Do not uninstall
+1. Install version 0.1.7 (version code 8) with entity sync enabled over the existing app. Do not uninstall
    or clear app data; either action would remove the device's offline data.
 2. Confirm the package installs as an update. A signature mismatch means the APK
    was not signed with the same key as the installed build; stop rather than
@@ -27,7 +27,7 @@ device checks below are complete.
 
 ## Phase 3 — activate and verify web
 
-1. Only after every Android installation is on version code 6 or newer, set the
+1. Only after every Android installation is on version code 8 or newer with entity sync enabled, set the
    web `entitySyncEnabled` gate to `true`, build, and publish the private Site.
 2. Open the web app, sign in to the same account, and run **Sync now**. Confirm the
    schedules, task history, and preferences match Android before editing anything.
