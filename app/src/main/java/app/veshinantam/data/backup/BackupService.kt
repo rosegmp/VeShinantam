@@ -24,6 +24,12 @@ import app.veshinantam.data.preset.PresetCatalogUpdateScheduler
 import app.veshinantam.data.preset.PresetUpdateSettings
 import app.veshinantam.ui.today.TodayDisplaySettings
 import app.veshinantam.ui.today.TodaySortOrder
+import app.veshinantam.data.sync.CanonicalAndroidMapper
+import app.veshinantam.shared.CanonicalDataCodec
+import app.veshinantam.shared.CanonicalDataSet
+import app.veshinantam.shared.CanonicalPreferences
+import app.veshinantam.shared.CanonicalPrimaryCalendar
+import app.veshinantam.shared.CanonicalSefarimLanguage
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -50,7 +56,7 @@ class BackupService(
             goals = dao.getAllProgressGoals(),
             preferences = readPreferences(),
         )
-        val bytes = BackupJson.encode(payload).toByteArray(Charsets.UTF_8)
+        val bytes = PortableBackupJson.encode(payload).toByteArray(Charsets.UTF_8)
         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
             ?: throw BackupException("The selected backup file could not be opened.")
         return BackupSummary(payload.schedules.size, payload.tasks.size)
@@ -62,7 +68,7 @@ class BackupService(
             if (bytes.size > MAX_BACKUP_BYTES) throw BackupException("The backup file is too large.")
             bytes.toString(Charsets.UTF_8)
         } ?: throw BackupException("The selected backup file could not be opened.")
-        val payload = BackupJson.decode(text)
+        val payload = PortableBackupJson.decode(text)
         validate(payload)
         dao.replaceAllData(payload.schedules, payload.exclusions, payload.tasks, payload.goals)
         savePreferences(payload.preferences)
@@ -150,6 +156,62 @@ class BackupService(
         const val MAX_BACKUP_BYTES = 64 * 1024 * 1024
         const val MAX_ROWS = 1_000_000
     }
+}
+
+internal object PortableBackupJson {
+    fun encode(payload: BackupPayload, now: Instant = Instant.now()): String = CanonicalDataCodec.encode(
+        CanonicalAndroidMapper.export(
+            schedules = payload.schedules,
+            exclusions = payload.exclusions,
+            tasks = payload.tasks,
+            goals = payload.goals,
+            preferences = payload.preferences.canonical(now),
+            now = now,
+        ),
+    )
+
+    fun decode(text: String): BackupPayload = try {
+        val root = JSONObject(text)
+        when (root.optString("format")) {
+            CanonicalDataSet.FORMAT -> CanonicalDataCodec.decode(text).payload()
+            "app.veshinantam.backup" -> BackupJson.decode(text)
+            else -> root.optJSONObject("canonical")?.let { CanonicalDataCodec.decode(it.toString()).payload() }
+                ?: throw BackupException("This is not a VeShinantam backup.")
+        }
+    } catch (error: BackupException) {
+        throw error
+    } catch (error: Exception) {
+        throw BackupException("The backup is damaged or incomplete.", error)
+    }
+
+    private fun BackupPreferences.canonical(now: Instant) = CanonicalPreferences(
+        appLanguage = appLanguage.languageTag,
+        sefarimLanguage = CanonicalSefarimLanguage.valueOf(sefarimLanguage.name),
+        primaryCalendar = CanonicalPrimaryCalendar.valueOf(primaryCalendar.name),
+        defaultChazarahOffsets = defaultChazarahOffsets,
+        reminderEnabled = reminder.enabled,
+        reminderHour = reminder.hour,
+        reminderMinute = reminder.minute,
+        todaySortOrder = todaySortOrder.name,
+        automaticPresetUpdates = automaticPresetUpdates,
+        updatedAt = now.toString(),
+    )
+
+    private fun CanonicalDataSet.payload(): BackupPayload = BackupPayload(
+        schedules = schedules.filterNot { it.deleted }.map(CanonicalAndroidMapper::schedule),
+        exclusions = exclusions.filterNot { it.deleted }.map(CanonicalAndroidMapper::exclusion),
+        tasks = tasks.filterNot { it.deleted }.map(CanonicalAndroidMapper::task),
+        goals = goals.filterNot { it.deleted }.map(CanonicalAndroidMapper::goal),
+        preferences = BackupPreferences(
+            appLanguage = AppLanguage.fromTag(preferences.appLanguage),
+            sefarimLanguage = SefarimLanguage.valueOf(preferences.sefarimLanguage.name),
+            primaryCalendar = PrimaryCalendar.valueOf(preferences.primaryCalendar.name),
+            defaultChazarahOffsets = preferences.defaultChazarahOffsets,
+            reminder = ReminderPreference(preferences.reminderEnabled, preferences.reminderHour, preferences.reminderMinute),
+            todaySortOrder = TodaySortOrder.valueOf(preferences.todaySortOrder),
+            automaticPresetUpdates = preferences.automaticPresetUpdates,
+        ),
+    )
 }
 
 internal data class BackupPayload(

@@ -3,6 +3,7 @@ package app.veshinantam.web
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import androidx.compose.runtime.remember
+import app.veshinantam.shared.CanonicalDataCodec
 import kotlinx.browser.document
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,7 +14,6 @@ private const val InvalidImportMarker = "__VESHINANTAM_INVALID_BACKUP__"
 
 private class LocalBrowserStore : BrowserStore {
     private val json = Json { ignoreUnknownKeys = true }
-    private val backupJson = Json { prettyPrint = true }
 
     override fun load(): WebAppState {
         val raw = readBrowserState() ?: return WebAppState.sample(currentIsoDate()).also(::save)
@@ -38,7 +38,7 @@ private class LocalBrowserStore : BrowserStore {
         val now = currentIsoInstant()
         downloadTextFile(
             "veshinantam-backup-$today.json",
-            backupJson.encodeToString(WebBackup(state = state, canonical = state.toCanonical(now, today))),
+            CanonicalDataCodec.encode(state.toCanonical(now, today)),
         )
     }
 
@@ -50,7 +50,7 @@ private class LocalBrowserStore : BrowserStore {
         val raw = readSessionStorage(PendingImportKey) ?: return BackupImportResult.None
         removeSessionStorage(PendingImportKey)
         if (raw == InvalidImportMarker) return BackupImportResult.Invalid
-        val state = runCatching { json.decodeFromString<WebBackup>(raw).validStateOrNull() }.getOrNull()
+        val state = decodeImportedBackup(raw, currentIsoInstant(), currentIsoDate())
         return if (state == null) BackupImportResult.Invalid else BackupImportResult.Ready(state)
     }
 }

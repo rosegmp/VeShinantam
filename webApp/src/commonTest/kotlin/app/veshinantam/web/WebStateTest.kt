@@ -5,10 +5,73 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.encodeToString
 
 class WebStateTest {
     private val today = "2026-09-14"
     private val now = "2026-09-14T12:00:00Z"
+
+    @Test
+    fun portableCanonicalBackupRebuildsWebState() {
+        val source = WebAppState.sample(today).copy(
+            reminderEnabled = true,
+            reminderHour = 7,
+            reminderMinute = 30,
+            automaticPresetUpdates = true,
+            goals = listOf(StoredGoal("STREAK", 30.0, now)),
+        )
+        val canonical = source.toCanonical(now, today)
+        val raw = app.veshinantam.shared.CanonicalDataCodec.encode(canonical)
+
+        val restored = assertNotNull(decodeImportedBackup(raw, now, today))
+
+        assertEquals(source.schedules.map { it.id }, restored.schedules.map { it.id })
+        assertEquals(source.tasks.map { it.id }, restored.tasks.map { it.id })
+        assertEquals(source.goals, restored.goals)
+        assertEquals(true, restored.reminderEnabled)
+        assertEquals(true, restored.automaticPresetUpdates)
+        assertEquals(canonical, restored.toCanonical(now, today))
+    }
+
+    @Test
+    fun importsLegacyAndroidBackupIntoWebState() {
+        val raw = """
+            {
+              "format":"app.veshinantam.backup","version":2,"createdAt":"$now",
+              "schedules":[{
+                "id":"legacy","nameEnglish":"Yevamos","nameHebrew":"יבמות","kind":"CUSTOM",
+                "sourceType":"GEMARA","materialType":"AMUD","presetId":null,"startDate":"$today","targetDate":null,
+                "dailyQuantity":1,"selectedWeekdays":"SUNDAY,MONDAY","chazarahDayOffsets":"1,7",
+                "repeatsAnnually":false,"officialOraysaChazarah":false,"missedWorkBehavior":"KEEP_FIXED_OVERDUE",
+                "state":"ACTIVE","generationRevision":1,"createdAt":"$now"
+              }],
+              "exclusions":[],"tasks":[],"goals":[{"kind":"STREAK","target":7.0}],
+              "preferences":{
+                "appLanguage":"HEBREW","sefarimLanguage":"BOTH","primaryCalendar":"HEBREW",
+                "defaultChazarahOffsets":[1,7],"reminderEnabled":true,"reminderHour":19,"reminderMinute":15,
+                "todaySortOrder":"REFERENCE_ASCENDING","automaticPresetUpdates":true
+              }
+            }
+        """.trimIndent()
+
+        val restored = assertNotNull(decodeImportedBackup(raw, now, today))
+
+        assertEquals("legacy", restored.schedules.single().id)
+        assertEquals(setOf(0, 1), restored.schedules.single().weekdays)
+        assertEquals("he", restored.language)
+        assertEquals(true, restored.reminderEnabled)
+        assertEquals(listOf(StoredGoal("STREAK", 7.0, now)), restored.goals)
+    }
+
+    @Test
+    fun importStillAcceptsLegacyWebEnvelope() {
+        val state = WebAppState.sample(today)
+        val raw = kotlinx.serialization.json.Json.encodeToString(
+            WebBackup(state = state, canonical = state.toCanonical(now, today)),
+        )
+
+        assertEquals(state, decodeImportedBackup(raw, now, today))
+    }
 
     @Test
     fun legacyWebStateMapsToValidCanonicalData() {

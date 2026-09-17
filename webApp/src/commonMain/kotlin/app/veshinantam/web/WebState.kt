@@ -6,6 +6,7 @@ import app.veshinantam.shared.LearningTaskType
 import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.CanonicalDataSet
+import app.veshinantam.shared.CanonicalDataCodec
 import app.veshinantam.shared.CanonicalDataValidator
 import app.veshinantam.shared.CanonicalExclusion
 import app.veshinantam.shared.CanonicalGoal
@@ -23,6 +24,9 @@ import app.veshinantam.shared.SharedMaterialUnit
 import app.veshinantam.shared.SharedScheduleEngine
 import app.veshinantam.shared.SharedScheduleRules
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+private val WebBackupJson = Json { ignoreUnknownKeys = true }
 
 @Serializable
 data class StoredSchedule(
@@ -148,6 +152,242 @@ sealed interface BackupImportResult {
     data object None : BackupImportResult
     data object Invalid : BackupImportResult
     data class Ready(val state: WebAppState) : BackupImportResult
+}
+
+fun decodeImportedBackup(raw: String, now: String, today: String): WebAppState? {
+    runCatching { CanonicalDataCodec.decode(raw).toWebState() }.getOrNull()?.let { return it }
+    runCatching { WebBackupJson.decodeFromString<WebBackup>(raw).validStateOrNull() }.getOrNull()?.let { return it }
+    return runCatching {
+        val legacy = WebBackupJson.decodeFromString<LegacyAndroidBackup>(raw)
+        legacy.toCanonical(now, today).toWebState()
+    }.getOrNull()
+}
+
+fun CanonicalDataSet.toWebState(): WebAppState {
+    require(CanonicalDataValidator.validate(this).isEmpty())
+    val schedulesById = schedules.filterNot { it.deleted }.associateBy { it.id }
+    return WebAppState(
+        schedules = schedulesById.values.map { schedule ->
+            StoredSchedule(
+                id = schedule.id,
+                name = schedule.nameEnglish.ifBlank { schedule.nameHebrew },
+                material = schedule.materialType.webLabel(),
+                pace = schedule.dailyQuantity,
+                weekdays = schedule.selectedWeekdays,
+                chazarahOffsets = schedule.chazarahDayOffsets,
+                active = schedule.state == CanonicalScheduleState.ACTIVE,
+                archived = schedule.state == CanonicalScheduleState.ARCHIVED,
+                nameHebrew = schedule.nameHebrew,
+                presetId = schedule.presetId,
+                startDate = schedule.startDate,
+                targetDate = schedule.targetDate,
+                missedWorkBehavior = schedule.missedWorkBehavior.name,
+                repeatsAnnually = schedule.repeatsAnnually,
+                officialOraysaChazarah = schedule.officialOraysaChazarah,
+                generationRevision = schedule.generationRevision,
+                createdAt = schedule.createdAt,
+                updatedAt = schedule.updatedAt,
+                revision = schedule.revision,
+                sourceType = schedule.sourceType,
+                materialType = schedule.materialType.name,
+            )
+        },
+        tasks = tasks.filter { !it.deleted && it.scheduleId in schedulesById }.map { task ->
+            StoredTask(
+                id = task.id,
+                scheduleId = task.scheduleId,
+                referenceEnglish = task.labelEnglish,
+                referenceHebrew = task.labelHebrew,
+                dueDate = task.plannedDate,
+                type = task.type.name,
+                completed = task.completedAt != null,
+                stableKey = task.stableKey,
+                materialType = task.materialType.name,
+                quantity = task.quantity,
+                originalLearningDate = task.originalLearningDate,
+                reviewIdentity = task.reviewIdentity,
+                generationRevision = task.generationRevision,
+                completedAt = task.completedAt,
+                completionLocalDate = task.completionLocalDate,
+                completionZoneId = task.completionZoneId,
+                updatedAt = task.updatedAt,
+                revision = task.revision,
+            )
+        },
+        exclusions = exclusions.filter { !it.deleted && it.scheduleId in schedulesById }.map { exclusion ->
+            StoredExclusion(exclusion.scheduleId, exclusion.date, exclusion.updatedAt, exclusion.revision)
+        },
+        goals = goals.filterNot { it.deleted }.map { goal ->
+            StoredGoal(goal.kind, goal.target, goal.updatedAt, goal.revision, goal.id)
+        },
+        language = preferences.appLanguage,
+        sefarimLanguage = preferences.sefarimLanguage.name,
+        primaryCalendar = preferences.primaryCalendar.name,
+        defaultChazarahOffsets = preferences.defaultChazarahOffsets,
+        reminderEnabled = preferences.reminderEnabled,
+        reminderHour = preferences.reminderHour,
+        reminderMinute = preferences.reminderMinute,
+        todaySortOrder = preferences.todaySortOrder.takeIf { it in WebTodaySortOrder.entries.map { entry -> entry.name } }
+            ?: WebTodaySortOrder.SCHEDULED_FIRST.name,
+        automaticPresetUpdates = preferences.automaticPresetUpdates,
+        preferencesRevision = preferences.revision,
+    )
+}
+
+private fun CanonicalMaterialType.webLabel(): String = when (this) {
+    CanonicalMaterialType.DAF, CanonicalMaterialType.AMUD -> "Gemara"
+    CanonicalMaterialType.MISHNAH, CanonicalMaterialType.PEREK -> "Mishnah"
+    CanonicalMaterialType.PAGE, CanonicalMaterialType.SEIF -> "Mishnah Berurah"
+    CanonicalMaterialType.SIMAN -> "Kitzur Shulchan Aruch"
+    CanonicalMaterialType.CUSTOM_UNIT -> "Other"
+}
+
+@Serializable
+private data class LegacyAndroidBackup(
+    val format: String,
+    val version: Int,
+    val createdAt: String,
+    val schedules: List<LegacyAndroidSchedule> = emptyList(),
+    val exclusions: List<LegacyAndroidExclusion> = emptyList(),
+    val tasks: List<LegacyAndroidTask> = emptyList(),
+    val goals: List<LegacyAndroidGoal> = emptyList(),
+    val preferences: LegacyAndroidPreferences,
+) {
+    fun toCanonical(now: String, today: String): CanonicalDataSet {
+        require(format == "app.veshinantam.backup" && version in 1..2)
+        val canonical = CanonicalDataSet(
+            schedules = schedules.map { it.canonical(now, today) },
+            tasks = tasks.map { it.canonical(now) },
+            exclusions = exclusions.map { CanonicalExclusion(it.scheduleId, it.date, now) },
+            goals = goals.map { CanonicalGoal(it.kind, kind = it.kind, target = it.target, updatedAt = now) },
+            preferences = CanonicalPreferences(
+                appLanguage = if (preferences.appLanguage == "HEBREW") "he" else "en",
+                sefarimLanguage = CanonicalSefarimLanguage.valueOf(preferences.sefarimLanguage),
+                primaryCalendar = CanonicalPrimaryCalendar.valueOf(preferences.primaryCalendar),
+                defaultChazarahOffsets = preferences.defaultChazarahOffsets,
+                reminderEnabled = preferences.reminderEnabled,
+                reminderHour = preferences.reminderHour,
+                reminderMinute = preferences.reminderMinute,
+                todaySortOrder = preferences.todaySortOrder,
+                automaticPresetUpdates = preferences.automaticPresetUpdates,
+                updatedAt = now,
+            ),
+        )
+        require(CanonicalDataValidator.validate(canonical).isEmpty())
+        return canonical
+    }
+}
+
+@Serializable
+private data class LegacyAndroidSchedule(
+    val id: String,
+    val nameEnglish: String,
+    val nameHebrew: String = "",
+    val kind: String,
+    val sourceType: String,
+    val materialType: String,
+    val presetId: String? = null,
+    val startDate: String,
+    val targetDate: String? = null,
+    val dailyQuantity: Int,
+    val selectedWeekdays: String,
+    val chazarahDayOffsets: String,
+    val repeatsAnnually: Boolean,
+    val officialOraysaChazarah: Boolean = false,
+    val missedWorkBehavior: String,
+    val state: String,
+    val generationRevision: Int,
+    val createdAt: String,
+) {
+    fun canonical(now: String, today: String) = CanonicalSchedule(
+        id = id,
+        nameEnglish = nameEnglish,
+        nameHebrew = nameHebrew,
+        kind = CanonicalScheduleKind.valueOf(kind),
+        sourceType = sourceType,
+        materialType = CanonicalMaterialType.valueOf(materialType),
+        presetId = presetId,
+        startDate = startDate.ifBlank { today },
+        targetDate = targetDate,
+        dailyQuantity = dailyQuantity,
+        selectedWeekdays = selectedWeekdays.split(',').map { weekday -> legacyWeekday(weekday.trim()) }.toSet(),
+        chazarahDayOffsets = chazarahDayOffsets.split(',').filter(String::isNotBlank).map { it.trim().toInt() },
+        repeatsAnnually = repeatsAnnually,
+        officialOraysaChazarah = officialOraysaChazarah,
+        missedWorkBehavior = CanonicalMissedWorkBehavior.valueOf(missedWorkBehavior),
+        state = CanonicalScheduleState.valueOf(state),
+        generationRevision = generationRevision,
+        createdAt = createdAt,
+        updatedAt = now,
+    )
+}
+
+@Serializable
+private data class LegacyAndroidTask(
+    val id: String,
+    val stableKey: String,
+    val scheduleId: String,
+    val type: String,
+    val labelEnglish: String,
+    val labelHebrew: String = "",
+    val materialType: String,
+    val quantity: Double,
+    val plannedDate: String,
+    val originalLearningDate: String,
+    val reviewIdentity: String? = null,
+    val generationRevision: Int,
+    val completedAt: String? = null,
+    val completionLocalDate: String? = null,
+    val completionZoneId: String? = null,
+) {
+    fun canonical(now: String) = CanonicalTask(
+        id = id,
+        stableKey = stableKey,
+        scheduleId = scheduleId,
+        type = CanonicalTaskType.valueOf(type),
+        labelEnglish = labelEnglish,
+        labelHebrew = labelHebrew,
+        materialType = CanonicalMaterialType.valueOf(materialType),
+        quantity = quantity,
+        plannedDate = plannedDate,
+        originalLearningDate = originalLearningDate,
+        reviewIdentity = reviewIdentity,
+        generationRevision = generationRevision,
+        completedAt = completedAt,
+        completionLocalDate = completionLocalDate,
+        completionZoneId = completionZoneId,
+        updatedAt = completedAt ?: now,
+    )
+}
+
+@Serializable
+private data class LegacyAndroidExclusion(val scheduleId: String, val date: String)
+
+@Serializable
+private data class LegacyAndroidGoal(val kind: String, val target: Double)
+
+@Serializable
+private data class LegacyAndroidPreferences(
+    val appLanguage: String,
+    val sefarimLanguage: String,
+    val primaryCalendar: String,
+    val defaultChazarahOffsets: List<Int>,
+    val reminderEnabled: Boolean,
+    val reminderHour: Int,
+    val reminderMinute: Int,
+    val todaySortOrder: String,
+    val automaticPresetUpdates: Boolean = false,
+)
+
+private fun legacyWeekday(value: String): Int = when (value) {
+    "SUNDAY" -> 0
+    "MONDAY" -> 1
+    "TUESDAY" -> 2
+    "WEDNESDAY" -> 3
+    "THURSDAY" -> 4
+    "FRIDAY" -> 5
+    "SATURDAY" -> 6
+    else -> error("Unknown weekday")
 }
 
 fun WebBackup.validStateOrNull(): WebAppState? {

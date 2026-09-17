@@ -19,7 +19,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. “Partial�
 | Offline persistence | Room | IndexedDB foundation | IndexedDB authoritative store with migrations and outbox |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |
 | Cross-device sync | Incremental client (rollout-gated) | Incremental client (rollout-gated) | Distribute the updated APK, then enable both clients together |
-| Backup and restore | Complete | Partial | One canonical format and lossless Android ↔ web round trip |
+| Backup and restore | Complete | Complete | New exports use one validated canonical format; Android and web import canonical files plus their legacy Android/web formats before confirmed replacement |
 | Printable schedule | Complete | Missing | Equivalent browser print/PDF output |
 | Reminders | Complete | Preference only | Preference is preserved and synchronized; best-effort browser notification and Web Push delivery remain planned |
 | Home-screen presence | Android widget | Installable PWA | Accepted platform exception; add badges/fast Today launch where supported |
