@@ -47,11 +47,19 @@ internal class AndroidEntitySync(
 ) {
     private val appContext = context.applicationContext
 
-    suspend fun synchronize(): EntitySyncResult = processMutex.withLock {
-        syncPhase("Preparing device changes") { captureLocalChanges() }
-        val push = syncPhase("Uploading device changes") { pushOutbox() }
-        val pulled = syncPhase("Downloading cloud changes") { pullRemoteChanges() }
-        EntitySyncResult(push.first, pulled, push.second)
+    suspend fun synchronize(): EntitySyncResult {
+        if (!processMutex.tryLock()) {
+            processMutex.withLock { }
+            return EntitySyncResult(pushed = 0, pulled = 0, conflicts = 0)
+        }
+        return try {
+            syncPhase("Preparing device changes") { captureLocalChanges() }
+            val push = syncPhase("Uploading device changes") { pushOutbox() }
+            val pulled = syncPhase("Downloading cloud changes") { pullRemoteChanges() }
+            EntitySyncResult(push.first, pulled, push.second)
+        } finally {
+            processMutex.unlock()
+        }
     }
 
     suspend fun resetForAccount() = processMutex.withLock {
