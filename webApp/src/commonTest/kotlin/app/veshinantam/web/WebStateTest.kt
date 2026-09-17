@@ -12,6 +12,54 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun printableScheduleMatchesAndroidRangeAndActiveScheduleRules() {
+        val state = WebAppState(
+            schedules = listOf(
+                StoredSchedule("active", "Mishnah Yomis", "Mishnah", 2, nameHebrew = "משנה יומית"),
+                StoredSchedule("paused", "Paused", "Mishnah", 2, active = false),
+                StoredSchedule("archived", "Archived", "Mishnah", 2, archived = true),
+            ),
+            tasks = listOf(
+                StoredTask("before", "active", "Before", "לפני", "2026-09-13", "LEARNING"),
+                StoredTask("review", "active", "Peah 2:1–2", "פאה ב׳:א׳–ב׳", today, "CHAZARAH", completed = true),
+                StoredTask("learning", "active", "Peah 2:3–4", "פאה ב׳:ג׳–ד׳", today, "LEARNING"),
+                StoredTask("paused-task", "paused", "Hidden", "מוסתר", today, "LEARNING"),
+                StoredTask("archived-task", "archived", "Hidden", "מוסתר", today, "LEARNING"),
+                StoredTask("last", "active", "Peah 3:1–2", "פאה ג׳:א׳–ב׳", "2026-09-20", "LEARNING"),
+                StoredTask("after", "active", "After", "אחרי", "2026-09-21", "LEARNING"),
+            ),
+            sefarimLanguage = "BOTH",
+        )
+
+        val printable = buildPrintableSchedule(state, today, 7)
+
+        assertEquals("2026-09-20", printable.endDate)
+        assertEquals(listOf("review", "learning", "last"), printable.rows.map { row ->
+            state.tasks.single { it.dueDate == row.date && it.referenceEnglish in row.reference }.id
+        })
+        assertEquals("Mishnah Yomis", printable.rows.first().scheduleName)
+        assertEquals("Peah 2:1–2 · פאה ב׳:א׳–ב׳", printable.rows.first().reference)
+    }
+
+    @Test
+    fun printableScheduleLocalizesHebrewNamesAndReferences() {
+        val sample = WebAppState.sample(today)
+        val state = sample.copy(
+            schedules = sample.schedules.map { schedule ->
+                if (schedule.id == "daf-yomi") schedule.copy(nameHebrew = "דף יומי") else schedule
+            },
+            language = "he",
+            sefarimLanguage = "HEBREW",
+        )
+
+        val printable = buildPrintableSchedule(state, today, 30)
+        val learning = printable.rows.single { it.reference == "ברכות דף י״ח" }
+
+        assertEquals("דף יומי", learning.scheduleName)
+        assertEquals("לימוד חדש", learning.taskType)
+    }
+
+    @Test
     fun portableCanonicalBackupRebuildsWebState() {
         val source = WebAppState.sample(today).copy(
             reminderEnabled = true,

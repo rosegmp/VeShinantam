@@ -863,6 +863,7 @@ interface BrowserStore {
     fun exportBackup(state: WebAppState)
     fun requestBackupImport()
     fun consumeBackupImport(): BackupImportResult
+    fun printSchedule(state: WebAppState, dayCount: Int)
 }
 
 @Serializable

@@ -53,7 +53,54 @@ private class LocalBrowserStore : BrowserStore {
         val state = decodeImportedBackup(raw, currentIsoInstant(), currentIsoDate())
         return if (state == null) BackupImportResult.Invalid else BackupImportResult.Ready(state)
     }
+
+    override fun printSchedule(state: WebAppState, dayCount: Int) {
+        val printable = buildPrintableSchedule(state, currentIsoDate(), dayCount)
+        val hebrew = state.language == "he"
+        val title = if (hebrew) "סדר הלימוד של ושיננתם" else "VeShinantam Learning Schedule"
+        val range = if (hebrew) {
+            "${printDateLabel(printable.startDate, state)} עד ${printDateLabel(printable.endDate, state)}"
+        } else {
+            "${printDateLabel(printable.startDate, state)} through ${printDateLabel(printable.endDate, state)}"
+        }
+        val groupedRows = printable.rows.groupBy { it.date }.entries.joinToString("") { (date, rows) ->
+            """<section class="day"><h2>${escapeHtml(printDateLabel(date, state))}</h2>${rows.joinToString("") { row ->
+                """<div class="task"><span class="box"></span><div><strong>${escapeHtml(row.scheduleName)} — ${escapeHtml(row.taskType)}</strong><br><span>${escapeHtml(row.reference)}</span></div></div>"""
+            }}</section>"""
+        }
+        val content = groupedRows.ifEmpty {
+            "<p class=\"empty\">${if (hebrew) "אין משימות לימוד או חזרה פעילות בטווח תאריכים זה." else "No active learning or chazarah tasks are scheduled in this date range."}</p>"
+        }
+        val html = """<!doctype html><html lang="${if (hebrew) "he" else "en"}" dir="${if (hebrew) "rtl" else "ltr"}"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+            @page { size: A4; margin: 16mm 15mm 18mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #23262a; font-family: "Noto Sans Hebrew", Arial, sans-serif; font-size: 10.5pt; }
+            header { border-bottom: 2px solid #c9992e; margin-bottom: 14px; padding-bottom: 10px; }
+            h1 { color: #153b5b; font-size: 22pt; margin: 0 0 4px; }
+            .range { color: #5c6269; font-size: 9.5pt; }
+            .day { margin: 0 0 12px; }
+            h2 { background: #f9f1db; border-radius: 5px; break-after: avoid; color: #153b5b; font-size: 11.5pt; margin: 0; padding: 6px 9px; }
+            .task { align-items: flex-start; border-bottom: 1px solid #dcded0; display: flex; gap: 9px; min-height: 42px; padding: 8px 2px; break-inside: avoid; }
+            .box { border: 1.5px solid #153b5b; display: inline-block; flex: 0 0 15px; height: 15px; margin-top: 2px; width: 15px; }
+            .empty { color: #5c6269; }
+            @media screen { body { margin: 24px auto; max-width: 180mm; padding: 0 8px; } }
+        </style></head><body><header><h1>${escapeHtml(title)}</h1><div class="range">${escapeHtml(range)}</div></header>$content<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),100));</script></body></html>"""
+        openPrintDocument(html)
+    }
+
+    private fun printDateLabel(date: String, state: WebAppState): String {
+        val gregorian = formatGregorianDate(date, state.language == "he")
+        val hebrew = formatHebrewDate(date, state.language == "he")
+        return if (state.primaryCalendar == "HEBREW") "$hebrew — $gregorian" else "$gregorian — $hebrew"
+    }
 }
+
+private fun escapeHtml(value: String): String = value
+    .replace("&", "&amp;")
+    .replace("<", "&lt;")
+    .replace(">", "&gt;")
+    .replace("\"", "&quot;")
+    .replace("'", "&#39;")
 
 private class SupabaseCloudAccount : CloudAccount {
     private val json = Json { ignoreUnknownKeys = true }
@@ -131,6 +178,17 @@ private external fun downloadTextFile(filename: String, text: String)
 private external fun chooseBackupFile(key: String, invalidMarker: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(html) => {
+    const popup = window.open('', '_blank');
+    if (!popup) { window.print(); return; }
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+}""")
+private external fun openPrintDocument(html: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => window.veshinantamAccountState()")
 private external fun cloudAccountState(): String
 
@@ -175,6 +233,16 @@ private external fun browserTimeZone(): String
     }).format(value);
 }""")
 private external fun formatHebrewDate(iso: String, hebrewUi: Boolean): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(iso, hebrewUi) => {
+    const value = new Date(iso + 'T12:00:00Z');
+    if (Number.isNaN(value.getTime())) return iso;
+    return new Intl.DateTimeFormat(hebrewUi ? 'he-IL' : 'en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+    }).format(value);
+}""")
+private external fun formatGregorianDate(iso: String, hebrewUi: Boolean): String
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(iso, hebrewUi) => {

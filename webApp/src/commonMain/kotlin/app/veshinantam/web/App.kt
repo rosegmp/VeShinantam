@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Unarchive
@@ -339,6 +340,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
+                                onPrintSchedule = { dayCount -> store.printSchedule(appState, dayCount) },
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
                                 hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
                                 hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
@@ -395,6 +397,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 },
                                 onExportBackup = { store.exportBackup(appState) },
                                 onImportBackup = store::requestBackupImport,
+                                onPrintSchedule = { dayCount -> store.printSchedule(appState, dayCount) },
                                 onAccount = { accountState = cloudAccount.state(); showAccount = true },
                                 hebrewDateLabel = { date -> store.hebrewDateLabel(date, hebrew) },
                                 hebrewDayLabel = { date -> store.hebrewDayLabel(date, hebrew) },
@@ -683,6 +686,7 @@ private fun AppContent(
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onPrintSchedule: (Int) -> Unit,
     onAccount: () -> Unit,
     hebrewDateLabel: (String) -> String,
     hebrewDayLabel: (String) -> String,
@@ -690,6 +694,7 @@ private fun AppContent(
 ) {
     var showDataMenu by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPrintSchedule by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 13.dp),
@@ -749,6 +754,11 @@ private fun AppContent(
                         onClick = { showDataMenu = false; onAccount() },
                     )
                     DropdownMenuItem(
+                        text = { Text(if (hebrew) "סדר להדפסה" else "Printable schedule") },
+                        leadingIcon = { Icon(Icons.Default.Print, null) },
+                        onClick = { showDataMenu = false; showPrintSchedule = true },
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (hebrew) "ייצוא גיבוי" else "Export backup") },
                         leadingIcon = { Icon(Icons.Default.Download, null) },
                         onClick = { showDataMenu = false; onExportBackup() },
@@ -787,6 +797,47 @@ private fun AppContent(
             onDismiss = { showSettings = false },
         )
     }
+    if (showPrintSchedule) {
+        PrintableScheduleDialog(
+            hebrew = hebrew,
+            onPrint = { dayCount -> showPrintSchedule = false; onPrintSchedule(dayCount) },
+            onDismiss = { showPrintSchedule = false },
+        )
+    }
+}
+
+@Composable
+private fun PrintableScheduleDialog(
+    hebrew: Boolean,
+    onPrint: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var dayCount by remember { mutableStateOf(30) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Print, null, tint = DeepBlue) },
+        title = { Text(if (hebrew) "סדר להדפסה" else "Printable schedule", color = DeepBlue) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    if (hebrew) "הדפסת משימות הלימוד והחזרה הפעילות מהיום, עם תיבת סימון לכל משימה."
+                    else "Print active learning and chazarah tasks beginning today, with one checkbox for every task.",
+                    color = MutedInk,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    PrintableScheduleDayCounts.forEach { count ->
+                        FilterChip(
+                            selected = dayCount == count,
+                            onClick = { dayCount = count },
+                            label = { Text(if (hebrew) "$count ימים" else "$count days") },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onPrint(dayCount) }) { Text(if (hebrew) "הדפסה / PDF" else "Print / PDF") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(if (hebrew) "ביטול" else "Cancel") } },
+    )
 }
 
 @Composable
