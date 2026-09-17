@@ -24,6 +24,9 @@ interface ScheduleDao {
     @Query("SELECT * FROM tasks ORDER BY scheduleId, plannedDate, type, stableKey")
     suspend fun getAllTasks(): List<TaskEntity>
 
+    @Query("SELECT * FROM tasks WHERE id > :afterId ORDER BY id LIMIT :limit")
+    suspend fun getTasksPage(afterId: String, limit: Int): List<TaskEntity>
+
     @Query("SELECT * FROM progress_goals ORDER BY kind")
     suspend fun getAllProgressGoals(): List<ProgressGoalEntity>
 
@@ -316,11 +319,17 @@ interface ScheduleDao {
     @Query("SELECT * FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId")
     suspend fun getSyncOutbox(entityType: String, entityId: String): SyncOutboxEntity?
 
+    @Query("SELECT * FROM sync_outbox WHERE entityType = :entityType AND entityId IN (:entityIds)")
+    suspend fun getSyncOutbox(entityType: String, entityIds: List<String>): List<SyncOutboxEntity>
+
     @Upsert
     suspend fun upsertSyncOutbox(value: SyncOutboxEntity)
 
     @Query("DELETE FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId AND mutationId = :mutationId")
     suspend fun deleteSyncOutbox(entityType: String, entityId: String, mutationId: String): Int
+
+    @Query("DELETE FROM sync_outbox WHERE mutationId IN (:mutationIds)")
+    suspend fun deleteSyncOutboxMutations(mutationIds: List<String>): Int
 
     @Query("UPDATE sync_outbox SET baseRevision = :revision WHERE entityType = :entityType AND entityId = :entityId")
     suspend fun updateSyncOutboxBaseRevision(entityType: String, entityId: String, revision: Long)
@@ -330,6 +339,31 @@ interface ScheduleDao {
 
     @Query("SELECT * FROM sync_shadow WHERE entityType = :entityType AND entityId = :entityId")
     suspend fun getSyncShadow(entityType: String, entityId: String): SyncShadowEntity?
+
+    @Query("SELECT * FROM sync_shadow WHERE entityType = :entityType AND entityId IN (:entityIds)")
+    suspend fun getSyncShadows(entityType: String, entityIds: List<String>): List<SyncShadowEntity>
+
+    @Query(
+        """
+        SELECT * FROM sync_shadow AS shadow
+        WHERE shadow.deleted = 0 AND (
+            (shadow.entityType = 'SCHEDULE' AND NOT EXISTS (
+                SELECT 1 FROM schedules WHERE schedules.id = shadow.entityId
+            )) OR
+            (shadow.entityType = 'TASK' AND NOT EXISTS (
+                SELECT 1 FROM tasks WHERE tasks.id = shadow.entityId
+            )) OR
+            (shadow.entityType = 'EXCLUSION' AND NOT EXISTS (
+                SELECT 1 FROM schedule_exclusions
+                WHERE schedule_exclusions.scheduleId || ':' || schedule_exclusions.date = shadow.entityId
+            )) OR
+            (shadow.entityType = 'GOAL' AND NOT EXISTS (
+                SELECT 1 FROM progress_goals WHERE progress_goals.kind = shadow.entityId
+            ))
+        )
+        """,
+    )
+    suspend fun getMissingLocalSyncShadows(): List<SyncShadowEntity>
 
     @Upsert
     suspend fun upsertSyncShadow(value: SyncShadowEntity)

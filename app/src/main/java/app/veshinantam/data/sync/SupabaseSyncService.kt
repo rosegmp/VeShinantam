@@ -114,7 +114,8 @@ class SupabaseSyncService(
         preferences.edit().putString(KEY_STATUS, authFailureStatus("creating the account", it)).apply()
     }
 
-    suspend fun sync(): Result<Unit> = runCatching {
+    suspend fun sync(cancelAutomaticWork: Boolean = true): Result<Unit> = runCatching {
+        if (cancelAutomaticWork) EntitySyncScheduler.cancel(appContext)
         preferences.edit().putString(KEY_STATUS, "Synchronizing…").apply()
         if (BuildConfig.ENTITY_SYNC_ENABLED) {
             prepareEntityAccount()
@@ -187,7 +188,7 @@ class SupabaseSyncService(
 
     suspend fun automaticSync(): Boolean {
         if (!BuildConfig.ENTITY_SYNC_ENABLED || !preferences.contains(KEY_ACCESS_TOKEN)) return true
-        return sync().isSuccess
+        return sync(cancelAutomaticWork = false).isSuccess
     }
 
     private suspend fun prepareEntityAccount() {

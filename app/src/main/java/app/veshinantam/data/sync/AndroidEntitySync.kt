@@ -46,53 +46,80 @@ internal class AndroidEntitySync(
     private val request: (path: String, method: String, body: String?) -> String,
 ) {
     private val appContext = context.applicationContext
-    private val mutex = Mutex()
 
-    suspend fun synchronize(): EntitySyncResult = mutex.withLock {
+    suspend fun synchronize(): EntitySyncResult = processMutex.withLock {
         syncPhase("Preparing device changes") { captureLocalChanges() }
         val push = syncPhase("Uploading device changes") { pushOutbox() }
         val pulled = syncPhase("Downloading cloud changes") { pullRemoteChanges() }
         EntitySyncResult(push.first, pulled, push.second)
     }
 
-    suspend fun resetForAccount() = mutex.withLock {
+    suspend fun resetForAccount() = processMutex.withLock {
         dao.clearSyncState()
     }
 
     private suspend fun captureLocalChanges() {
         val now = Instant.now()
-        val data = CanonicalAndroidMapper.export(
+        val preferences = readPreferences(now)
+        val stableData = CanonicalAndroidMapper.export(
             schedules = dao.getAllSchedules(),
             exclusions = dao.getAllExclusions(),
-            tasks = dao.getAllTasks(),
+            tasks = emptyList(),
             goals = dao.getAllProgressGoals(),
-            preferences = readPreferences(now),
+            preferences = preferences,
             now = now,
             syncCursor = dao.getSyncMetadata(CURSOR_KEY) ?: 0,
         )
-        val current = buildList {
-            data.schedules.forEach { add(LocalEntity(SyncEntityType.SCHEDULE, it.id, encode(CanonicalSchedule.serializer(), it))) }
-            data.materialUnits.forEach { add(LocalEntity(SyncEntityType.MATERIAL_UNIT, it.id, encode(app.veshinantam.shared.CanonicalMaterialUnit.serializer(), it))) }
-            data.tasks.forEach { add(LocalEntity(SyncEntityType.TASK, it.id, encode(CanonicalTask.serializer(), it))) }
-            data.exclusions.forEach { add(LocalEntity(SyncEntityType.EXCLUSION, it.id, encode(CanonicalExclusion.serializer(), it))) }
-            data.goals.forEach { add(LocalEntity(SyncEntityType.GOAL, it.id, encode(CanonicalGoal.serializer(), it))) }
-            add(LocalEntity(SyncEntityType.PREFERENCES, PREFERENCES_ID, encode(CanonicalPreferences.serializer(), data.preferences)))
-        }
-        val currentKeys = current.mapTo(mutableSetOf()) { it.type.name to it.id }
-        val shadows = dao.getSyncShadows().associateBy { it.entityType to it.entityId }
+        captureEntities(buildList {
+            stableData.schedules.forEach { add(LocalEntity(SyncEntityType.SCHEDULE, it.id, encode(CanonicalSchedule.serializer(), it))) }
+            stableData.exclusions.forEach { add(LocalEntity(SyncEntityType.EXCLUSION, it.id, encode(CanonicalExclusion.serializer(), it))) }
+            stableData.goals.forEach { add(LocalEntity(SyncEntityType.GOAL, it.id, encode(CanonicalGoal.serializer(), it))) }
+            add(LocalEntity(SyncEntityType.PREFERENCES, PREFERENCES_ID, encode(CanonicalPreferences.serializer(), stableData.preferences)))
+        })
 
-        current.forEach { entity ->
-            val key = entity.type.name to entity.id
-            val shadow = shadows[key]
-            if (shadow != null && samePayload(shadow.payload, entity.payload) && !shadow.deleted) return@forEach
-            enqueue(entity.type, entity.id, entity.payload, deleted = false, shadow?.revision ?: 0)
-        }
-        shadows.values.filter {
-            it.entityType != SyncEntityType.MATERIAL_UNIT.name &&
-                !it.deleted && (it.entityType to it.entityId) !in currentKeys
-        }.forEach { shadow ->
+        var afterTaskId = ""
+        do {
+            val taskPage = dao.getTasksPage(afterTaskId, LOCAL_TASK_PAGE_SIZE)
+            val canonicalTasks = CanonicalAndroidMapper.export(
+                schedules = emptyList(),
+                exclusions = emptyList(),
+                tasks = taskPage,
+                goals = emptyList(),
+                preferences = preferences,
+                now = now,
+            ).tasks
+            captureEntities(canonicalTasks.map {
+                LocalEntity(SyncEntityType.TASK, it.id, encode(CanonicalTask.serializer(), it))
+            })
+            afterTaskId = taskPage.lastOrNull()?.id ?: afterTaskId
+        } while (taskPage.size == LOCAL_TASK_PAGE_SIZE)
+
+        dao.getMissingLocalSyncShadows().forEach { shadow ->
             enqueue(SyncEntityType.valueOf(shadow.entityType), shadow.entityId, null, deleted = true, shadow.revision)
         }
+    }
+
+    private suspend fun captureEntities(entities: List<LocalEntity>) {
+        if (entities.isEmpty()) return
+        val shadows = mutableMapOf<Pair<String, String>, SyncShadowEntity>()
+        val pending = mutableMapOf<Pair<String, String>, SyncOutboxEntity>()
+        entities.groupBy { it.type.name }.forEach { (entityType, values) ->
+            val ids = values.map { it.id }
+            dao.getSyncShadows(entityType, ids).forEach { shadows[it.entityType to it.entityId] = it }
+            dao.getSyncOutbox(entityType, ids).forEach { pending[it.entityType to it.entityId] = it }
+        }
+        val redundantMutations = mutableListOf<String>()
+        entities.forEach { entity ->
+            val key = entity.type.name to entity.id
+            val shadow = shadows[key]
+            if (shadow != null && samePayload(shadow.payload, entity.payload) && !shadow.deleted) {
+                pending[key]?.takeIf { !it.deleted && samePayload(it.payload, entity.payload) }
+                    ?.let { redundantMutations += it.mutationId }
+            } else {
+                enqueue(entity.type, entity.id, entity.payload, deleted = false, shadow?.revision ?: 0)
+            }
+        }
+        redundantMutations.chunked(OUTBOX_DELETE_BATCH_SIZE).forEach { dao.deleteSyncOutboxMutations(it) }
     }
 
     private suspend fun enqueue(type: SyncEntityType, id: String, payload: String?, deleted: Boolean, baseRevision: Long) {
@@ -167,12 +194,14 @@ internal class AndroidEntitySync(
     }
 
     private suspend fun pullRemoteChanges(): Int {
-        var cursor = dao.getSyncMetadata(CURSOR_KEY) ?: 0
+        var pageCursor = dao.getSyncMetadata(CURSOR_KEY) ?: 0
+        var finalCursor = pageCursor
         var pulled = 0
+        val deferredChildren = mutableListOf<RemoteEntity>()
         do {
             val rows = JSONArray(
                 request(
-                    "/rest/v1/learning_entities?select=entity_type,entity_id,payload,deleted,revision,updated_at&revision=gt.$cursor&order=revision.asc&limit=$PULL_PAGE_SIZE",
+                    "/rest/v1/learning_entities?select=entity_type,entity_id,payload,deleted,revision,updated_at&revision=gt.$pageCursor&order=revision.asc&limit=$PULL_PAGE_SIZE",
                     "GET",
                     null,
                 ),
@@ -189,19 +218,52 @@ internal class AndroidEntitySync(
             }
             val ordered = records.sortedWith(compareBy<RemoteEntity>({ applyOrder(it) }, { it.revision }))
             for (record in ordered) {
-                val pending = dao.getSyncOutbox(record.type.name, record.id)
-                if (pending == null) applyRemote(record) else {
-                    updateShadow(record)
-                    dao.updateSyncOutboxBaseRevision(record.type.name, record.id, record.revision)
-                }
+                if (hasMissingParent(record)) deferredChildren += record else applyPulledRecord(record)
             }
             records.maxOfOrNull { it.revision }?.let {
-                cursor = it
-                dao.upsertSyncMetadata(SyncMetadataEntity(CURSOR_KEY, it))
+                pageCursor = it
+                finalCursor = it
             }
             pulled += records.size
         } while (rows.length() == PULL_PAGE_SIZE)
+
+        deferredChildren.forEach { record ->
+            if (hasMissingParent(record)) {
+                // Old sync versions could leave a task or exclusion behind after its schedule was removed.
+                // Retain a shadow so the orphan is not retried, but do not violate the local database FK.
+                updateShadow(record)
+            } else {
+                applyPulledRecord(record)
+            }
+        }
+        if (finalCursor > (dao.getSyncMetadata(CURSOR_KEY) ?: 0)) {
+            dao.upsertSyncMetadata(SyncMetadataEntity(CURSOR_KEY, finalCursor))
+        }
         return pulled
+    }
+
+    private suspend fun applyPulledRecord(record: RemoteEntity) {
+        val pending = dao.getSyncOutbox(record.type.name, record.id)
+        try {
+            if (pending == null) applyRemote(record) else {
+                updateShadow(record)
+                dao.updateSyncOutboxBaseRevision(record.type.name, record.id, record.revision)
+            }
+        } catch (error: Exception) {
+            throw IllegalStateException(
+                "Could not apply ${record.type}:${record.id} at revision ${record.revision}: " +
+                    (error.message ?: error.javaClass.simpleName),
+                error,
+            )
+        }
+    }
+
+    private suspend fun hasMissingParent(record: RemoteEntity): Boolean {
+        if (record.deleted || (record.type != SyncEntityType.TASK && record.type != SyncEntityType.EXCLUSION)) {
+            return false
+        }
+        val scheduleId = record.payload?.let(::JSONObject)?.optString("scheduleId").orEmpty()
+        return scheduleId.isNotBlank() && dao.getSchedule(scheduleId) == null
     }
 
     private suspend fun applyRemote(record: RemoteEntity) {
@@ -278,13 +340,8 @@ internal class AndroidEntitySync(
         ReminderScheduler.sync(appContext)
     }
 
-    private fun samePayload(left: String?, right: String?): Boolean = normalize(left) == normalize(right)
-
-    private fun normalize(value: String?): String? = value?.let {
-        JSONObject(it).apply {
-            remove("updatedAt")
-            remove("revision")
-        }.toString()
+    private fun samePayload(left: String?, right: String?): Boolean {
+        return syncPayloadsEquivalent(left, right)
     }
 
     private fun <T> encode(serializer: kotlinx.serialization.KSerializer<T>, value: T): String =
@@ -316,13 +373,41 @@ internal class AndroidEntitySync(
     )
 
     private companion object {
+        val processMutex = Mutex()
         const val CURSOR_KEY = "entity_cursor"
         const val PREFERENCES_ID = "preferences"
         const val PULL_PAGE_SIZE = 1_000
+        const val LOCAL_TASK_PAGE_SIZE = 500
+        const val OUTBOX_DELETE_BATCH_SIZE = 500
     }
 }
 
 internal const val ENTITY_SYNC_PUSH_BATCH_SIZE = 100
+
+internal fun syncPayloadsEquivalent(left: String?, right: String?): Boolean {
+    if (left == null || right == null) return left == right
+    return syncJsonEquivalent(normalizeSyncPayload(left), normalizeSyncPayload(right))
+}
+
+private fun normalizeSyncPayload(value: String): JSONObject = JSONObject(value).apply {
+    remove("updatedAt")
+    remove("revision")
+}
+
+private fun syncJsonEquivalent(left: Any?, right: Any?): Boolean = when {
+    left === right -> true
+    left == null || right == null -> false
+    left is JSONObject && right is JSONObject -> {
+        val leftKeys = left.keys().asSequence().toSet()
+        val rightKeys = right.keys().asSequence().toSet()
+        leftKeys == rightKeys && leftKeys.all { syncJsonEquivalent(left.get(it), right.get(it)) }
+    }
+    left is JSONArray && right is JSONArray ->
+        left.length() == right.length() && (0 until left.length()).all { syncJsonEquivalent(left.get(it), right.get(it)) }
+    left is Number && right is Number ->
+        left.toString().toBigDecimal().compareTo(right.toString().toBigDecimal()) == 0
+    else -> left == right
+}
 
 internal fun mutationBatchRequestBody(mutations: List<SyncOutboxEntity>): String = JSONObject()
     .put("p_mutations", JSONArray().apply {

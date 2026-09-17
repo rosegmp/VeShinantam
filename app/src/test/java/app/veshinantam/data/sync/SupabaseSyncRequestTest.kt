@@ -48,6 +48,15 @@ class SupabaseSyncRequestTest {
     }
 
     @Test
+    fun entityPayloadComparisonIgnoresJsonOrderNumericFormattingAndSyncMetadata() {
+        val remote = """{"quantity":1,"nested":{"b":2,"a":1},"updatedAt":"old","revision":7}"""
+        val local = """{"nested":{"a":1.0,"b":2.0},"quantity":1.0,"updatedAt":"new","revision":0}"""
+
+        assertTrue(syncPayloadsEquivalent(remote, local))
+        assertFalse(syncPayloadsEquivalent(remote, local.replace("1.0", "3.0")))
+    }
+
+    @Test
     fun syncFailureIncludesThePhaseWithoutGrowingUnbounded() {
         val status = syncFailureStatus(IllegalStateException("Uploading device changes failed: network unavailable"))
 
