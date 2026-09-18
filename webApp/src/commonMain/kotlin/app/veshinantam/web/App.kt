@@ -3,6 +3,7 @@ package app.veshinantam.web
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -65,6 +66,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -125,12 +128,31 @@ import app.veshinantam.web.generated.resources.Res
 import org.jetbrains.compose.resources.Font
 import kotlinx.coroutines.delay
 
-private val DeepBlue = Color(0xFF173B67)
-private val DeepBlueContainer = Color(0xFFDCE9FF)
-private val WarmGold = Color(0xFFC59636)
-private val AppBackground = Color(0xFFF7F8FC)
-private val MutedInk = Color(0xFF5C6370)
-private val SuccessGreen = Color(0xFF2E6E55)
+private val WebLightColors = lightColorScheme(
+    primary = Color(0xFF173B67), onPrimary = Color.White,
+    primaryContainer = Color(0xFFD6E4FF), onPrimaryContainer = Color(0xFF001B3D),
+    secondary = Color(0xFF765A16), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFFFE08A), onSecondaryContainer = Color(0xFF251A00),
+    tertiary = Color(0xFF765A16), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFE08A), onTertiaryContainer = Color(0xFF251A00),
+    surface = Color(0xFFF9F9FC), surfaceVariant = Color(0xFFE0E2E8),
+)
+private val WebDarkColors = darkColorScheme(
+    primary = Color(0xFFA9C7F5), onPrimary = Color(0xFF002F61),
+    primaryContainer = Color(0xFF0B477C), onPrimaryContainer = Color(0xFFD6E4FF),
+    secondary = Color(0xFFE7C578), onSecondary = Color(0xFF3D2E00),
+    secondaryContainer = Color(0xFF574500), onSecondaryContainer = Color(0xFFFFE08A),
+    tertiary = Color(0xFFE7C578), onTertiary = Color(0xFF3D2E00),
+    tertiaryContainer = Color(0xFF574500), onTertiaryContainer = Color(0xFFFFE08A),
+    surface = Color(0xFF111318), surfaceVariant = Color(0xFF44474E),
+)
+
+private val DeepBlue: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val DeepBlueContainer: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+private val WarmGold: Color @Composable get() = MaterialTheme.colorScheme.secondary
+private val AppBackground: Color @Composable get() = MaterialTheme.colorScheme.background
+private val MutedInk: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val SuccessGreen: Color @Composable get() = MaterialTheme.colorScheme.tertiary
 
 @Composable
 private fun appTypography(): Typography {
@@ -306,7 +328,10 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-        MaterialTheme(typography = appTypography()) {
+        MaterialTheme(
+            colorScheme = if (isSystemInDarkTheme()) WebDarkColors else WebLightColors,
+            typography = appTypography(),
+        ) {
             Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
                 BoxWithConstraints {
                     val desktop = maxWidth >= 880.dp
@@ -519,7 +544,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     schedulePendingDelete?.let { schedule ->
         AlertDialog(
             onDismissRequest = { schedulePendingDelete = null },
-            icon = { Icon(Icons.Default.DeleteForever, null, tint = Color(0xFF9B2C2C)) },
+            icon = { Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(if (hebrew) "למחוק את התוכנית?" else "Delete this schedule?") },
             text = {
                 Text(
@@ -632,7 +657,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
 @Composable
 private fun DesktopNavigation(selected: Destination, hebrew: Boolean, signedIn: Boolean, onDestination: (Destination) -> Unit) {
     Column(
-        modifier = Modifier.width(248.dp).fillMaxHeight().background(DeepBlue).padding(20.dp),
+        modifier = Modifier.width(248.dp).fillMaxHeight().background(Color(0xFF173B67)).padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Surface(shape = RoundedCornerShape(14.dp), color = WarmGold, modifier = Modifier.size(46.dp)) {
@@ -705,7 +730,7 @@ private fun AppContent(
     var showPrintSchedule by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 24.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(if (hebrew) destination.he else destination.en, fontWeight = FontWeight.Bold, fontSize = 19.sp, color = DeepBlue)
@@ -779,7 +804,7 @@ private fun AppContent(
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFFE4E7EC))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         when (destination) {
             Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate, onTodaySortOrder)
             Destination.CALENDAR -> CalendarScreen(
@@ -947,7 +972,7 @@ private fun WebSettingsDialog(
                 }
                 if (!valid) Text(
                     if (hebrew) "בדוק את ימי החזרה ואת שעת התזכורת." else "Check the chazarah days and reminder time.",
-                    color = Color(0xFF9B2C2C), fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.error, fontSize = 13.sp,
                 )
             }
         },
@@ -1066,7 +1091,7 @@ private fun AccountDialog(
                 state.status?.let {
                     Text(
                         it,
-                        color = if (it.startsWith("Error") || it.startsWith("Sync failed")) Color(0xFF9B2C2C) else SuccessGreen,
+                        color = if (it.startsWith("Error") || it.startsWith("Sync failed")) MaterialTheme.colorScheme.error else SuccessGreen,
                         fontSize = 14.sp,
                     )
                 }
@@ -1141,7 +1166,7 @@ private fun TodayScreen(
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (hebrew) "התקדמות היום" else "Today’s progress", fontWeight = FontWeight.Bold, color = DeepBlue)
@@ -1153,7 +1178,7 @@ private fun TodayScreen(
                         progress = { progress.fraction },
                         modifier = Modifier.fillMaxWidth().height(9.dp),
                         color = WarmGold,
-                        trackColor = Color(0xFFE8EBF1),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
                 }
             }
@@ -1198,7 +1223,7 @@ private fun TodayScreen(
         item { Spacer(Modifier.height(72.dp)) }
     }
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomEnd) {
-        FloatingActionButton(onClick = onCreate, containerColor = WarmGold, contentColor = Color.White) {
+        FloatingActionButton(onClick = onCreate, containerColor = WarmGold, contentColor = MaterialTheme.colorScheme.onSecondary) {
             Icon(Icons.Default.Add, if (hebrew) "הוסף תוכנית" else "Add schedule")
         }
     }
@@ -1216,7 +1241,7 @@ private fun TaskGroup(
     showDueDate: Boolean = false,
 ) {
     if (tasks.isEmpty()) return
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth().then(if (onExpandToggle != null) Modifier.clickable(onClick = onExpandToggle) else Modifier).padding(horizontal = 18.dp, vertical = 14.dp).semantics { heading() },
@@ -1226,7 +1251,7 @@ private fun TaskGroup(
                 if (onExpandToggle != null) Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = DeepBlue)
             }
             if (!expanded) return@Column
-            HorizontalDivider(color = Color(0xFFEEF0F4))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             tasks.forEachIndexed { index, task ->
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onToggle(task.id) }.padding(horizontal = 12.dp, vertical = 12.dp),
@@ -1243,17 +1268,17 @@ private fun TaskGroup(
                         val secondary = if (sefarimLanguage == "BOTH") {
                             if (hebrew) task.referenceEnglish else task.referenceHebrew
                         } else null
-                        Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else Color(0xFF22262D))
+                        Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else MaterialTheme.colorScheme.onSurface)
                         secondary?.takeIf { it.isNotBlank() }?.let { Text(it, color = MutedInk, fontSize = 14.sp) }
                         if (showDueDate) Text(
                             if (hebrew) "לתאריך ${friendlyDate(task.dueDate, true)}" else "Due ${friendlyDate(task.dueDate, false)}",
-                            color = Color(0xFF9B2C2C),
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 13.sp,
                         )
                     }
                     if (task.completed) Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(21.dp))
                 }
-                if (index != tasks.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = Color(0xFFEEF0F4))
+                if (index != tasks.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
@@ -1276,7 +1301,7 @@ private fun todaySortLabel(value: String, hebrew: Boolean): String = when (value
 
 @Composable
 private fun EmptyToday(hebrew: Boolean, onCreate: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(42.dp))
             Spacer(Modifier.height(12.dp))
@@ -1341,7 +1366,7 @@ private fun CalendarScreen(
         .map { it.domain() }
         .toList()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
@@ -1376,9 +1401,9 @@ private fun CalendarScreen(
                                     .background(
                                         when {
                                             isSelected -> DeepBlue
-                                            summary?.status == WebCalendarDayStatus.COMPLETE -> Color(0xFFDFF3E8)
-                                            summary?.status == WebCalendarDayStatus.PARTIAL -> Color(0xFFFFF0CE)
-                                            summary?.status == WebCalendarDayStatus.INCOMPLETE -> Color(0xFFFFE8E8)
+                                            summary?.status == WebCalendarDayStatus.COMPLETE -> MaterialTheme.colorScheme.tertiaryContainer
+                                            summary?.status == WebCalendarDayStatus.PARTIAL -> MaterialTheme.colorScheme.secondaryContainer
+                                            summary?.status == WebCalendarDayStatus.INCOMPLETE -> MaterialTheme.colorScheme.errorContainer
                                             isToday -> DeepBlueContainer
                                             else -> Color.Transparent
                                         },
@@ -1401,18 +1426,18 @@ private fun CalendarScreen(
                                 if (cell.gregorianDay != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         if (state.primaryCalendar == "HEBREW") hebrewDayLabel(requireNotNull(cell.isoDate)) else cell.gregorianDay.toString(),
-                                        color = if (isSelected) Color.White else Color(0xFF333841),
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                                     )
                                     cell.isoDate?.let { date ->
                                         Text(
                                             if (state.primaryCalendar == "HEBREW") cell.gregorianDay.toString() else hebrewDayLabel(date),
-                                            color = if (isSelected) Color.White.copy(alpha = .8f) else MutedInk,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = .8f) else MutedInk,
                                             fontSize = 11.sp,
                                         )
                                     }
                                     summary?.let {
-                                        Text("${it.completedCount}/${it.taskCount}", color = if (isSelected) Color.White else DeepBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("${it.completedCount}/${it.taskCount}", color = if (isSelected) MaterialTheme.colorScheme.onPrimary else DeepBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1423,9 +1448,9 @@ private fun CalendarScreen(
         }
         Spacer(Modifier.height(16.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            CalendarLegend(Color(0xFFFFE8E8), if (hebrew) "לא הושלם" else "Incomplete")
-            CalendarLegend(Color(0xFFFFF0CE), if (hebrew) "הושלם חלקית" else "Partial")
-            CalendarLegend(Color(0xFFDFF3E8), if (hebrew) "הושלם" else "Complete")
+            CalendarLegend(MaterialTheme.colorScheme.errorContainer, if (hebrew) "לא הושלם" else "Incomplete")
+            CalendarLegend(MaterialTheme.colorScheme.secondaryContainer, if (hebrew) "הושלם חלקית" else "Partial")
+            CalendarLegend(MaterialTheme.colorScheme.tertiaryContainer, if (hebrew) "הושלם" else "Complete")
         }
         Spacer(Modifier.height(20.dp))
         val primaryDate = if (state.primaryCalendar == "HEBREW") hebrewDateLabel(selectedDate) else friendlyDate(selectedDate, hebrew)
@@ -1462,7 +1487,7 @@ private fun CalendarScreen(
         }
         Spacer(Modifier.height(14.dp))
         if (selectedTasks.isEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Text(
                     if (hebrew) "אין משימות מתוכננות ליום זה." else "No tasks are scheduled for this day.",
                     modifier = Modifier.fillMaxWidth().padding(22.dp),
@@ -1491,7 +1516,7 @@ private fun CalendarScreen(
 @Composable
 private fun CalendarLegend(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(12.dp).background(color, CircleShape).border(1.dp, Color(0xFFD3D7DE), CircleShape))
+        Box(Modifier.size(12.dp).background(color, CircleShape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
         Spacer(Modifier.width(5.dp))
         Text(label, color = MutedInk, fontSize = 13.sp)
     }
@@ -1537,7 +1562,7 @@ private fun SchedulesScreen(
         }
         Spacer(Modifier.height(20.dp))
         if (state.schedules.isEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = DeepBlue, modifier = Modifier.size(40.dp))
                     Spacer(Modifier.height(10.dp))
@@ -1551,10 +1576,10 @@ private fun SchedulesScreen(
                 val scheduleTasks = state.tasks.filter { it.scheduleId == schedule.id }
                 val overdueLearning = scheduleTasks.count { it.type == LearningTaskType.LEARNING.name && it.dueDate < today && !it.completed }
                 val overdueChazarah = scheduleTasks.count { it.type == LearningTaskType.CHAZARAH.name && it.dueDate < today && !it.completed }
-                Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = if (schedule.archived) Color(0xFFE8E9ED) else DeepBlueContainer, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(48.dp)) {
+                            Surface(color = if (schedule.archived) MaterialTheme.colorScheme.surfaceVariant else DeepBlueContainer, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(48.dp)) {
                                 Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = if (schedule.archived) MutedInk else DeepBlue) }
                             }
                             Spacer(Modifier.width(14.dp))
@@ -1591,7 +1616,7 @@ private fun SchedulesScreen(
                                 }
                             }
                             Spacer(Modifier.height(14.dp))
-                            HorizontalDivider(color = Color(0xFFEEF0F4))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             FlowRow(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
                                 TextButton(onClick = { onRequestEdit(schedule.id) }) {
                                     Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
@@ -1611,7 +1636,7 @@ private fun SchedulesScreen(
                             }
                         } else {
                             Spacer(Modifier.height(14.dp))
-                            HorizontalDivider(color = Color(0xFFEEF0F4))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
                                 TextButton(onClick = { onRestore(schedule.id) }) {
                                     Icon(Icons.Default.Unarchive, null, modifier = Modifier.size(19.dp))
@@ -1619,9 +1644,9 @@ private fun SchedulesScreen(
                                     Text(if (hebrew) "שחזר" else "Restore")
                                 }
                                 TextButton(onClick = { onRequestDelete(schedule.id) }) {
-                                    Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(19.dp), tint = Color(0xFF9B2C2C))
+                                    Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(19.dp), tint = MaterialTheme.colorScheme.error)
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (hebrew) "מחק" else "Delete", color = Color(0xFF9B2C2C))
+                                    Text(if (hebrew) "מחק" else "Delete", color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -1790,12 +1815,12 @@ private fun ProgressScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text(if (hebrew) "ההתקדמות שלך" else "Your progress", color = DeepBlue, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(18.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = DeepBlue), shape = RoundedCornerShape(22.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = DeepBlueContainer), shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(24.dp)) {
-                Text(if (hebrew) "הושלם בסך הכול" else "Overall completion", color = Color.White.copy(alpha = .72f))
-                Text("${progress.completionPercent}%", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+                Text(if (hebrew) "הושלם בסך הכול" else "Overall completion", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .72f))
+                Text("${progress.completionPercent}%", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 44.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(progress = { progress.completionPercent / 100f }, modifier = Modifier.fillMaxWidth().height(9.dp), color = WarmGold, trackColor = Color.White.copy(alpha = .18f))
+                LinearProgressIndicator(progress = { progress.completionPercent / 100f }, modifier = Modifier.fillMaxWidth().height(9.dp), color = WarmGold, trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .18f))
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -1816,7 +1841,7 @@ private fun ProgressScreen(
             }
         }
         if (progress.goals.isEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Text(
                     if (hebrew) "הגדר יעדים לאחוז השלמה, רצף ויחידות לימוד." else "Set goals for completion, streak, and learning units.",
                     modifier = Modifier.fillMaxWidth().padding(18.dp), color = MutedInk,
@@ -1838,7 +1863,7 @@ private fun ProgressScreen(
         Spacer(Modifier.height(24.dp))
         Text(if (hebrew) "עומס החזרות ב־30 הימים הקרובים" else "30-day chazarah workload", color = DeepBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(10.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
                 if (progress.upcomingReviews.isEmpty()) Text(if (hebrew) "אין חזרות מתוכננות." else "No upcoming reviews.", color = MutedInk)
                 val maximumWorkload = progress.upcomingReviews.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
@@ -1853,7 +1878,7 @@ private fun ProgressScreen(
                             progress = { day.count.toFloat() / maximumWorkload },
                             modifier = Modifier.fillMaxWidth().height(7.dp),
                             color = WarmGold,
-                            trackColor = Color(0xFFE8EBF1),
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
                 }
@@ -1865,7 +1890,7 @@ private fun ProgressScreen(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             state.schedules.forEach { schedule ->
                 val scheduleProgress = LearningPlanner.progress(domainTasks.filter { it.scheduleId == schedule.id })
-                Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -1879,7 +1904,7 @@ private fun ProgressScreen(
                             progress = { scheduleProgress.fraction },
                             modifier = Modifier.fillMaxWidth().height(8.dp),
                             color = WarmGold,
-                            trackColor = Color(0xFFE8EBF1),
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
                 }
@@ -1910,7 +1935,7 @@ private fun ProgressGoalsDialog(
                 OutlinedTextField(completionText, { completionText = it; invalid = false }, label = { Text(if (hebrew) "אחוז השלמה" else "Completion percent") }, singleLine = true)
                 OutlinedTextField(streakText, { streakText = it; invalid = false }, label = { Text(if (hebrew) "ימי רצף" else "Streak days") }, singleLine = true)
                 OutlinedTextField(unitsText, { unitsText = it; invalid = false }, label = { Text(if (hebrew) "יחידות לימוד" else "Learning units") }, singleLine = true)
-                if (invalid) Text(if (hebrew) "הזן מספרים חיוביים; אחוז ההשלמה לא יעלה על 100." else "Enter positive numbers; completion cannot exceed 100.", color = Color(0xFF9B2C2C), fontSize = 13.sp)
+                if (invalid) Text(if (hebrew) "הזן מספרים חיוביים; אחוז ההשלמה לא יעלה על 100." else "Enter positive numbers; completion cannot exceed 100.", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
         },
         confirmButton = {
@@ -1935,7 +1960,7 @@ private fun ProgressGoalCard(goal: SharedProgressGoal, hebrew: Boolean) {
         SharedProgressGoalKind.STREAK -> if (hebrew) "יעד רצף" else "Streak goal"
         SharedProgressGoalKind.LEARNING_UNITS -> if (hebrew) "יעד יחידות לימוד" else "Learning-units goal"
     }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 Text(label, modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -1944,7 +1969,7 @@ private fun ProgressGoalCard(goal: SharedProgressGoal, hebrew: Boolean) {
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = { (goal.current / goal.target).toFloat().coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(7.dp), color = WarmGold, trackColor = Color(0xFFE8EBF1),
+                modifier = Modifier.fillMaxWidth().height(7.dp), color = WarmGold, trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         }
     }
@@ -1958,7 +1983,7 @@ private fun ProgressMilestoneCard(milestone: SharedProgressMilestone, hebrew: Bo
         SharedProgressMilestoneKind.REVIEWS -> if (hebrew) "חזרות" else "reviews"
     }
     Card(
-        colors = CardDefaults.cardColors(containerColor = if (milestone.unlocked) Color(0xFFFFF0CE) else Color.White),
+        colors = CardDefaults.cardColors(containerColor = if (milestone.unlocked) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -1967,7 +1992,7 @@ private fun ProgressMilestoneCard(milestone: SharedProgressMilestone, hebrew: Bo
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = { (milestone.current / milestone.target).toFloat().coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(7.dp), color = if (milestone.unlocked) WarmGold else DeepBlue, trackColor = Color(0xFFE8EBF1),
+                modifier = Modifier.fillMaxWidth().height(7.dp), color = if (milestone.unlocked) WarmGold else DeepBlue, trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         }
     }
@@ -1977,7 +2002,7 @@ private fun formatProgressNumber(value: Double): String = if (value % 1.0 == 0.0
 
 @Composable
 private fun ProgressMetric(label: String, value: String) {
-    Card(modifier = Modifier.width(210.dp), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+    Card(modifier = Modifier.width(210.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text(value, color = DeepBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Text(label, color = MutedInk, fontSize = 14.sp)
