@@ -150,6 +150,18 @@ internal class SchedulePdfRenderer(
             style = Paint.Style.STROKE
             strokeWidth = 1.4f
         })
+        if (task.completedAt != null) {
+            val markPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = NAVY
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            val top = y + 9f
+            canvas.drawLine(boxLeft + 3f, top + 7.5f, boxLeft + 6.2f, top + 11f, markPaint)
+            canvas.drawLine(boxLeft + 6.2f, top + 11f, boxLeft + 12.5f, top + 4f, markPaint)
+        }
         val textLeft = if (isRtl) LEFT_MARGIN else LEFT_MARGIN + CHECKBOX_SIZE + 10f
         canvas.save()
         canvas.translate(textLeft, y + 3f)

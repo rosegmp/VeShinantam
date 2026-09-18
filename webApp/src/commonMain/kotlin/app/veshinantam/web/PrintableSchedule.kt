@@ -9,6 +9,7 @@ data class PrintableScheduleRow(
     val scheduleName: String,
     val taskType: String,
     val reference: String,
+    val completed: Boolean,
 )
 
 data class PrintableSchedule(
@@ -49,6 +50,7 @@ fun buildPrintableSchedule(state: WebAppState, startDate: String, dayCount: Int)
                     "HEBREW" -> task.referenceHebrew.ifBlank { task.referenceEnglish }
                     else -> listOf(task.referenceEnglish, task.referenceHebrew).filter { it.isNotBlank() }.distinct().joinToString(" · ")
                 },
+                completed = task.completed,
             )
         }
         .toList()

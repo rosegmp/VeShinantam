@@ -60,6 +60,7 @@ class WebStateTest {
         })
         assertEquals("Mishnah Yomis", printable.rows.first().scheduleName)
         assertEquals("Peah 2:1–2 · פאה ב׳:א׳–ב׳", printable.rows.first().reference)
+        assertEquals(listOf(true, false, false), printable.rows.map { it.completed })
     }
 
     @Test

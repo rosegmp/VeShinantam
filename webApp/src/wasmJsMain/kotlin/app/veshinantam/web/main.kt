@@ -65,7 +65,8 @@ private class LocalBrowserStore : BrowserStore {
         }
         val groupedRows = printable.rows.groupBy { it.date }.entries.joinToString("") { (date, rows) ->
             """<section class="day"><h2>${escapeHtml(printDateLabel(date, state))}</h2>${rows.joinToString("") { row ->
-                """<div class="task"><span class="box"></span><div><strong>${escapeHtml(row.scheduleName)} — ${escapeHtml(row.taskType)}</strong><br><span>${escapeHtml(row.reference)}</span></div></div>"""
+                val checkbox = if (row.completed) """<span class="box completed">✓</span>""" else """<span class="box"></span>"""
+                """<div class="task">$checkbox<div><strong>${escapeHtml(row.scheduleName)} — ${escapeHtml(row.taskType)}</strong><br><span>${escapeHtml(row.reference)}</span></div></div>"""
             }}</section>"""
         }
         val content = groupedRows.ifEmpty {
@@ -81,7 +82,7 @@ private class LocalBrowserStore : BrowserStore {
             .day { margin: 0 0 12px; }
             h2 { background: #f9f1db; border-radius: 5px; break-after: avoid; color: #153b5b; font-size: 11.5pt; margin: 0; padding: 6px 9px; }
             .task { align-items: flex-start; border-bottom: 1px solid #dcded0; display: flex; gap: 9px; min-height: 42px; padding: 8px 2px; break-inside: avoid; }
-            .box { border: 1.5px solid #153b5b; display: inline-block; flex: 0 0 15px; height: 15px; margin-top: 2px; width: 15px; }
+            .box { align-items: center; border: 1.5px solid #153b5b; color: #153b5b; display: inline-flex; flex: 0 0 15px; font-size: 13px; font-weight: bold; height: 15px; justify-content: center; line-height: 1; margin-top: 2px; width: 15px; }
             .empty { color: #5c6269; }
             @media screen { body { margin: 24px auto; max-width: 180mm; padding: 0 8px; } }
         </style></head><body><header><h1>${escapeHtml(title)}</h1><div class="range">${escapeHtml(range)}</div></header>$content<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),100));</script></body></html>"""
