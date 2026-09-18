@@ -114,12 +114,26 @@ class SupabaseSyncService(
         preferences.edit().putString(KEY_STATUS, authFailureStatus("creating the account", it)).apply()
     }
 
-    suspend fun sync(cancelAutomaticWork: Boolean = true): Result<Unit> = runCatching {
-        if (cancelAutomaticWork) EntitySyncScheduler.cancel(appContext)
+    suspend fun sync(): Result<Unit> = runCatching {
+        val previousStatus = preferences.getString(KEY_STATUS, null)
         preferences.edit().putString(KEY_STATUS, "Synchronizing…").apply()
         if (BuildConfig.ENTITY_SYNC_ENABLED) {
             prepareEntityAccount()
-            val result = entitySync.synchronize()
+            val localChangeVersion = deviceSyncPreferences.getLong(KEY_LOCAL_CHANGE_VERSION, 0)
+            val capturedVersion = when {
+                deviceSyncPreferences.contains(KEY_CAPTURED_CHANGE_VERSION) ->
+                    deviceSyncPreferences.getLong(KEY_CAPTURED_CHANGE_VERSION, -1)
+                previousStatus?.startsWith("Synced") == true -> localChangeVersion.also {
+                    deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, it).apply()
+                }
+                else -> -1
+            }
+            val captureDeviceChanges = localChangeVersion != capturedVersion
+            val result = entitySync.synchronize(captureDeviceChanges)
+            if (result.coalesced) return@runCatching
+            if (captureDeviceChanges) {
+                deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, localChangeVersion).apply()
+            }
             WidgetUpdater.enqueueImmediate(appContext)
             preferences.edit()
                 .remove(KEY_CONFLICT)
@@ -180,15 +194,19 @@ class SupabaseSyncService(
         preferences.edit().clear().putString(KEY_STATUS, "Signed out. Device data remains available offline.").apply()
     }
 
-    fun scheduleAutomaticSync() {
+    fun scheduleAutomaticSync(localDataChanged: Boolean = true) {
         if (BuildConfig.ENTITY_SYNC_ENABLED && preferences.contains(KEY_ACCESS_TOKEN)) {
+            if (localDataChanged) {
+                val nextVersion = deviceSyncPreferences.getLong(KEY_LOCAL_CHANGE_VERSION, 0) + 1
+                deviceSyncPreferences.edit().putLong(KEY_LOCAL_CHANGE_VERSION, nextVersion).apply()
+            }
             EntitySyncScheduler.enqueue(appContext)
         }
     }
 
     suspend fun automaticSync(): Boolean {
         if (!BuildConfig.ENTITY_SYNC_ENABLED || !preferences.contains(KEY_ACCESS_TOKEN)) return true
-        return sync(cancelAutomaticWork = false).isSuccess
+        return sync().isSuccess
     }
 
     private suspend fun prepareEntityAccount() {
@@ -200,7 +218,10 @@ class SupabaseSyncService(
         val boundAccountId = deviceSyncPreferences.getString(KEY_ENTITY_ACCOUNT_ID, null)
         if (boundAccountId == null) {
             entitySync.resetForAccount()
-            deviceSyncPreferences.edit().putString(KEY_ENTITY_ACCOUNT_ID, accountId).apply()
+            deviceSyncPreferences.edit()
+                .putString(KEY_ENTITY_ACCOUNT_ID, accountId)
+                .putLong(KEY_CAPTURED_CHANGE_VERSION, -1)
+                .apply()
         } else if (boundAccountId != accountId) {
             error("This device's offline data is linked to another account. Clear the app's data before linking a different account.")
         }
@@ -392,6 +413,8 @@ class SupabaseSyncService(
     private companion object {
         const val PREFERENCES = "supabase_account"
         const val DEVICE_SYNC_PREFERENCES = "supabase_device_sync"
+        const val KEY_LOCAL_CHANGE_VERSION = "local_change_version"
+        const val KEY_CAPTURED_CHANGE_VERSION = "captured_change_version"
         const val KEY_ACCESS_TOKEN = "access_token"
         const val KEY_REFRESH_TOKEN = "refresh_token"
         const val KEY_EMAIL = "email"

@@ -38,6 +38,7 @@ internal data class EntitySyncResult(
     val pushed: Int,
     val pulled: Int,
     val conflicts: Int,
+    val coalesced: Boolean = false,
 )
 
 internal class AndroidEntitySync(
@@ -47,13 +48,13 @@ internal class AndroidEntitySync(
 ) {
     private val appContext = context.applicationContext
 
-    suspend fun synchronize(): EntitySyncResult {
+    suspend fun synchronize(captureDeviceChanges: Boolean): EntitySyncResult {
         if (!processMutex.tryLock()) {
             processMutex.withLock { }
-            return EntitySyncResult(pushed = 0, pulled = 0, conflicts = 0)
+            return EntitySyncResult(pushed = 0, pulled = 0, conflicts = 0, coalesced = true)
         }
         return try {
-            syncPhase("Preparing device changes") { captureLocalChanges() }
+            if (captureDeviceChanges) syncPhase("Preparing device changes") { captureLocalChanges() }
             val push = syncPhase("Uploading device changes") { pushOutbox() }
             val pulled = syncPhase("Downloading cloud changes") { pullRemoteChanges() }
             EntitySyncResult(push.first, pulled, push.second)

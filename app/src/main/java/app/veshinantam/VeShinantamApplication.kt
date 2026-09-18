@@ -37,7 +37,7 @@ class VeShinantamApplication : Application() {
             database.scheduleDao().deleteSchedule(LEGACY_DEBUG_SCHEDULE_ID)
             scheduleRepository.rollOverMissedLearning(notifyDataChanged = false)
             WidgetUpdater.enqueueImmediate(this@VeShinantamApplication)
-            supabaseSyncService.scheduleAutomaticSync()
+            supabaseSyncService.scheduleAutomaticSync(localDataChanged = false)
         }
     }
 
