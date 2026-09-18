@@ -45,3 +45,9 @@ The real payload must include every bundled preset ID. Before private distributi
 ```
 
 Signature rotation is intentionally deferred to the later diagnostics/key-rotation enhancement; the current schema recognizes one explicit key ID.
+
+## Web configuration
+
+The web app accepts the same envelope, key ID, DER ECDSA signature, and payload as Android. Configure `window.VESHINANTAM_PRESET_UPDATES` in `supabase-config.js` with the HTTPS endpoint and the same base64 DER SubjectPublicKeyInfo value. The browser verifies the signature with WebCrypto, while the Kotlin layer independently requires a newer sequence and one resolvable reference for every bundled preset.
+
+Verified envelopes are cached in browser storage. The cache is reverified at every startup; invalid, incomplete, or unknown-reference catalogs are discarded, and the bundled catalog remains active. Enabling automatic catalog updates reloads the app once so it can perform the verified check before schedule creation begins.

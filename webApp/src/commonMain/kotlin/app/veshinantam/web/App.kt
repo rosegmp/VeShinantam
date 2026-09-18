@@ -288,6 +288,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
 
     fun savePreferences(edit: WebPreferencesEdit) {
         if (edit.reminderEnabled) store.requestReminderPermission()
+        val shouldRefreshCatalog = edit.automaticPresetUpdates && !appState.automaticPresetUpdates
         update { state ->
             state.copy(
                 language = edit.language,
@@ -301,6 +302,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                 automaticPresetUpdates = edit.automaticPresetUpdates,
             )
         }
+        if (shouldRefreshCatalog) store.refreshPresetCatalog()
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides if (hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr) {
@@ -439,7 +441,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                     officialOraysaChazarah = draft.includeWeekendChazarah,
                     createdAt = store.currentInstant(),
                     updatedAt = store.currentInstant(),
-                    sourceType = draft.preset?.let { "PRESET:${SharedPresetCatalog.VERSION}" } ?: draft.sourceType,
+                    sourceType = draft.preset?.let { "PRESET:${WebPresetCatalog.version}" } ?: draft.sourceType,
                     materialType = draft.materialType,
                 )
                 val engine = SharedScheduleEngine()
@@ -936,8 +938,8 @@ private fun WebSettingsDialog(
                     Column(Modifier.weight(1f)) {
                         Text(if (hebrew) "עדכוני קטלוג אוטומטיים" else "Automatic catalog updates", fontWeight = FontWeight.Bold)
                         Text(
-                            if (hebrew) "ההעדפה מסתנכרנת עם Android; אתר האינטרנט משתמש בקטלוג המאומת המצורף."
-                            else "This preference syncs with Android; web uses its bundled validated catalog.",
+                            if (hebrew) "האתר מאמת עדכונים חתומים ושומר את הקטלוג המצורף כגיבוי."
+                            else "Web verifies signed updates and keeps the bundled catalog as a fallback.",
                             color = MutedInk, fontSize = 12.sp,
                         )
                     }
@@ -1985,12 +1987,12 @@ private fun ProgressMetric(label: String, value: String) {
 
 @Composable
 private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
-    val programs = remember { SharedPresetCatalog.programs }
+    val programs = remember { WebPresetCatalog.programs }
     val catalogPositionDate = remember(today) { requireNotNull(IsoDate.parse(today)) }
     var selectedProgramIndex by remember { mutableStateOf(0) }
     val baseProgram = programs.getOrNull(selectedProgramIndex)
     val program = remember(baseProgram, catalogPositionDate) {
-        baseProgram?.let { SharedPresetCatalog.programAtDate(it, catalogPositionDate) }
+        baseProgram?.let { WebPresetCatalog.programAtDate(it, catalogPositionDate) }
     }
     val custom = program == null
     var programMenuExpanded by remember { mutableStateOf(false) }
@@ -2022,7 +2024,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
         mutableStateOf(program?.let { SharedPresetCatalog.defaultAdditionalChazarahOffsets(it.id).isNotEmpty() } ?: true)
     }
     var weekendChazarah by remember(selectedProgramIndex) { mutableStateOf(program?.id == "oraysa") }
-    val currentMasechtaStart = program?.let(SharedPresetCatalog::currentMasechtaStartIndex)
+    val currentMasechtaStart = program?.let(WebPresetCatalog::currentMasechtaStartIndex)
     val positionMatches = if (program != null && positionQuery.length >= 2) {
         program.selectableStartingUnits.withIndex().filter { indexed ->
             indexed.value.english.contains(positionQuery, ignoreCase = true) || indexed.value.hebrew.contains(positionQuery)
@@ -2194,8 +2196,8 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                     )
                     if (startIndex != program.currentIndex) {
                         Text(
-                            if (hebrew) "נקבע במקור ל־${SharedPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}"
-                            else "Originally scheduled for ${SharedPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}",
+                            if (hebrew) "נקבע במקור ל־${WebPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}"
+                            else "Originally scheduled for ${WebPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}",
                             color = MutedInk,
                             fontSize = 13.sp,
                         )
@@ -2475,7 +2477,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                             repeatsAnnually = false,
                             includeWeekendChazarah = weekendChazarah,
                             missedWorkBehavior = "KEEP_FIXED_OVERDUE",
-                            sourceType = "PRESET:${SharedPresetCatalog.VERSION}",
+                            sourceType = "PRESET:${WebPresetCatalog.version}",
                         ),
                     )
                 },

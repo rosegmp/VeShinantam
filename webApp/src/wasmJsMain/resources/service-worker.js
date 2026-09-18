@@ -1,10 +1,11 @@
 const CACHE_PREFIX = 'veshinantam-web-';
-const CACHE = 'veshinantam-web-v30';
+const CACHE = 'veshinantam-web-v31';
 const PRECACHE = [
   './',
   './index.html',
   './veshinantam.js',
   './entity-sync.js',
+  './preset-updates.js',
   './supabase-config.js',
   './manifest.webmanifest',
   './icon.svg',

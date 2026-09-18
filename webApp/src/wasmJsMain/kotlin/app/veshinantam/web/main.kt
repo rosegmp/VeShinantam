@@ -106,6 +106,8 @@ private class LocalBrowserStore : BrowserStore {
         )
     }
 
+    override fun refreshPresetCatalog() = reloadForPresetCatalog()
+
     private fun printDateLabel(date: String, state: WebAppState): String {
         val gregorian = formatGregorianDate(date, state.language == "he")
         val hebrew = formatHebrewDate(date, state.language == "he")
@@ -144,6 +146,18 @@ private external fun readBrowserState(): String?
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(value) => window.veshinantamPersistState(value)")
 private external fun writeBrowserState(value: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamReadPresetCatalog()")
+private external fun readPresetCatalog(): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamDiscardPresetCatalog()")
+private external fun discardPresetCatalog()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.location.reload()")
+private external fun reloadForPresetCatalog()
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(key) => window.sessionStorage.getItem(key)")
@@ -366,6 +380,12 @@ private external fun hebrewCalendarPeriodJson(iso: String, hebrewUi: Boolean): S
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    readPresetCatalog()?.let { raw ->
+        runCatching {
+            val update = Json { ignoreUnknownKeys = true }.decodeFromString<WebPresetCatalogUpdate>(raw)
+            WebPresetCatalog.applyVerifiedUpdate(update)
+        }.onFailure { discardPresetCatalog() }
+    }
     ComposeViewport(document.body!!) {
         val store = remember { LocalBrowserStore() }
         val cloudAccount = remember { SupabaseCloudAccount() }

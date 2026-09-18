@@ -874,6 +874,7 @@ interface BrowserStore {
     fun updateDueBadge(state: WebAppState, today: String)
     fun requestReminderPermission()
     fun updateBrowserReminder(state: WebAppState, today: String)
+    fun refreshPresetCatalog()
 }
 
 @Serializable

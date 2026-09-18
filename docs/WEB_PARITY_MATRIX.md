@@ -23,7 +23,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Printable schedule | Complete | Complete | Matching 7/14/30/60/90-day content rules with localized browser print/PDF, bilingual references, active learning/chazarah tasks, checkboxes, RTL, and A4 pagination |
 | Reminders | Complete | Active-tab notification | Preference/time synchronize; permission is requested from a user action and the open web app schedules service-worker notifications. Closed-app delivery still requires Web Push |
 | Home-screen presence | Android widget | Installable PWA + due badge | Manifest Today shortcut and active incomplete due-count app badge where the browser/OS supports it |
-| Signed preset updates | Complete | Missing | Shared validated catalog and cached fallback |
+| Signed preset updates | Complete | Complete | Same HTTPS envelope/key ID, pinned P-256 signature verification, strict reference validation, atomic browser cache replacement, and bundled fallback |
 | Light/dark mode | Complete | Partial | Follow system preference on web with matching brand tokens |
 | Accessibility hardening | Complete | Partial | Keyboard, focus, screen readers, 200% zoom, contrast, and RTL |
 | Release/migration verification | Complete | Partial | Browser matrix, IndexedDB/service-worker recovery, and sync integration tests |
