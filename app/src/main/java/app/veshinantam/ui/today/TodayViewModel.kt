@@ -141,12 +141,10 @@ internal fun sortTodayTasks(
     }
     return when (order) {
         TodaySortOrder.SCHEDULED_FIRST -> tasks.sortedWith(
-            compareBy<TodayTaskUi>({ it.plannedDate }, { it.labelEnglish }, { it.labelHebrew }, { it.id }),
+            compareBy<TodayTaskUi>({ it.plannedDate }, { it.id }),
         )
         TodaySortOrder.NEWEST_DUE_FIRST -> tasks.sortedWith(
             compareByDescending<TodayTaskUi> { it.plannedDate }
-                .thenBy { it.labelEnglish }
-                .thenBy { it.labelHebrew }
                 .thenBy { it.id },
         )
         TodaySortOrder.REFERENCE_ASCENDING -> tasks.sortedWith(reference)

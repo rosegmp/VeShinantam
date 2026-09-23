@@ -103,6 +103,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -270,7 +271,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
     var accountState by remember { mutableStateOf(cloudAccount.state()) }
-    var showAccount by remember { mutableStateOf(accountState.status != null || accountState.conflict) }
+    var showAccount by remember { mutableStateOf(false) }
     var textReaderSelection by remember { mutableStateOf<TextReaderSelection?>(null) }
     val hebrew = appState.language == "he"
 
@@ -1327,8 +1328,29 @@ private fun TaskGroup(
                     Checkbox(checked = task.completed, onCheckedChange = null)
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else MaterialTheme.colorScheme.onSurface)
-                        secondary?.takeIf { it.isNotBlank() }?.let { Text(it, color = MutedInk, fontSize = 14.sp) }
+                        Text(
+                            primary,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textDirection = when (sefarimLanguage) {
+                                    "HEBREW" -> TextDirection.Rtl
+                                    "ENGLISH" -> TextDirection.Ltr
+                                    else -> if (hebrew) TextDirection.Rtl else TextDirection.Ltr
+                                },
+                            ),
+                            color = if (task.completed) MutedInk else MaterialTheme.colorScheme.onSurface,
+                        )
+                        secondary?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 14.sp,
+                                    textDirection = if (hebrew) TextDirection.Ltr else TextDirection.Rtl,
+                                ),
+                                color = MutedInk,
+                            )
+                        }
                         if (showDueDate) Text(
                             if (hebrew) "לתאריך ${friendlyDate(task.dueDate, true)}" else "Due ${friendlyDate(task.dueDate, false)}",
                             color = MaterialTheme.colorScheme.error,

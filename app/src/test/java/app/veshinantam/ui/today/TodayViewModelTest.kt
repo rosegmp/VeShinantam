@@ -71,6 +71,25 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `date sorting uses the synced task id instead of lexical reference order for ties`() {
+        val tasks = listOf(
+            task("04", "Yevamos 105b", "יבמות דף קה:", today),
+            task("01", "Yevamos 90b", "יבמות דף צ:", today),
+            task("03", "Yevamos 109b", "יבמות דף קט:", today),
+            task("02", "Yevamos 45b", "יבמות דף מה:", today),
+        )
+
+        assertEquals(
+            listOf("01", "02", "03", "04"),
+            sortTodayTasks(tasks, TodaySortOrder.SCHEDULED_FIRST).map { it.id },
+        )
+        assertEquals(
+            listOf("01", "02", "03", "04"),
+            sortTodayTasks(tasks, TodaySortOrder.NEWEST_DUE_FIRST).map { it.id },
+        )
+    }
+
+    @Test
     fun `reference sorting follows the selected sefarim language`() {
         val tasks = listOf(
             task("english-first", "Berachos", "שבת", today),

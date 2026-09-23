@@ -246,6 +246,7 @@ private val LocalDefaultChazarahOffsets = staticCompositionLocalOf { ChazarahDef
 @Composable
 fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
     val context = LocalContext.current
+    val systemConfiguration = LocalConfiguration.current
     val activityResultRegistryOwner = checkNotNull(LocalActivityResultRegistryOwner.current)
     var destination by remember { mutableStateOf(Destination.TODAY) }
     val reminderSettings = remember(context) { ReminderSettings(context.applicationContext) }
@@ -276,7 +277,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
     var accountState by remember { mutableStateOf(accountService.state()) }
     var showAccount by remember { mutableStateOf(false) }
     var accountBusy by remember { mutableStateOf(false) }
-    val localizedContext = remember(context, appLanguage) { AppLocale.wrap(context, appLanguage) }
+    val localizedContext = remember(context, appLanguage, systemConfiguration) { AppLocale.wrap(context, appLanguage) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
