@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -92,9 +94,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -703,7 +708,8 @@ private fun DesktopNavigation(selected: Destination, hebrew: Boolean, signedIn: 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     .background(if (isSelected) Color.White.copy(alpha = .14f) else Color.Transparent, RoundedCornerShape(14.dp))
-                    .clickable { onDestination(item) }.padding(horizontal = 14.dp, vertical = 13.dp),
+                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onDestination(item) })
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(item.icon, null, tint = if (isSelected) Color.White else Color.White.copy(alpha = .72f))
@@ -1277,7 +1283,17 @@ private fun TaskGroup(
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().then(if (onExpandToggle != null) Modifier.clickable(onClick = onExpandToggle) else Modifier).padding(horizontal = 18.dp, vertical = 14.dp).semantics { heading() },
+                modifier = Modifier.fillMaxWidth()
+                    .then(if (onExpandToggle != null) Modifier.clickable(role = Role.Button, onClick = onExpandToggle) else Modifier)
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+                    .semantics {
+                        heading()
+                        if (onExpandToggle != null) stateDescription = if (expanded) {
+                            if (hebrew) "מורחב" else "Expanded"
+                        } else {
+                            if (hebrew) "מכווץ" else "Collapsed"
+                        }
+                    },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("$title (${tasks.size})", modifier = Modifier.weight(1f), color = MutedInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1286,21 +1302,30 @@ private fun TaskGroup(
             if (!expanded) return@Column
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             tasks.forEachIndexed { index, task ->
+                val primary = when (sefarimLanguage) {
+                    "ENGLISH" -> task.referenceEnglish
+                    "HEBREW" -> task.referenceHebrew
+                    else -> if (hebrew) task.referenceHebrew else task.referenceEnglish
+                }
+                val secondary = if (sefarimLanguage == "BOTH") {
+                    if (hebrew) task.referenceEnglish else task.referenceHebrew
+                } else null
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onToggle(task.id) }.padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .toggleable(value = task.completed, role = Role.Checkbox, onValueChange = { onToggle(task.id) })
+                        .semantics {
+                            contentDescription = "$primary, ${if (task.completed) {
+                                if (hebrew) "הושלם" else "Completed"
+                            } else {
+                                if (hebrew) "לא הושלם" else "Not completed"
+                            }}"
+                        }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = task.completed, onCheckedChange = { onToggle(task.id) })
+                    Checkbox(checked = task.completed, onCheckedChange = null)
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        val primary = when (sefarimLanguage) {
-                            "ENGLISH" -> task.referenceEnglish
-                            "HEBREW" -> task.referenceHebrew
-                            else -> if (hebrew) task.referenceHebrew else task.referenceEnglish
-                        }
-                        val secondary = if (sefarimLanguage == "BOTH") {
-                            if (hebrew) task.referenceEnglish else task.referenceHebrew
-                        } else null
                         Text(primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (task.completed) MutedInk else MaterialTheme.colorScheme.onSurface)
                         secondary?.takeIf { it.isNotBlank() }?.let { Text(it, color = MutedInk, fontSize = 14.sp) }
                         if (showDueDate) Text(
@@ -1587,9 +1612,10 @@ private fun CalendarScreen(
                                     .semantics {
                                         cell.isoDate?.let { date ->
                                             contentDescription = calendarDayDescription(date, summary, hebrew)
+                                            selected = isSelected
                                         }
                                     }
-                                    .clickable(enabled = cell.gregorianDay != null) {
+                                    .clickable(enabled = cell.gregorianDay != null, role = Role.Button) {
                                         cell.isoDate?.let {
                                             selectedDate = it
                                             followsToday = it == today
