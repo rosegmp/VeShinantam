@@ -25,7 +25,8 @@ class SharedPresetCatalogTest {
                 "Chullin 133", "Yevamos 105a", "Yoma 69a", "Kelim 30:2",
                 "Mishnah Berurah, chelek 5 page 7a", "Yerushalmi Shevuos 15",
                 "Yerushalmi Yevamos 33", "Rambam, Other Sources of Defilement 9",
-                "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134", "Pele Yoetz, Day 103",
+                "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134",
+                "Pele Yoetz, Volume 2, Day 357, Ot Tet - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.",
                 "Kitzur Shulchan Aruch 133:1-8",
             ),
             SharedPresetCatalog.programs.map { it.currentReference.english },
@@ -38,6 +39,7 @@ class SharedPresetCatalogTest {
         val schottenstein = SharedPresetCatalog.programs.first { it.id == "yerushalmi-yomi-schottenstein" }
         val rambam = SharedPresetCatalog.programs.first { it.id == "rambam-three-chapters" }
         val kitzur = SharedPresetCatalog.programs.first { it.id == "kitzur-yomi" }
+        val peleYoetz = SharedPresetCatalog.programs.first { it.id == "hachzek-pele-yoetz" }
 
         assertEquals(1554, vilna.units.size)
         assertEquals(2094, schottenstein.units.size)
@@ -46,6 +48,11 @@ class SharedPresetCatalogTest {
         assertEquals("קיצור שולחן ערוך קלג:א-ח", kitzur.currentReference.hebrew)
         assertTrue(rambam.units.any { it.english.endsWith("Leavened and Unleavened Bread 8-9") })
         assertFalse(schottenstein.units.any { it.hebrew.isBlank() })
+        assertEquals(499, peleYoetz.units.size)
+        assertEquals("פלא יועץ, חלק ב, יום שנז, אות ט - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.", peleYoetz.currentReference.hebrew)
+        assertEquals("Pele Yoetz, Volume 1, Day 1, Ot Alef - אהבה להקדוש ברוך הוא - אהבה להקדוש ברוך הוא אין מדה טובה", peleYoetz.units.first().english)
+        assertEquals("Pele Yoetz, Volume 2, Day 255, Ot Vav - אות ו: ותרנות - ותרנות היא מדה טובה, כשהוא ותרן בממונו לדבר", peleYoetz.units[254].english)
+        assertTrue(peleYoetz.units.none { "page" in it.english.lowercase() })
     }
 
     @Test

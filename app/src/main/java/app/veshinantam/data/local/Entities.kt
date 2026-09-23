@@ -129,6 +129,8 @@ data class TodayTaskRow(
     val labelHebrew: String,
     val plannedDate: LocalDate,
     val completedAt: Instant?,
+    val materialType: MaterialType = MaterialType.CUSTOM_UNIT,
+    val presetId: String? = null,
 )
 
 data class DueCounts(

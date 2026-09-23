@@ -1,6 +1,5 @@
 param(
     [switch]$AllowUnsigned,
-    [switch]$EntitySyncEnabled,
     [switch]$SkipLint,
     [switch]$VerifyReproducible,
     [string]$OutputDirectory = "artifacts"
@@ -16,9 +15,6 @@ $outputPath = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
 
 function Invoke-ReleaseBuild {
     $arguments = @("clean", "testDebugUnitTest", "assembleRelease")
-    if ($EntitySyncEnabled) {
-        $arguments += "-PentitySyncEnabled=true"
-    }
     if ($SkipLint) {
         $arguments += @(
             "-x", ":app:lintVitalAnalyzeRelease",
@@ -79,7 +75,6 @@ try {
         ChecksumFile = $checksumPath
         SHA256 = $firstHash
         Signed = -not $isUnsigned
-        EntitySyncEnabled = [bool]$EntitySyncEnabled
         ReproducibilityVerified = [bool]$VerifyReproducible
         LintSkipped = [bool]$SkipLint
     } | Format-List

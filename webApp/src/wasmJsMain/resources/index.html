@@ -330,6 +330,55 @@
     })();
   </script>
   <script>
+    (() => {
+      const CACHE_PREFIX = 'veshinantam.sefaria-text.';
+      const CACHE_INDEX = 'veshinantam.sefaria-text-index';
+      const requests = new Map();
+      const cacheName = key => CACHE_PREFIX + encodeURIComponent(key);
+      const cacheIndex = () => {
+        try { return JSON.parse(localStorage.getItem(CACHE_INDEX) || '[]'); }
+        catch (_) { return []; }
+      };
+      window.veshinantamReadSefariaCache = key => localStorage.getItem(cacheName(key));
+      window.veshinantamWriteSefariaCache = (key, raw) => {
+        if (typeof raw !== 'string' || raw.length > 2000000) return;
+        const name = cacheName(key);
+        let index = cacheIndex().filter(entry => entry !== name);
+        const store = () => {
+          localStorage.setItem(name, raw);
+          index.push(name);
+          while (index.length > 10) localStorage.removeItem(index.shift());
+          localStorage.setItem(CACHE_INDEX, JSON.stringify(index));
+        };
+        try { store(); }
+        catch (_) {
+          while (index.length) {
+            localStorage.removeItem(index.shift());
+            try { store(); return; } catch (_) { /* Evict another old passage. */ }
+          }
+        }
+      };
+      window.veshinantamBeginSefariaRequest = (key, reference, versionLines) => {
+        if (requests.get(key)?.status === 'loading') return;
+        requests.set(key, { status: 'loading' });
+        const params = new URLSearchParams({ return_format: 'text_only' });
+        String(versionLines || '').split('\n').filter(Boolean).forEach(version => params.append('version', version));
+        const url = 'https://www.sefaria.org/api/v3/texts/' + encodeURIComponent(reference) + '?' + params.toString();
+        fetch(url, { headers: { Accept: 'application/json' } }).then(async response => {
+          if (!response.ok) throw new Error('Sefaria returned ' + response.status + '.');
+          const declared = Number(response.headers.get('content-length') || 0);
+          if (declared > 2000000) throw new Error('The passage is too large to display.');
+          const body = await response.text();
+          if (body.length > 2000000) throw new Error('The passage is too large to display.');
+          requests.set(key, { status: 'ready', body });
+        }).catch(error => requests.set(key, { status: 'error', error: error?.message || 'The text could not be loaded.' }));
+      };
+      window.veshinantamSefariaRequestStatus = key => requests.get(key)?.status || 'idle';
+      window.veshinantamSefariaRequestBody = key => requests.get(key)?.body || null;
+      window.veshinantamSefariaRequestError = key => requests.get(key)?.error || null;
+    })();
+  </script>
+  <script>
     Promise.all([window.veshinantamStorageReady, window.veshinantamPresetCatalogReady]).finally(() => {
       const application = document.createElement('script');
       application.src = 'veshinantam.js';

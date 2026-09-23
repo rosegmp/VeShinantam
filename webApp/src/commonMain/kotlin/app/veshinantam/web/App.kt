@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -57,6 +58,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -123,10 +125,17 @@ import app.veshinantam.shared.preset.MishnahBerurahUnit
 import app.veshinantam.shared.preset.MishnahUnit
 import app.veshinantam.shared.preset.SeferChoice
 import app.veshinantam.shared.preset.UnitReference
+import app.veshinantam.shared.text.SefariaReferenceMapper
+import app.veshinantam.shared.text.SefariaTextContent
+import app.veshinantam.shared.text.SefariaTextLookup
+import app.veshinantam.shared.text.SefariaTextParser
+import app.veshinantam.shared.text.PeleYoetzReference
 import app.veshinantam.web.generated.resources.NotoSansHebrew
 import app.veshinantam.web.generated.resources.Res
 import org.jetbrains.compose.resources.Font
 import kotlinx.coroutines.delay
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 private val WebLightColors = lightColorScheme(
     primary = Color(0xFF173B67), onPrimary = Color.White,
@@ -236,6 +245,13 @@ private data class BulkCompletionRequest(
     val taskCount: Int,
 )
 
+private data class TextReaderSelection(val task: StoredTask, val presetId: String?)
+private sealed interface WebTextState {
+    data object Loading : WebTextState
+    data class Ready(val content: SefariaTextContent, val fromCache: Boolean) : WebTextState
+    data class Error(val message: String) : WebTextState
+}
+
 @Composable
 fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     val initialImportResult = remember { store.consumeBackupImport() }
@@ -250,6 +266,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
     var accountState by remember { mutableStateOf(cloudAccount.state()) }
     var showAccount by remember { mutableStateOf(accountState.status != null || accountState.conflict) }
+    var textReaderSelection by remember { mutableStateOf<TextReaderSelection?>(null) }
     val hebrew = appState.language == "he"
 
     LaunchedEffect(store) {
@@ -351,6 +368,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
+                                onRead = { task, presetId -> textReaderSelection = TextReaderSelection(task, presetId) },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
@@ -408,6 +426,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
+                                onRead = { task, presetId -> textReaderSelection = TextReaderSelection(task, presetId) },
                                 onCreate = { showCreate = true },
                                 onSetScheduleActive = { scheduleId, active ->
                                     update { state -> state.copy(schedules = state.schedules.map { if (it.id == scheduleId) it.copy(active = active) else it }) }
@@ -652,6 +671,15 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
             onSignOut = cloudAccount::signOut,
         )
     }
+    textReaderSelection?.let { selection ->
+        WebSefariaTextDialog(
+            selection = selection,
+            store = store,
+            hebrew = hebrew,
+            sefarimLanguage = appState.sefarimLanguage,
+            onDismiss = { textReaderSelection = null },
+        )
+    }
 }
 
 @Composable
@@ -710,6 +738,7 @@ private fun AppContent(
     onSaveGoals: (Double?, Double?, Double?) -> Unit,
     onSavePreferences: (WebPreferencesEdit) -> Unit,
     onToggle: (String) -> Unit,
+    onRead: (StoredTask, String?) -> Unit,
     onCreate: () -> Unit,
     onSetScheduleActive: (String, Boolean) -> Unit,
     onArchiveSchedule: (String) -> Unit,
@@ -806,12 +835,13 @@ private fun AppContent(
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         when (destination) {
-            Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onCreate, onTodaySortOrder)
+            Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder)
             Destination.CALENDAR -> CalendarScreen(
                 state = state,
                 today = todayIso,
                 hebrew = hebrew,
                 onToggle = onToggle,
+                onRead = onRead,
                 hebrewDateLabel = hebrewDateLabel,
                 hebrewDayLabel = hebrewDayLabel,
                 hebrewCalendarPeriod = hebrewCalendarPeriod,
@@ -1118,6 +1148,7 @@ private fun TodayScreen(
     today: String,
     hebrew: Boolean,
     onToggle: (String) -> Unit,
+    onRead: (StoredTask, String?) -> Unit,
     onCreate: () -> Unit,
     onSortOrder: (String) -> Unit,
 ) {
@@ -1193,7 +1224,7 @@ private fun TodayScreen(
                         Text(schedule.name, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp).semantics { heading() })
                     }
                     WebTodaySection.entries.forEach { section ->
-                        val sectionTasks = scheduleTasks.filter { it.section == section }.map { it.task.domain() }
+                        val sectionTasks = scheduleTasks.filter { it.section == section }.map { it.task }
                         if (sectionTasks.isNotEmpty()) {
                             val sectionKey = "${schedule.id}-${section.name}"
                             val expanded = sectionKey !in collapsedSections
@@ -1204,6 +1235,7 @@ private fun TodayScreen(
                                     hebrew = hebrew,
                                     sefarimLanguage = state.sefarimLanguage,
                                     onToggle = onToggle,
+                                    onRead = { task -> onRead(task, schedule.presetId) },
                                     expanded = expanded,
                                     onExpandToggle = {
                                         if (expanded) {
@@ -1232,10 +1264,11 @@ private fun TodayScreen(
 @Composable
 private fun TaskGroup(
     title: String,
-    tasks: List<LearningTask>,
+    tasks: List<StoredTask>,
     hebrew: Boolean,
     sefarimLanguage: String,
     onToggle: (String) -> Unit,
+    onRead: (StoredTask) -> Unit,
     expanded: Boolean = true,
     onExpandToggle: (() -> Unit)? = null,
     showDueDate: Boolean = false,
@@ -1277,11 +1310,152 @@ private fun TaskGroup(
                         )
                     }
                     if (task.completed) Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(21.dp))
+                    IconButton(onClick = { onRead(task) }) {
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, if (hebrew) "קריאת הטקסט" else "Read text", tint = DeepBlue)
+                    }
                 }
                 if (index != tasks.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
+}
+
+@Composable
+private fun WebSefariaTextDialog(
+    selection: TextReaderSelection,
+    store: BrowserStore,
+    hebrew: Boolean,
+    sefarimLanguage: String,
+    onDismiss: () -> Unit,
+) {
+    val task = selection.task
+    val peleYoetz = remember(task.referenceEnglish) { PeleYoetzReference.parse(task.referenceEnglish) }
+    if (peleYoetz != null) {
+        WebPeleYoetzTextDialog(task, peleYoetz, hebrew, onDismiss)
+        return
+    }
+    val lookup = remember(task.id, selection.presetId) {
+        SefariaReferenceMapper.lookup(task.referenceEnglish, task.materialType, selection.presetId)
+    }
+    if (lookup is SefariaTextLookup.Unavailable) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+            title = { Text(if (hebrew) "הטקסט אינו זמין" else "Text unavailable") },
+            text = { Text(if (hebrew) lookup.messageHebrew else lookup.messageEnglish) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+        )
+        return
+    }
+
+    val request = (lookup as SefariaTextLookup.Available).request
+    var state by remember(request.cacheKey) { mutableStateOf<WebTextState>(WebTextState.Loading) }
+    LaunchedEffect(request.cacheKey) {
+        state = runCatching {
+            val cached = store.readCachedText(request.cacheKey)
+            if (cached != null) {
+                WebTextState.Ready(SefariaTextParser.parse(cached), fromCache = true)
+            } else {
+                val raw = store.fetchSefariaText(request)
+                val content = SefariaTextParser.parse(raw)
+                if (content.mayCache) store.cacheText(request.cacheKey, raw)
+                WebTextState.Ready(content, fromCache = false)
+            }
+        }.getOrElse { WebTextState.Error(it.message ?: if (hebrew) "לא ניתן לטעון את הטקסט." else "The text could not be loaded.") }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+        title = { Text(if (hebrew) task.referenceHebrew.ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when (val value = state) {
+                    WebTextState.Loading -> {
+                        CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                        Text(if (hebrew) "הטקסט נטען…" else "Loading text…", modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                    is WebTextState.Error -> {
+                        Text(if (hebrew) "לא ניתן לטעון את הטקסט." else "The text could not be loaded.", color = MaterialTheme.colorScheme.error)
+                        Text(value.message, fontSize = 13.sp, color = MutedInk)
+                    }
+                    is WebTextState.Ready -> {
+                        val content = value.content
+                        if (sefarimLanguage != "ENGLISH") content.hebrew?.let { version ->
+                            Text(content.hebrewReference.ifBlank { task.referenceHebrew }, fontWeight = FontWeight.Bold, color = DeepBlue)
+                            Text(version.segments.joinToString("\n\n"), fontSize = 17.sp)
+                            Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
+                        }
+                        if (sefarimLanguage != "HEBREW") content.english?.let { version ->
+                            Text(content.reference.ifBlank { task.referenceEnglish }, fontWeight = FontWeight.Bold, color = DeepBlue)
+                            Text(version.segments.joinToString("\n\n"), fontSize = 16.sp)
+                            Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
+                        }
+                        Text(
+                            if (value.fromCache) {
+                                if (hebrew) "נטען מהמטמון המקומי. הטקסט באדיבות ספריא." else "Loaded from this device’s cache. Text provided by Sefaria."
+                            } else {
+                                if (hebrew) "הטקסט באדיבות ספריא. רק מראה מקום זה נשלח; מהדורות ברישיון מתאים נשמרות לקריאה ללא חיבור." else "Text provided by Sefaria. Only this reference was sent; eligible licensed editions are cached for offline reading."
+                            },
+                            fontSize = 12.sp,
+                            color = MutedInk,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+    )
+}
+
+@Composable
+private fun WebPeleYoetzTextDialog(
+    task: StoredTask,
+    reference: PeleYoetzReference,
+    hebrew: Boolean,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(reference.day) { mutableStateOf<String?>(null) }
+    var error by remember(reference.day) { mutableStateOf(false) }
+    LaunchedEffect(reference.day) {
+        runCatching {
+            Json.decodeFromString<List<String>>(
+                Res.readBytes("files/pele_yoetz_schedule.json").decodeToString(),
+            ).also { require(it.size == 499) }[reference.day - 1]
+        }.onSuccess { text = it }.onFailure { error = true }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+        title = { Text(if (hebrew) task.referenceHebrew.ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when {
+                    error -> Text(
+                        if (hebrew) "הטקסט ליום זה חסר מן המסמך המצורף." else "This day's text is missing from the bundled schedule document.",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    text == null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                    else -> {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            Text(text.orEmpty(), fontSize = 17.sp, modifier = Modifier.fillMaxWidth())
+                        }
+                        Text(
+                            if (hebrew) "מקור: מסמך לוח חזק המצורף." else "Source: the supplied Hachzek schedule document.",
+                            fontSize = 12.sp,
+                            color = MutedInk,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+    )
 }
 
 private fun todaySectionLabel(section: WebTodaySection, hebrew: Boolean): String = when (section) {
@@ -1317,6 +1491,7 @@ private fun CalendarScreen(
     today: String,
     hebrew: Boolean,
     onToggle: (String) -> Unit,
+    onRead: (StoredTask, String?) -> Unit,
     hebrewDateLabel: (String) -> String,
     hebrewDayLabel: (String) -> String,
     hebrewCalendarPeriod: (String) -> WebCalendarPeriod,
@@ -1363,7 +1538,6 @@ private fun CalendarScreen(
                 (taskFilter == CalendarTaskFilter.LEARNING && it.type == LearningTaskType.LEARNING.name) ||
                 (taskFilter == CalendarTaskFilter.CHAZARAH && it.type == LearningTaskType.CHAZARAH.name)
         }
-        .map { it.domain() }
         .toList()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
@@ -1506,6 +1680,7 @@ private fun CalendarScreen(
                         hebrew = hebrew,
                         sefarimLanguage = state.sefarimLanguage,
                         onToggle = onToggle,
+                        onRead = { task -> onRead(task, schedule.presetId) },
                     )
                 }
             }

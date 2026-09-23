@@ -1,50 +1,39 @@
-# Account sync rollout
+# Account sync releases
 
-Incremental account sync must be rolled out in this order. The web gate in
-`webApp/src/wasmJsMain/resources/supabase-config.js` stays off until the Android
-device checks below are complete.
+Android and web use incremental entity sync. The legacy `learning_snapshots`
+table and `sync_learning_snapshot` RPC are retired and intentionally inaccessible
+to signed-in clients. Do not restore their grants to work around a client error;
+update the client instead.
 
-## Phase 1 — preserve the legacy snapshot
+Android entity sync is unconditional as of version 0.1.11 (version code 12).
+There is no Android `entitySyncEnabled` build flag. The web production
+configuration enables entity sync in `webApp/src/wasmJsMain/resources/supabase-config.js`.
 
-1. On every Android installation that is signed in, open the currently installed
-   app and run **Sync now** while it still uses legacy snapshot sync.
-2. Resolve any displayed snapshot conflict deliberately. Export a local backup
-   from the Android app and the web app before proceeding.
-3. Stop using older Android installations after this point. They cannot read or
-   write the incremental entity store and would diverge from upgraded clients.
+## Updating an Android test installation
 
-## Phase 2 — install and seed Android
+1. Build an APK with a higher `versionCode` and the same signing certificate as
+   the installed app. The GitHub test releases use the local debug certificate.
+2. Install it over the existing app. Do not uninstall or clear app data: local
+   schedules, tasks, and completion history are stored on the device.
+3. Confirm the local data is visible, sign in, and tap **Sync now**.
+4. Sign in to the same account on the web app and sync there. Check a few
+   schedules and completed tasks before editing on both devices.
 
-1. Install version 0.1.7 (version code 8) with entity sync enabled over the existing app. Do not uninstall
-   or clear app data; either action would remove the device's offline data.
-2. Confirm the package installs as an update. A signature mismatch means the APK
-   was not signed with the same key as the installed build; stop rather than
-   uninstalling the existing app.
-3. Open the upgraded app, confirm the schedules and completion history are intact,
-   and run **Sync now**. This first incremental sync seeds the empty entity store.
-4. Make one harmless, reversible change (for example, complete then undo a task),
-   sync again, and confirm the app reports success.
-
-## Phase 3 — activate and verify web
-
-1. Only after every Android installation is on version code 8 or newer with entity sync enabled, set the
-   web `entitySyncEnabled` gate to `true`, build, and publish the private Site.
-2. Open the web app, sign in to the same account, and run **Sync now**. Confirm the
-   schedules, task history, and preferences match Android before editing anything.
-3. Change one reversible item on Android, sync both clients, and confirm it reaches
-   web. Then change it on web, sync both clients, and confirm it reaches Android.
-4. Keep the legacy snapshot table and RPC in place during the rollback window.
-   If verification fails, turn the web gate off and stop incremental edits while
-   investigating; do not ask an old Android build to reconcile the entity store.
+The app keeps local data when a sync request fails. Investigate the displayed
+error before retrying; the web and Android clients must both use the current
+entity API.
 
 ## Release build
 
-The final APK must be signed with the existing release key:
+For a signed release, configure the signing properties described in
+`docs/RELEASE.md` and run:
 
 ```powershell
-.\scripts\build-release.ps1 -EntitySyncEnabled -VerifyReproducible
+.\scripts\build-release.ps1 -VerifyReproducible
 ```
 
-For an installation-compatible test build signed by the local Android debug key,
-build with `-PentitySyncEnabled=true`. Only use it to update installations that
-were originally installed with that same debug key.
+For an installation-compatible test APK signed by the local Android debug key:
+
+```powershell
+.\gradlew.bat clean testDebugUnitTest assembleDebug
+```

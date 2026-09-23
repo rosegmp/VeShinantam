@@ -96,6 +96,8 @@ interface ScheduleDao {
           tasks.type AS type,
           tasks.labelEnglish AS labelEnglish,
           tasks.labelHebrew AS labelHebrew,
+          tasks.materialType AS materialType,
+          schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
           tasks.completedAt AS completedAt
         FROM tasks
@@ -123,6 +125,8 @@ interface ScheduleDao {
           tasks.type AS type,
           tasks.labelEnglish AS labelEnglish,
           tasks.labelHebrew AS labelHebrew,
+          tasks.materialType AS materialType,
+          schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
           tasks.completedAt AS completedAt
         FROM tasks
@@ -144,6 +148,8 @@ interface ScheduleDao {
           tasks.type AS type,
           tasks.labelEnglish AS labelEnglish,
           tasks.labelHebrew AS labelHebrew,
+          tasks.materialType AS materialType,
+          schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
           tasks.completedAt AS completedAt
         FROM tasks

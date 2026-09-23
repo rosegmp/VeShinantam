@@ -22,7 +22,7 @@ class PresetCatalogTest {
                 "Chullin 133", "Yevamos 105a", "Yoma 69a", "Kelim 30:2", "Mishnah Berurah, chelek 5 page 7a",
                 "Yerushalmi Shevuos 15", "Yerushalmi Yevamos 33", "Rambam, Other Sources of Defilement 9",
                 "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134",
-                "Pele Yoetz, Day 103",
+                "Pele Yoetz, Volume 2, Day 357, Ot Tet - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.",
                 "Kitzur Shulchan Aruch 133:1-8",
             ),
             PresetCatalog.programs.map { it.currentReference.english },
@@ -151,11 +151,33 @@ class PresetCatalogTest {
         assertEquals("Tehillim 140-150", tehillim.units.last().english)
         assertEquals("תהילים קכ–קלד", tehillim.currentReference.hebrew)
         assertEquals(1, peleYoetz.dailyQuantity)
-        assertEquals(245, peleYoetz.units.size)
-        assertEquals("פלא יועץ, יום קג", peleYoetz.currentReference.hebrew)
-        assertEquals(java.time.LocalDate.of(2026, 5, 12), PresetCatalog.scheduledDate(peleYoetz, 0))
-        assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.scheduledDate(peleYoetz, 102))
+        assertEquals(499, peleYoetz.units.size)
+        assertEquals(
+            "פלא יועץ, חלק ב, יום שנז, אות ט - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.",
+            peleYoetz.currentReference.hebrew,
+        )
+        assertEquals(
+            "Pele Yoetz, Volume 1, Day 1, Ot Alef - אהבה להקדוש ברוך הוא - אהבה להקדוש ברוך הוא אין מדה טובה",
+            peleYoetz.units.first().english,
+        )
+        assertEquals(
+            "Pele Yoetz, Volume 2, Day 255, Ot Vav - אות ו: ותרנות - ותרנות היא מדה טובה, כשהוא ותרן בממונו לדבר",
+            peleYoetz.units[254].english,
+        )
+        assertEquals(
+            "Pele Yoetz, Volume 2, Day 499, Ot Kaf - [כח] יגדל נא כח ה' כאשר ירגיל אדם עצמו ללמד את הדברים",
+            peleYoetz.units.last().english,
+        )
+        assertTrue(peleYoetz.units.none { "page" in it.english.lowercase() })
+        assertEquals(java.time.LocalDate.of(2025, 7, 4), PresetCatalog.scheduledDate(peleYoetz, 0))
+        assertEquals(java.time.LocalDate.of(2026, 5, 12), PresetCatalog.scheduledDate(peleYoetz, 254))
+        assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.scheduledDate(peleYoetz, 356))
+        assertTrue(
+            PresetCatalog.programAtDate(peleYoetz, java.time.LocalDate.of(2026, 9, 22))
+                .currentReference.english.startsWith("Pele Yoetz, Volume 2, Day 365, Ot Tet - "),
+        )
         assertTrue(java.time.DayOfWeek.SATURDAY !in peleYoetz.selectedWeekdays)
+        assertTrue(java.time.LocalDate.of(2025, 9, 23) in peleYoetz.excludedDates)
         assertTrue(java.time.LocalDate.of(2026, 9, 21) in peleYoetz.excludedDates)
         assertEquals(354, kitzurYomi.units.size)
         assertEquals("Kitzur Shulchan Aruch 1:1-4", kitzurYomi.units.first().english)

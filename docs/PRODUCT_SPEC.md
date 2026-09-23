@@ -7,7 +7,7 @@ Package: `app.veshinantam`
 
 ## 1. Product intent
 
-VeShinantam helps one person plan Torah learning and chazarah, see exactly what is due, and mark each obligation complete. An optional account synchronizes that person's data across their devices while each device remains useful offline. The product deliberately avoids social mechanics, messaging, rankings, leader dashboards, and embedded sefer text.
+VeShinantam helps one person plan Torah learning and chazarah, see exactly what is due, and mark each obligation complete. An optional account synchronizes that person's data across their devices while each device remains useful offline. The product deliberately avoids social mechanics, messaging, rankings, and leader dashboards. Where a daily assignment maps exactly to a licensed Sefaria edition, the user may optionally open its source text in the app.
 
 Success means that the app remains dependable without a network connection, makes both today's work and future workload legible, preserves history when plans change, and works naturally in English, Hebrew, LTR, RTL, light mode, dark mode, large text, and TalkBack.
 
@@ -16,7 +16,7 @@ Success means that the app remains dependable without a network connection, make
 1. **The plan is trustworthy.** Dates are deterministic, based on local calendar dates rather than elapsed hours. A new task day begins at local midnight and uses the phone's current time zone.
 2. **Every obligation is explicit.** New learning and every chazarah occurrence are separate tasks with their own completion state. There is no bulk-complete action.
 3. **History does not move.** Completed tasks remain unchanged when a schedule is edited. Only unfinished future work is regenerated.
-4. **Offline is normal.** Creation, planning, completion, history, reminders, widgets, PDF generation, backup, and restore use on-device data. Network access is optional and used for account sync and preset-data updates.
+4. **Offline is normal.** Creation, planning, completion, history, reminders, widgets, PDF generation, backup, and restore use on-device data. Network access is optional and used for account sync, preset-data updates, and an explicitly opened Sefaria passage; previously cached license-permitted passages remain readable offline.
 5. **Structured Torah references remain bilingual.** Preset and structured references supplied by the app show English and Hebrew together. User-entered schedule names and custom unit labels are single-field values entered in either language and displayed verbatim.
 6. **Calm, native presentation.** Material 3 behavior and accessibility come first. Deep blue and restrained warm-gold details provide identity without ornament competing with the work.
 
@@ -35,7 +35,7 @@ An individual maintaining one or more parallel learning programs, who may join a
 - Shared/family accounts, collaboration, or social synchronization
 - Groups, leaderboards, rankings, messaging, social sharing
 - Notes, recall ratings, partial credit, elapsed-time tracking
-- Actual Gemara, Mishnah, halachah, or other sefer text
+- Bundled or bulk-downloaded sefer libraries; unlicensed editions; imprecisely mapped source text
 - CSV or multiline bulk import
 - Readable progress-report export
 - Heavy-workload warnings
@@ -119,7 +119,17 @@ Custom schedules support either:
 1. A predefined ordered list of units entered one at a time, or
 2. A daily quantity whose generated tasks receive manually entered labels.
 
-The first bundled preset catalog contains Daf Yomi Bavli, Oraysa, Amud Yomi, Mishnah Yomis, and Dirshu Mishnah Berurah. A preset normally starts at the current worldwide position; the user may select any earlier position to catch up. Presets contain references and cycle metadata only, never sefer text.
+The first bundled preset catalog contains Daf Yomi Bavli, Oraysa, Amud Yomi, Mishnah Yomis, and Dirshu Mishnah Berurah. A preset normally starts at the current worldwide position; the user may select any earlier position to catch up. Presets contain references and cycle metadata only. Supported references may be resolved on demand against Sefaria; fetched text is not part of the preset catalog.
+
+### Optional source-text reader
+
+- Today and Calendar tasks expose a reader action when the assignment can be mapped to a precise Sefaria reference.
+- The reader requests only the selected reference, not schedules, completion history, account data, or other progress.
+- Hebrew and English rendering follows the sefarim-display preference. Missing translations are handled without hiding an available Hebrew edition.
+- Version titles and licenses are displayed with the passage. A response is cached locally only when every returned edition has a public-domain or compatible Creative Commons license.
+- Unsupported proprietary editions and references that cannot be mapped safely show an unavailable explanation rather than substituting a nearby passage.
+- Third-party scan libraries are used only within their published terms. HebrewBooks publications may be manually curated and distributed free for personal or educational use when their attribution notices are preserved and the complete required limited license accompanies every copy; the app does not scrape or automate downloads from HebrewBooks.
+- On Android, a page-based Mishnah Berurah assignment may use a PDF that the user downloaded manually and selects through the system document picker. The app retains read access to the original file, renders it without alteration, uploads nothing, and stores a per-chelek page-alignment anchor so subsequent daf/amud assignments resolve locally.
 
 Custom creation begins with a sefer category: Gemara, Mishnah, Mishnah Berurah, Kitzur Shulchan Aruch, or Other. Gemara and Mishnah use ordered From and To masechta selectors rather than independent multi-selection. Their start and end units are selected from pre-populated lists valid for the corresponding masechtos; Gemara chooses daf or amud, while Mishnah chooses individual mishnayos or whole perakim. Mishnah Berurah requires a chelek, then page, seif, or siman units selected from unit-specific pre-populated lists: printed pagination for Page, actual seif entries grouped by siman for Seif, and the chelek's siman range for Siman. Kitzur uses pre-populated siman lists. Other retains one-at-a-time manual unit labels.
 

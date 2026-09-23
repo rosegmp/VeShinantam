@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.veshinantam.data.ScheduleRepository
 import app.veshinantam.data.local.TodayTaskRow
 import app.veshinantam.domain.model.TaskType
+import app.veshinantam.domain.model.MaterialType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,6 +30,8 @@ data class TodayTaskUi(
     val plannedDate: LocalDate,
     val section: TodaySection,
     val isCompleted: Boolean,
+    val materialType: MaterialType = MaterialType.CUSTOM_UNIT,
+    val presetId: String? = null,
 )
 
 data class TodayScheduleUi(
@@ -120,6 +123,8 @@ internal fun mapTodayRows(rows: List<TodayTaskRow>, today: LocalDate): List<Toda
                                 else -> TodaySection.OVERDUE_CHAZARAH
                             },
                             isCompleted = row.completedAt != null,
+                            materialType = row.materialType,
+                            presetId = row.presetId,
                         )
                     }.sortedWith(compareBy<TodayTaskUi>({ it.section.ordinal }, { it.plannedDate }, { it.id })),
                 )

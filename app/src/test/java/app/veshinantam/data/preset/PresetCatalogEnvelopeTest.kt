@@ -24,7 +24,7 @@ class PresetCatalogEnvelopeTest {
         val positions = PresetCatalog.programs.associate { program ->
             program.id to program.units[(program.currentIndex + 1).coerceAtMost(program.units.lastIndex)].english
         }
-        val envelope = signedEnvelope(keyPair, 9, "2026.09.11-9", LocalDate.parse("2026-09-11"), positions)
+        val envelope = signedEnvelope(keyPair, 11, "2026.09.22-11", LocalDate.parse("2026-09-22"), positions)
 
         val verified = PresetCatalogEnvelope.verifyAndDecode(
             envelope,
@@ -32,9 +32,9 @@ class PresetCatalogEnvelopeTest {
         )
         PresetCatalog.applyVerifiedUpdate(verified.version, verified.sequence, verified.positionAsOf, verified.currentReferences)
 
-        assertEquals(9, PresetCatalog.activeSequence)
-        assertEquals("2026.09.11-9", PresetCatalog.VERSION)
-        assertEquals(LocalDate.parse("2026-09-11"), PresetCatalog.positionAsOf)
+        assertEquals(11, PresetCatalog.activeSequence)
+        assertEquals("2026.09.22-11", PresetCatalog.VERSION)
+        assertEquals(LocalDate.parse("2026-09-22"), PresetCatalog.positionAsOf)
         assertEquals(positions, PresetCatalog.programs.associate { it.id to it.currentReference.english })
     }
 
@@ -58,19 +58,19 @@ class PresetCatalogEnvelopeTest {
         val positions = PresetCatalog.programs.dropLast(1).associate { it.id to it.currentReference.english }
 
         assertThrows(IllegalArgumentException::class.java) {
-            PresetCatalog.validateVerifiedUpdate("version-9", 9, LocalDate.parse("2026-09-11"), positions)
+            PresetCatalog.validateVerifiedUpdate("version-10", 10, LocalDate.parse("2026-09-22"), positions)
         }
     }
 
     @Test
     fun `catalog sequence cannot roll back active data`() {
         val positions = PresetCatalog.programs.associate { it.id to it.currentReference.english }
-        PresetCatalog.applyVerifiedUpdate("version-9", 9, LocalDate.parse("2026-09-11"), positions)
+        PresetCatalog.applyVerifiedUpdate("version-11", 11, LocalDate.parse("2026-09-22"), positions)
 
         assertThrows(IllegalArgumentException::class.java) {
-            PresetCatalog.applyVerifiedUpdate("older", 8, LocalDate.parse("2026-09-10"), positions)
+            PresetCatalog.applyVerifiedUpdate("older", 10, LocalDate.parse("2026-09-10"), positions)
         }
-        assertEquals(9, PresetCatalog.activeSequence)
+        assertEquals(11, PresetCatalog.activeSequence)
     }
 
     private fun signedEnvelope(

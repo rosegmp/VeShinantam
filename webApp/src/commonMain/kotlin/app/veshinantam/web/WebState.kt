@@ -3,6 +3,7 @@ package app.veshinantam.web
 import app.veshinantam.shared.LearningSchedule
 import app.veshinantam.shared.LearningTask
 import app.veshinantam.shared.LearningTaskType
+import app.veshinantam.shared.text.SefariaTextRequest
 import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.GregorianCalendar
 import app.veshinantam.shared.CanonicalDataSet
@@ -875,6 +876,9 @@ interface BrowserStore {
     fun requestReminderPermission()
     fun updateBrowserReminder(state: WebAppState, today: String)
     fun refreshPresetCatalog()
+    fun readCachedText(cacheKey: String): String?
+    fun cacheText(cacheKey: String, raw: String)
+    suspend fun fetchSefariaText(request: SefariaTextRequest): String
 }
 
 @Serializable

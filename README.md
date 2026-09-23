@@ -21,6 +21,8 @@ The web app is deployed automatically from `main` to [GitHub Pages](https://rose
 - English and Hebrew resources with RTL support
 - Persistent in-app English/Hebrew interface switching with immediate RTL/LTR refresh, also applied to widgets and notifications
 - An independent English, Hebrew, or bilingual sefarim-display preference used for learning references across Today, Calendar, material selectors, and the widget; schedule names remain single-language
+- An optional in-app reader for precisely mapped daily assignments, loading licensed Hebrew and English editions from Sefaria on demand and retaining only license-permitted passages in a small device-local cache
+- Android page-based Mishnah Berurah assignments can open a user-selected HebrewBooks PDF locally; each chelek is calibrated once to its printed daf/amud sequence, while automated access to or downloads from HebrewBooks remain excluded by its terms
 - Hebrew sefer references use Hebrew-letter numbering, including daf/amud notation such as `ברכות דף ב.`
 - Consistent Ashkenazi transliteration in user-facing English references
 - Room-backed Today tasks grouped into expandable sections, with past tasks completed today separated from overdue work
@@ -63,6 +65,7 @@ See `docs/RELEASE.md` for release-key setup, signed builds, verification, and pr
 
 - `app/src/main/java/app/veshinantam/domain` — deterministic domain model and scheduling rules
 - `app/src/main/java/app/veshinantam/data` — offline Room foundation
+- `shared/src/commonMain/kotlin/app/veshinantam/shared/text` — shared Sefaria reference mapping, response parsing, and cache-license policy
 - `app/src/main/java/app/veshinantam/ui` — Compose app shell and theme
 - `app/src/main/java/app/veshinantam/notifications` — persisted daily reminder settings, scheduling, and aggregate notifications
 - `app/src/test` — pure JVM scheduling tests

@@ -7,6 +7,8 @@ import app.veshinantam.shared.CanonicalDataCodec
 import kotlinx.browser.document
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import app.veshinantam.shared.text.SefariaTextRequest
+import kotlinx.coroutines.delay
 import kotlin.js.ExperimentalWasmJsInterop
 
 private const val PendingImportKey = "veshinantam.web.pending-import"
@@ -109,6 +111,22 @@ private class LocalBrowserStore : BrowserStore {
 
     override fun refreshPresetCatalog() = reloadForPresetCatalog()
 
+    override fun readCachedText(cacheKey: String): String? = readSefariaCache(cacheKey)
+
+    override fun cacheText(cacheKey: String, raw: String) = writeSefariaCache(cacheKey, raw)
+
+    override suspend fun fetchSefariaText(request: SefariaTextRequest): String {
+        beginSefariaRequest(request.cacheKey, request.reference, request.versions.joinToString("\n"))
+        repeat(150) {
+            when (sefariaRequestStatus(request.cacheKey)) {
+                "ready" -> return requireNotNull(sefariaRequestBody(request.cacheKey))
+                "error" -> error(sefariaRequestError(request.cacheKey) ?: "The text could not be loaded.")
+            }
+            delay(200)
+        }
+        error("The text request timed out.")
+    }
+
     private fun printDateLabel(date: String, state: WebAppState): String {
         val gregorian = formatGregorianDate(date, state.language == "he")
         val hebrew = formatHebrewDate(date, state.language == "he")
@@ -167,6 +185,30 @@ private external fun readSessionStorage(key: String): String?
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(key) => window.sessionStorage.removeItem(key)")
 private external fun removeSessionStorage(key: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key) => window.veshinantamReadSefariaCache(key)")
+private external fun readSefariaCache(key: String): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key, raw) => window.veshinantamWriteSefariaCache(key, raw)")
+private external fun writeSefariaCache(key: String, raw: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key, reference, versions) => window.veshinantamBeginSefariaRequest(key, reference, versions)")
+private external fun beginSefariaRequest(key: String, reference: String, versions: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key) => window.veshinantamSefariaRequestStatus(key)")
+private external fun sefariaRequestStatus(key: String): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key) => window.veshinantamSefariaRequestBody(key)")
+private external fun sefariaRequestBody(key: String): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key) => window.veshinantamSefariaRequestError(key)")
+private external fun sefariaRequestError(key: String): String?
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(filename, text) => {

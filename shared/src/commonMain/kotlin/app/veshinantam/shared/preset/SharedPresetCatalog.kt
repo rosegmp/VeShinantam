@@ -20,8 +20,8 @@ data class SharedPresetProgram(
 
 /** Platform-neutral, reference-only catalog shared by Android and the web app. */
 object SharedPresetCatalog {
-    const val VERSION = "2026.09.10-8"
-    const val SEQUENCE = 8L
+    const val VERSION = "2026.09.22-10"
+    const val SEQUENCE = 10L
     val positionAsOf = IsoDate(2026, 9, 10)
 
     private val everyDay = (0..6).toSet()
@@ -78,12 +78,16 @@ object SharedPresetCatalog {
         IsoDate(2030, 8, 8), IsoDate(2030, 10, 7),
         IsoDate(2031, 7, 29), IsoDate(2031, 9, 27),
     )
-    private val hachzekPeleYoetzUnits by lazy {
-        (1..245).map { day ->
-            UnitReference("Pele Yoetz, Day $day", "פלא יועץ, יום ${PresetHebrewNumerals.format(day)}")
-        }
-    }
+    private val hachzekPeleYoetzUnits by lazy { PeleYoetzSchedule.units }
     private val hachzekPeleYoetzReviewDates = setOf(
+        IsoDate(2025, 8, 3),
+        IsoDate(2025, 9, 23), IsoDate(2025, 9, 24),
+        IsoDate(2025, 10, 2),
+        IsoDate(2025, 10, 7), IsoDate(2025, 10, 8),
+        IsoDate(2025, 10, 14), IsoDate(2025, 10, 15),
+        IsoDate(2026, 3, 3),
+        IsoDate(2026, 4, 2), IsoDate(2026, 4, 3),
+        IsoDate(2026, 4, 8), IsoDate(2026, 4, 9),
         IsoDate(2026, 5, 22),
         IsoDate(2026, 7, 23),
         IsoDate(2026, 9, 13),
@@ -125,7 +129,7 @@ object SharedPresetCatalog {
             ),
             program(
                 "hachzek-pele-yoetz", "Hachzek Pele Yoetz", "חזק פלא יועץ", CanonicalMaterialType.CUSTOM_UNIT, 1,
-                sundayThroughFriday, hachzekPeleYoetzUnits, "Pele Yoetz, Day 103", hachzekPeleYoetzReviewDates,
+                sundayThroughFriday, hachzekPeleYoetzUnits, hachzekPeleYoetzUnits[254 + 102].english, hachzekPeleYoetzReviewDates,
             ),
             program(
                 "kitzur-yomi", "Kitzur Shulchan Aruch Yomi", "קיצור שולחן ערוך יומי", CanonicalMaterialType.CUSTOM_UNIT, 1,

@@ -1,10 +1,13 @@
 package app.veshinantam.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,6 +41,11 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Today
@@ -65,6 +76,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TextButton
@@ -78,6 +90,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -85,11 +98,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -101,6 +120,9 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -128,6 +150,15 @@ import app.veshinantam.data.local.ScheduleEntity
 import app.veshinantam.data.local.ScheduleExclusionEntity
 import app.veshinantam.data.local.TodayTaskRow
 import app.veshinantam.data.sync.AccountSyncState
+import app.veshinantam.data.text.SefariaTextRepository
+import app.veshinantam.data.text.SefariaTextResult
+import app.veshinantam.data.text.MishnahBerurahPageReference
+import app.veshinantam.data.text.MishnahBerurahScanConfig
+import app.veshinantam.data.text.MishnahBerurahScanRepository
+import app.veshinantam.data.text.PeleYoetzScanRepository
+import app.veshinantam.data.text.PeleYoetzDocumentRepository
+import app.veshinantam.data.text.PeleYoetzVolumeReference
+import app.veshinantam.data.text.RenderedPdfPage
 import app.veshinantam.domain.model.ChazarahPattern
 import app.veshinantam.domain.model.ChazarahDefaults
 import app.veshinantam.domain.model.MissedWorkBehavior
@@ -144,6 +175,8 @@ import app.veshinantam.domain.material.SeferChoice
 import app.veshinantam.domain.material.UnitReference
 import app.veshinantam.domain.material.PresetCatalog
 import app.veshinantam.shared.preset.SharedPresetCatalog
+import app.veshinantam.shared.text.SefariaReferenceMapper
+import app.veshinantam.shared.text.SefariaTextLookup
 import app.veshinantam.domain.material.PresetProgram
 import app.veshinantam.localization.AppLanguage
 import app.veshinantam.localization.BidiText
@@ -187,6 +220,7 @@ import java.time.ZoneOffset
 import java.time.format.TextStyle
 import java.util.Locale
 import java.text.NumberFormat
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -212,6 +246,7 @@ private val LocalDefaultChazarahOffsets = staticCompositionLocalOf { ChazarahDef
 @Composable
 fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
     val context = LocalContext.current
+    val activityResultRegistryOwner = checkNotNull(LocalActivityResultRegistryOwner.current)
     var destination by remember { mutableStateOf(Destination.TODAY) }
     val reminderSettings = remember(context) { ReminderSettings(context.applicationContext) }
     val languageSettings = remember(context) { LanguageSettings(context.applicationContext) }
@@ -313,6 +348,7 @@ fun VeShinantamApp(openTodayRequest: Int = 0, openAccountRequest: Int = 0) {
         LocalContext provides localizedContext,
         LocalConfiguration provides localizedContext.resources.configuration,
         LocalResources provides localizedContext.resources,
+        LocalActivityResultRegistryOwner provides activityResultRegistryOwner,
     ) {
         if (showFirstLaunch) {
             FirstLaunchWelcome(
@@ -1338,6 +1374,7 @@ private fun CalendarRoute(modifier: Modifier = Modifier) {
     var scheduleFilter by remember { mutableStateOf<String?>(null) }
     var typeFilter by remember { mutableStateOf<TaskType?>(null) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var readerTask by remember { mutableStateOf<TodayTaskUi?>(null) }
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val resources = LocalContext.current.resources
     LaunchedEffect(period) { calendarViewModel.showRange(period.start, period.endInclusive) }
@@ -1503,13 +1540,35 @@ private fun CalendarRoute(modifier: Modifier = Modifier) {
         }
         if (selectedTasks.isEmpty()) item { MessageCard(R.string.no_tasks_selected_day) }
         items(selectedTasks, key = { it.taskId }) { task ->
-            CalendarTaskCard(task, locale) { checked -> calendarViewModel.setCompleted(task.taskId, checked) }
+            CalendarTaskCard(
+                task = task,
+                locale = locale,
+                onCheckedChange = { checked -> calendarViewModel.setCompleted(task.taskId, checked) },
+                onRead = {
+                    readerTask = TodayTaskUi(
+                        id = task.taskId,
+                        labelEnglish = task.labelEnglish,
+                        labelHebrew = task.labelHebrew,
+                        plannedDate = task.plannedDate,
+                        section = if (task.type == TaskType.LEARNING) TodaySection.NEW_LEARNING else TodaySection.CHAZARAH_TODAY,
+                        isCompleted = task.completedAt != null,
+                        materialType = task.materialType,
+                        presetId = task.presetId,
+                    )
+                },
+            )
         }
     }
+    readerTask?.let { task -> SefariaTextDialog(task, locale, onDismiss = { readerTask = null }) }
 }
 
 @Composable
-private fun CalendarTaskCard(task: TodayTaskRow, locale: Locale, onCheckedChange: (Boolean) -> Unit) {
+private fun CalendarTaskCard(
+    task: TodayTaskRow,
+    locale: Locale,
+    onCheckedChange: (Boolean) -> Unit,
+    onRead: () -> Unit,
+) {
     val reference = referenceLabel(task.labelEnglish, task.labelHebrew, locale)
     val schedule = localizedName(task.scheduleNameEnglish, task.scheduleNameHebrew, locale)
     val type = stringResource(if (task.type == TaskType.LEARNING) R.string.new_learning else R.string.chazarah)
@@ -1529,6 +1588,9 @@ private fun CalendarTaskCard(task: TodayTaskRow, locale: Locale, onCheckedChange
             Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                 Text(reference, style = MaterialTheme.typography.bodyLarge)
                 Text("$schedule • $type", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onRead) {
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = stringResource(R.string.read_text))
             }
         }
     }
@@ -3264,6 +3326,7 @@ private fun TodayScreen(
     var sortOrder by remember { mutableStateOf(displaySettings.readSortOrder()) }
     val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
     val expandedSchedules = remember { mutableStateMapOf<String, Boolean>() }
+    var readerTask by remember { mutableStateOf<TodayTaskUi?>(null) }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -3319,7 +3382,12 @@ private fun TodayScreen(
                         }
                         if (expanded) {
                             items(tasks, key = { it.id }) { task ->
-                                TaskRow(task, locale) { checked -> onCheckedChange(task.id, checked) }
+                                TaskRow(
+                                    task = task,
+                                    locale = locale,
+                                    onCheckedChange = { checked -> onCheckedChange(task.id, checked) },
+                                    onRead = { readerTask = task },
+                                )
                             }
                         }
                     }
@@ -3327,6 +3395,9 @@ private fun TodayScreen(
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+    readerTask?.let { task ->
+        SefariaTextDialog(task = task, locale = locale, onDismiss = { readerTask = null })
     }
 }
 
@@ -3392,7 +3463,12 @@ private fun SectionHeader(section: TodaySection, taskCount: Int, expanded: Boole
 }
 
 @Composable
-private fun TaskRow(task: TodayTaskUi, locale: Locale, onCheckedChange: (Boolean) -> Unit) {
+private fun TaskRow(
+    task: TodayTaskUi,
+    locale: Locale,
+    onCheckedChange: (Boolean) -> Unit,
+    onRead: () -> Unit,
+) {
     val reference = referenceLabel(task.labelEnglish, task.labelHebrew, locale)
     val section = stringResource(task.section.stringResource)
     val dueDate = displayDate(task.plannedDate, LocalPrimaryCalendar.current, locale)
@@ -3420,6 +3496,504 @@ private fun TaskRow(task: TodayTaskUi, locale: Locale, onCheckedChange: (Boolean
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
+                }
+            }
+            IconButton(onClick = onRead) {
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = stringResource(R.string.read_text))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SefariaTextDialog(task: TodayTaskUi, locale: Locale, onDismiss: () -> Unit) {
+    val hebrewUi = AppLanguage.fromTag(locale.language) == AppLanguage.HEBREW
+    val mishnahBerurahPage = remember(task.labelEnglish) { MishnahBerurahPageReference.parse(task.labelEnglish) }
+    if (mishnahBerurahPage != null) {
+        MishnahBerurahScanDialog(task, mishnahBerurahPage, locale, onDismiss)
+        return
+    }
+    val lookup = remember(task.id) {
+        SefariaReferenceMapper.lookup(task.labelEnglish, task.materialType.name, task.presetId)
+    }
+    if (lookup is SefariaTextLookup.Unavailable) {
+        val peleYoetz = PeleYoetzVolumeReference.parse(task.labelEnglish)
+        if (peleYoetz != null) {
+            PeleYoetzDocumentDialog(task, peleYoetz, locale, onDismiss)
+            return
+        }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+            title = { Text(stringResource(R.string.text_unavailable)) },
+            text = { Text(if (hebrewUi) lookup.messageHebrew else lookup.messageEnglish) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+        )
+        return
+    }
+
+    val request = (lookup as SefariaTextLookup.Available).request
+    val context = LocalContext.current
+    val repository = remember(context) { SefariaTextRepository(context.applicationContext) }
+    var result by remember(request.cacheKey) { mutableStateOf<SefariaTextResult?>(null) }
+    LaunchedEffect(request.cacheKey) { result = repository.load(request) }
+    val sefarimLanguage = LocalSefarimLanguage.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when (val value = result) {
+                    null -> {
+                        CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                        Text(stringResource(R.string.loading_text), modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                    is SefariaTextResult.Error -> {
+                        Text(stringResource(R.string.text_load_failed), color = MaterialTheme.colorScheme.error)
+                        Text(value.message, style = MaterialTheme.typography.bodySmall)
+                    }
+                    is SefariaTextResult.Ready -> {
+                        val content = value.content
+                        if (sefarimLanguage != SefarimLanguage.ENGLISH) content.hebrew?.let { version ->
+                            Text(content.hebrewReference.ifBlank { task.labelHebrew }, fontWeight = FontWeight.Bold)
+                            version.segments.forEach { segment ->
+                                Text(segment, style = MaterialTheme.typography.bodyLarge)
+                            }
+                            Text("${version.title} · ${version.license}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (sefarimLanguage != SefarimLanguage.HEBREW) content.english?.let { version ->
+                            Text(content.reference.ifBlank { task.labelEnglish }, fontWeight = FontWeight.Bold)
+                            version.segments.forEach { segment ->
+                                Text(segment, style = MaterialTheme.typography.bodyLarge)
+                            }
+                            Text("${version.title} · ${version.license}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            stringResource(if (value.fromCache) R.string.text_cached_offline else R.string.text_provided_by_sefaria),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
+}
+
+@Composable
+private fun PeleYoetzDocumentDialog(
+    task: TodayTaskUi,
+    reference: PeleYoetzVolumeReference,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val repository = remember(context) { PeleYoetzDocumentRepository(context.applicationContext) }
+    val text = remember(reference.day) { repository.read(reference.day) }
+    val hebrewUi = AppLanguage.fromTag(locale.language) == AppLanguage.HEBREW
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                if (text == null) {
+                    Text(
+                        if (hebrewUi) "הטקסט ליום זה חסר מן המסמך המצורף." else "This day's text is missing from the bundled schedule document.",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text(text, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl))
+                    Text(
+                        if (hebrewUi) "מקור: מסמך לוח חזק המצורף." else "Source: the supplied Hachzek schedule document.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
+}
+
+@Composable
+private fun PeleYoetzPdfUnavailableDialog(
+    task: TodayTaskUi,
+    reference: PeleYoetzVolumeReference,
+    lookup: SefariaTextLookup.Unavailable,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val hebrewUi = AppLanguage.fromTag(locale.language) == AppLanguage.HEBREW
+    val context = LocalContext.current
+    val repository = remember(context) { PeleYoetzScanRepository(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    var config by remember(reference.volume) { mutableStateOf(repository.read(reference.volume)) }
+    var currentPage by remember(reference.volume) { mutableStateOf(0) }
+    var renderedPage by remember { mutableStateOf<RenderedPdfPage?>(null) }
+    var pageCount by remember { mutableStateOf(0) }
+    var showFullScreen by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            error = null
+            renderedPage = null
+            runCatching {
+                val attached = repository.attach(reference.volume, uri)
+                attached to repository.render(attached, 0)
+            }
+                .onSuccess { (attached, firstPage) ->
+                    currentPage = 0
+                    config = attached
+                    renderedPage = firstPage
+                    pageCount = firstPage.pageCount
+                    showFullScreen = true
+                }
+                .onFailure {
+                    error = it.message ?: context.getString(R.string.pele_yoetz_pdf_error)
+                }
+        }
+    }
+    LaunchedEffect(config, currentPage) {
+        val selected = config ?: return@LaunchedEffect
+        renderedPage = null
+        error = null
+        runCatching { repository.render(selected, currentPage) }
+            .onSuccess { page ->
+                renderedPage = page
+                pageCount = page.pageCount
+            }
+            .onFailure {
+                error = it.message ?: context.getString(R.string.pele_yoetz_pdf_error)
+            }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+        title = { Text(stringResource(R.string.text_unavailable)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(if (hebrewUi) lookup.messageHebrew else lookup.messageEnglish)
+                Text(
+                    stringResource(R.string.pele_yoetz_pdf_intro, reference.volume),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (config == null) {
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://hebrewbooks.org/")))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.open_hebrewbooks)) }
+                } else {
+                    TextButton(
+                        onClick = { importLauncher.launch(arrayOf("application/pdf")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.replace_pdf)) }
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (config == null || error != null) {
+                        importLauncher.launch(arrayOf("application/pdf"))
+                    } else {
+                        showFullScreen = true
+                    }
+                },
+                enabled = config == null || error != null || renderedPage != null,
+            ) {
+                Text(
+                    if (config == null || error != null) {
+                        stringResource(R.string.choose_pele_yoetz_pdf, reference.volume)
+                    } else {
+                        stringResource(R.string.open_full_sefer_pdf)
+                    },
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
+    if (showFullScreen) {
+        FullScreenPdfViewer(
+            title = stringResource(R.string.pele_yoetz_volume_title, reference.volume),
+            page = renderedPage,
+            pageIndex = currentPage,
+            pageCount = pageCount,
+            onPrevious = { currentPage-- },
+            onNext = { currentPage++ },
+            onDismiss = { showFullScreen = false },
+        )
+    }
+}
+
+@Composable
+private fun MishnahBerurahScanDialog(
+    task: TodayTaskUi,
+    reference: MishnahBerurahPageReference,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val repository = remember(context) { MishnahBerurahScanRepository(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    var config by remember(reference.chelek) { mutableStateOf(repository.read(reference.chelek)) }
+    var currentPage by remember(reference, config) {
+        mutableStateOf(config?.let { repository.resolvedPage(reference, it) } ?: 0)
+    }
+    var renderedPage by remember { mutableStateOf<RenderedPdfPage?>(null) }
+    var pageCount by remember { mutableStateOf(0) }
+    var showFullScreen by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            error = null
+            runCatching { repository.attach(reference.chelek, uri, reference.ordinal) }
+                .onSuccess { attached -> config = attached; currentPage = 0 }
+                .onFailure { error = it.message ?: context.getString(R.string.mishnah_berurah_pdf_error) }
+        }
+    }
+    LaunchedEffect(config, currentPage) {
+        val selected = config ?: return@LaunchedEffect
+        renderedPage = null
+        error = null
+        runCatching { repository.render(selected, currentPage) }
+            .onSuccess { page -> renderedPage = page; pageCount = page.pageCount }
+            .onFailure { error = it.message ?: context.getString(R.string.mishnah_berurah_pdf_error) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (config == null) {
+                    Text(stringResource(R.string.mishnah_berurah_import_intro))
+                    Text(
+                        stringResource(R.string.hebrewbooks_license_notice),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://hebrewbooks.org/")))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.open_hebrewbooks)) }
+                    Button(
+                        onClick = { importLauncher.launch(arrayOf("application/pdf")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.choose_mishnah_berurah_pdf, reference.chelek)) }
+                } else {
+                    renderedPage?.let { page ->
+                        Image(
+                            bitmap = page.bitmap.asImageBitmap(),
+                            contentDescription = task.labelHebrew.ifBlank { task.labelEnglish },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 450.dp)
+                                .clickable { showFullScreen = true },
+                            contentScale = ContentScale.Fit,
+                        )
+                        Text(
+                            stringResource(R.string.pdf_page_position, currentPage + 1, page.pageCount),
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconButton(onClick = { currentPage-- }, enabled = currentPage > 0) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous_page))
+                            }
+                            IconButton(onClick = { currentPage++ }, enabled = currentPage + 1 < page.pageCount) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next_page))
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { showFullScreen = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.FitScreen, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.view_pdf_full_screen))
+                        }
+                    } ?: run {
+                        if (error == null) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                    }
+                    if (config?.calibrated == false) {
+                        Text(stringResource(R.string.align_mishnah_berurah_page), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(
+                        onClick = { config = repository.saveAlignment(reference, currentPage) },
+                        enabled = renderedPage != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.use_page_for_assignment)) }
+                    TextButton(
+                        onClick = { importLauncher.launch(arrayOf("application/pdf")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.replace_pdf)) }
+                    Text(
+                        stringResource(R.string.hebrewbooks_scan_attribution),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
+    if (showFullScreen) {
+        FullScreenPdfViewer(
+            title = referenceLabel(task.labelEnglish, task.labelHebrew, locale),
+            page = renderedPage,
+            pageIndex = currentPage,
+            pageCount = pageCount,
+            onPrevious = { currentPage-- },
+            onNext = { currentPage++ },
+            onDismiss = { showFullScreen = false },
+        )
+    }
+}
+
+@Composable
+private fun FullScreenPdfViewer(
+    title: String,
+    page: RenderedPdfPage?,
+    pageIndex: Int,
+    pageCount: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
+    var offset by remember(pageIndex) { mutableStateOf(Offset.Zero) }
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+
+    fun clampOffset(value: Offset, atScale: Float): Offset {
+        if (atScale <= 1f) return Offset.Zero
+        val maxX = viewportSize.width * (atScale - 1f) / 2f
+        val maxY = viewportSize.height * (atScale - 1f) / 2f
+        return Offset(
+            x = value.x.coerceIn(-maxX, maxX),
+            y = value.y.coerceIn(-maxY, maxY),
+        )
+    }
+
+    fun setScale(nextScale: Float) {
+        scale = nextScale.coerceIn(1f, 5f)
+        offset = clampOffset(offset, scale)
+    }
+
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextScale = (scale * zoomChange).coerceIn(1f, 5f)
+        scale = nextScale
+        offset = clampOffset(offset + panChange, nextScale)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
+                    }
+                    Text(
+                        title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                    )
+                    if (pageCount > 0) {
+                        Text(
+                            stringResource(R.string.pdf_page_position, pageIndex + 1, pageCount),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clipToBounds()
+                        .onSizeChanged { viewportSize = it },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (page == null) {
+                        CircularProgressIndicator()
+                    } else {
+                        Image(
+                            bitmap = page.bitmap.asImageBitmap(),
+                            contentDescription = title,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offset.x
+                                    translationY = offset.y
+                                }
+                                .transformable(transformState),
+                        )
+                    }
+                }
+                Text(
+                    stringResource(R.string.pdf_zoom_hint),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onPrevious, enabled = pageIndex > 0) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous_page))
+                    }
+                    IconButton(onClick = { setScale(scale - 0.5f) }, enabled = scale > 1f) {
+                        Icon(Icons.Default.ZoomOut, stringResource(R.string.zoom_out))
+                    }
+                    Text("${(scale * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
+                    IconButton(onClick = { setScale(scale + 0.5f) }, enabled = scale < 5f) {
+                        Icon(Icons.Default.ZoomIn, stringResource(R.string.zoom_in))
+                    }
+                    IconButton(onClick = { scale = 1f; offset = Offset.Zero }, enabled = scale != 1f || offset != Offset.Zero) {
+                        Icon(Icons.Default.FitScreen, stringResource(R.string.reset_zoom))
+                    }
+                    IconButton(onClick = onNext, enabled = pageCount > 0 && pageIndex + 1 < pageCount) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next_page))
+                    }
                 }
             }
         }
