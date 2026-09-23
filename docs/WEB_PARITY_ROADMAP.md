@@ -233,7 +233,7 @@ Indicative effort: 2 weeks
 
 - Automated common-domain tests run for JVM and Wasm in continuous integration.
 - Sync policy tests cover retry classification, duplicate acknowledgements, concurrent edit/delete conflicts, mutation rebasing, account-switch rejection, and token-refresh boundaries. Live two-device refresh integration completes this gate.
-- Migration tests cover every supported Android database/backup and web IndexedDB/local-storage version.
+- Migration tests cover every supported Android database/backup format and the current web IndexedDB v2/local-storage bootstrap path. Web recovery tests also cover blocked/open failures, interrupted migration, failed or closed writes, pending-fallback restart promotion, and remote-apply failure; destructive real-browser validation remains in the browser matrix.
 - Automated Wasm tests cover current Chrome and Firefox in deployment CI. The documented manual release matrix still covers Edge, Safari, browser-level IndexedDB recovery, and installed PWA behavior where supported.
 - Accessibility review covers keyboard-only use, focus order, landmarks, screen readers, 200% zoom, contrast, reduced motion, and Hebrew RTL.
 - Security review covers RLS, RPC authorization, public-key handling, redirect allowlists, session storage, dependency audit, and account deletion/export.

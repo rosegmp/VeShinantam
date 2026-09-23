@@ -1,5 +1,6 @@
 (() => {
   const STATE_KEY = 'veshinantam.web.v1';
+  const FALLBACK_PENDING_KEY = 'veshinantam.web.v1.pending';
   const DATABASE_NAME = 'veshinantam';
   const APP_STATE = 'app_state';
   const OUTBOX = 'sync_outbox';
@@ -181,13 +182,30 @@
   const readBrowserState = () => cachedState ?? localStorage.getItem(STATE_KEY);
   window.veshinantamReadState = readBrowserState;
 
+  const persistLocalFallback = value => {
+    try {
+      localStorage.setItem(STATE_KEY, value);
+      localStorage.setItem(FALLBACK_PENDING_KEY, '1');
+    } catch (_) { /* The in-memory copy remains available. */ }
+  };
+
   window.veshinantamPersistState = value => {
     const previousRaw = readBrowserState();
     cachedState = value;
     if (database) {
-      writeIndexedState(value).then(() => localStorage.removeItem(STATE_KEY)).catch(() => {});
+      try {
+        writeIndexedState(value)
+          .then(() => {
+            localStorage.removeItem(STATE_KEY);
+            localStorage.removeItem(FALLBACK_PENDING_KEY);
+          })
+          .catch(() => persistLocalFallback(value));
+      } catch (_) {
+        database = null;
+        persistLocalFallback(value);
+      }
     } else {
-      localStorage.setItem(STATE_KEY, value);
+      persistLocalFallback(value);
     }
     try {
       pendingDiff = pendingDiff.then(() => queueStateDiff(previousRaw ? JSON.parse(previousRaw) : null, JSON.parse(value))).catch(() => {});
@@ -328,9 +346,16 @@
     const serialized = JSON.stringify(state);
     suppressDiff = true;
     cachedState = serialized;
-    await writeIndexedState(serialized);
-    localStorage.removeItem(STATE_KEY);
-    suppressDiff = false;
+    try {
+      await writeIndexedState(serialized);
+      localStorage.removeItem(STATE_KEY);
+      localStorage.removeItem(FALLBACK_PENDING_KEY);
+    } catch (error) {
+      persistLocalFallback(serialized);
+      throw error;
+    } finally {
+      suppressDiff = false;
+    }
     return state;
   };
 
@@ -343,22 +368,38 @@
       if (!request.result.objectStoreNames.contains(METADATA)) request.result.createObjectStore(METADATA);
     };
     request.onerror = () => {
+      database = null;
+      cachedState = localStorage.getItem(STATE_KEY);
+      resolve();
+    };
+    request.onblocked = () => {
       cachedState = localStorage.getItem(STATE_KEY);
       resolve();
     };
     request.onsuccess = async () => {
-      database = request.result;
-      database.onversionchange = () => database.close();
+      const openedDatabase = request.result;
+      database = openedDatabase;
+      const forgetClosedDatabase = () => {
+        if (database === openedDatabase) database = null;
+      };
+      openedDatabase.onversionchange = () => {
+        openedDatabase.close();
+        forgetClosedDatabase();
+      };
+      openedDatabase.onclose = forgetClosedDatabase;
       try {
         const indexedState = await requestResult(database.transaction(APP_STATE, 'readonly').objectStore(APP_STATE).get('state'));
         const legacyState = localStorage.getItem(STATE_KEY);
-        if (typeof indexedState === 'string') {
+        const fallbackPending = localStorage.getItem(FALLBACK_PENDING_KEY) === '1';
+        if (typeof indexedState === 'string' && !fallbackPending) {
           cachedState = indexedState;
           localStorage.removeItem(STATE_KEY);
+          localStorage.removeItem(FALLBACK_PENDING_KEY);
         } else if (legacyState) {
           cachedState = legacyState;
           await writeIndexedState(legacyState);
           localStorage.removeItem(STATE_KEY);
+          localStorage.removeItem(FALLBACK_PENDING_KEY);
         }
       } catch (_) { cachedState = localStorage.getItem(STATE_KEY); }
       resolve();
