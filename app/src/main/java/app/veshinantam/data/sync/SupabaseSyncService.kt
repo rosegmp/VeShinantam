@@ -117,76 +117,46 @@ class SupabaseSyncService(
     suspend fun sync(): Result<Unit> = runCatching {
         val previousStatus = preferences.getString(KEY_STATUS, null)
         preferences.edit().putString(KEY_STATUS, "Synchronizing…").apply()
-        if (BuildConfig.ENTITY_SYNC_ENABLED) {
-            prepareEntityAccount()
-            val localChangeVersion = deviceSyncPreferences.getLong(KEY_LOCAL_CHANGE_VERSION, 0)
-            val capturedVersion = when {
-                deviceSyncPreferences.contains(KEY_CAPTURED_CHANGE_VERSION) ->
-                    deviceSyncPreferences.getLong(KEY_CAPTURED_CHANGE_VERSION, -1)
-                previousStatus?.startsWith("Synced") == true -> localChangeVersion.also {
-                    deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, it).apply()
-                }
-                else -> -1
+        prepareEntityAccount()
+        val localChangeVersion = deviceSyncPreferences.getLong(KEY_LOCAL_CHANGE_VERSION, 0)
+        val capturedVersion = when {
+            deviceSyncPreferences.contains(KEY_CAPTURED_CHANGE_VERSION) ->
+                deviceSyncPreferences.getLong(KEY_CAPTURED_CHANGE_VERSION, -1)
+            previousStatus?.startsWith("Synced") == true -> localChangeVersion.also {
+                deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, it).apply()
             }
-            val captureDeviceChanges = localChangeVersion != capturedVersion
-            val result = entitySync.synchronize(captureDeviceChanges)
-            if (result.coalesced) return@runCatching
-            if (captureDeviceChanges) {
-                deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, localChangeVersion).apply()
-            }
-            WidgetUpdater.enqueueImmediate(appContext)
-            preferences.edit()
-                .remove(KEY_CONFLICT)
-                .putString(
-                    KEY_STATUS,
-                    if (result.conflicts > 0) {
-                        "Synced with ${result.conflicts} newer cloud change${if (result.conflicts == 1) "" else "s"}."
-                    } else {
-                        "Synced successfully."
-                    },
-                )
-                .apply()
-            return@runCatching
+            else -> -1
         }
-        val local = localPayload()
-        val rows = JSONArray(request("/rest/v1/learning_snapshots?select=payload,revision&limit=1"))
-        if (rows.length() == 0) {
-            push(local, 0)
-            return@runCatching
+        val captureDeviceChanges = localChangeVersion != capturedVersion
+        val result = entitySync.synchronize(captureDeviceChanges)
+        if (result.coalesced) return@runCatching
+        if (captureDeviceChanges) {
+            deviceSyncPreferences.edit().putLong(KEY_CAPTURED_CHANGE_VERSION, localChangeVersion).apply()
         }
-        val remote = rows.getJSONObject(0)
-        val remotePayload = remote.getJSONObject("payload")
-        val remoteRevision = remote.getLong("revision")
-        val localRevision = preferences.getLong(KEY_REVISION, -1)
-        if (local.toString() == remotePayload.toString()) {
-            preferences.edit().putLong(KEY_REVISION, remoteRevision).remove(KEY_CONFLICT)
-                .putString(KEY_STATUS, "Already up to date.").apply()
-        } else if (localRevision != remoteRevision) {
-            preferences.edit().putString(
-                KEY_CONFLICT,
-                JSONObject().put("payload", remotePayload).put("revision", remoteRevision).toString(),
-            ).putString(KEY_STATUS, "Choose which copy to keep.").apply()
-        } else {
-            push(local, remoteRevision)
-        }
+        WidgetUpdater.enqueueImmediate(appContext)
+        preferences.edit()
+            .remove(KEY_CONFLICT)
+            .putString(
+                KEY_STATUS,
+                if (result.conflicts > 0) {
+                    "Synced with ${result.conflicts} newer cloud change${if (result.conflicts == 1) "" else "s"}."
+                } else {
+                    "Synced successfully."
+                },
+            )
+            .apply()
     }.onFailure {
         preferences.edit().putString(KEY_STATUS, syncFailureStatus(it)).apply()
     }
 
-    suspend fun useCloudCopy(): Result<Unit> = runCatching {
-        val conflict = JSONObject(requireNotNull(preferences.getString(KEY_CONFLICT, null)))
-        mergeCloudPayload(conflict.getJSONObject("payload"))
-        preferences.edit().putLong(KEY_REVISION, conflict.getLong("revision")).remove(KEY_CONFLICT)
-            .putString(KEY_STATUS, "Cloud changes merged into this device.").apply()
-    }.onFailure {
-        preferences.edit().putString(KEY_STATUS, "Error applying cloud changes. Device data is unchanged.").apply()
+    suspend fun useCloudCopy(): Result<Unit> {
+        preferences.edit().remove(KEY_CONFLICT).apply()
+        return sync()
     }
 
-    suspend fun replaceCloudCopy(): Result<Unit> = runCatching {
-        val conflict = JSONObject(requireNotNull(preferences.getString(KEY_CONFLICT, null)))
-        push(localPayload(), conflict.getLong("revision"))
-    }.onFailure {
-        preferences.edit().putString(KEY_STATUS, "Error replacing the cloud copy. Device data is unchanged.").apply()
+    suspend fun replaceCloudCopy(): Result<Unit> {
+        preferences.edit().remove(KEY_CONFLICT).apply()
+        return sync()
     }
 
     fun signOut() {
@@ -195,7 +165,7 @@ class SupabaseSyncService(
     }
 
     fun scheduleAutomaticSync(localDataChanged: Boolean = true) {
-        if (BuildConfig.ENTITY_SYNC_ENABLED && preferences.contains(KEY_ACCESS_TOKEN)) {
+        if (preferences.contains(KEY_ACCESS_TOKEN)) {
             if (localDataChanged) {
                 val nextVersion = deviceSyncPreferences.getLong(KEY_LOCAL_CHANGE_VERSION, 0) + 1
                 deviceSyncPreferences.edit().putLong(KEY_LOCAL_CHANGE_VERSION, nextVersion).apply()
@@ -205,7 +175,7 @@ class SupabaseSyncService(
     }
 
     suspend fun automaticSync(): Boolean {
-        if (!BuildConfig.ENTITY_SYNC_ENABLED || !preferences.contains(KEY_ACCESS_TOKEN)) return true
+        if (!preferences.contains(KEY_ACCESS_TOKEN)) return true
         return sync().isSuccess
     }
 
@@ -347,13 +317,6 @@ class SupabaseSyncService(
             ))
         }
         if (newTasks.isNotEmpty()) dao.insertTasks(newTasks)
-    }
-
-    private fun push(payload: JSONObject, expectedRevision: Long) {
-        val body = JSONObject().put("expected_revision", expectedRevision).put("new_payload", payload).toString()
-        val revision = request("/rest/v1/rpc/sync_learning_snapshot", "POST", body).trim().toLong()
-        preferences.edit().putLong(KEY_REVISION, revision).remove(KEY_CONFLICT)
-            .putString(KEY_STATUS, "Synced successfully.").apply()
     }
 
     private fun authenticatedToken(): String = synchronized(tokenRefreshLock) {

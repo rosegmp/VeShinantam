@@ -32,10 +32,9 @@ android {
         applicationId = "app.veshinantam"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.1.11"
         val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl").orElse("").get()
-        val entitySyncEnabled = providers.gradleProperty("entitySyncEnabled").orElse("false").get().toBooleanStrict()
         val presetCatalogPublicKey = providers.gradleProperty("presetCatalogPublicKey").orElse(
             "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx3gli60LF/hLHlkuh9AqlgM3rpo3bP5L3fQySwJH8ggsHmMMmgSdisKnL+ljpJGSuEqE82uN/UBItAYlPpfZpA==",
         ).get()
@@ -43,8 +42,6 @@ android {
         buildConfigField("String", "PRESET_CATALOG_PUBLIC_KEY", "\"${presetCatalogPublicKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "SUPABASE_URL", "\"https://tyzembsyzzjrdhmmmfln.supabase.co\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_VpyDD3COjLuAKkNmaPaBgQ_sKGiIGXe\"")
-        // Turn on with -PentitySyncEnabled=true only for the coordinated Android/web rollout.
-        buildConfigField("boolean", "ENTITY_SYNC_ENABLED", entitySyncEnabled.toString())
 
         testInstrumentationRunner = "app.veshinantam.data.local.MigrationTestInstrumentation"
         vectorDrawables.useSupportLibrary = true
