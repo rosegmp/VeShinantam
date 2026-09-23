@@ -232,7 +232,7 @@ Indicative effort: 2 weeks
 ### Quality gates
 
 - Automated common-domain tests run for JVM and Wasm in continuous integration.
-- Sync integration tests cover two-device offline changes, retries, duplicates, conflicts, deletes, account switching, and token expiry.
+- Sync policy tests cover retry classification, duplicate acknowledgements, concurrent edit/delete conflicts, mutation rebasing, and account-switch rejection. Live two-device and token-expiry integration checks complete this gate.
 - Migration tests cover every supported Android database/backup and web IndexedDB/local-storage version.
 - Browser matrix covers current Chrome, Edge, Firefox, and Safari, plus installed PWA behavior where supported.
 - Accessibility review covers keyboard-only use, focus order, landmarks, screen readers, 200% zoom, contrast, reduced motion, and Hebrew RTL.

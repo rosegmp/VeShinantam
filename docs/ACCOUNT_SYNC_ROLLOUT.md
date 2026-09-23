@@ -23,6 +23,19 @@ The app keeps local data when a sync request fails. Investigate the displayed
 error before retrying; the web and Android clients must both use the current
 entity API.
 
+Both clients bind their offline entity store to the first authenticated account
+that synchronizes it. Signing out keeps device data, but a different account is
+not allowed to merge into that store; clear the app/site data only when the user
+intentionally wants to discard the existing offline copy and link another
+account.
+
+The web outbox acknowledges mutations by mutation ID, not only by entity ID. If
+the same item changes while an upload is in flight, the replacement mutation is
+retained and rebased to the server revision. Remote pulls likewise rebase but do
+not overwrite pending local edits or deletes. These concurrency, duplicate,
+retry, delete, and account-binding policies run in CI through
+`scripts/entity-sync-policy.test.cjs`.
+
 ## Release build
 
 For a signed release, configure the signing properties described in

@@ -40,6 +40,7 @@ jobs:
 
       - name: Validate shared, Android, and web behavior
         run: |
+          node --test --test-isolation=none scripts/entity-sync-policy.test.cjs
           ./gradlew kotlinWasmUpgradePackageLock --rerun-tasks
           ./gradlew :shared:allTests :app:testDebugUnitTest :webApp:allTests
 

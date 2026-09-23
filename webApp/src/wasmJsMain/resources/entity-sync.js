@@ -201,11 +201,17 @@
     return requestResult(database.transaction(OUTBOX, 'readonly').objectStore(OUTBOX).getAll());
   };
 
-  window.veshinantamRemoveOutbox = async (entityType, entityId) => {
-    if (!database) return;
+  window.veshinantamSettleOutbox = async (entityType, entityId, mutationId, serverRevision) => {
+    if (!database) return false;
+    const key = `${entityType}:${entityId}`;
     const transaction = database.transaction(OUTBOX, 'readwrite');
-    transaction.objectStore(OUTBOX).delete(`${entityType}:${entityId}`);
+    const store = transaction.objectStore(OUTBOX);
+    const current = await requestResult(store.get(key));
+    const settlement = globalThis.VeShinantamEntitySyncPolicy.settleMutation(current, mutationId, serverRevision);
+    if (settlement.nextMutation) store.put(settlement.nextMutation, key);
+    else if (settlement.matched) store.delete(key);
     await transactionDone(transaction);
+    return settlement.matched;
   };
 
   window.veshinantamGetSyncCursor = async () => {
@@ -268,13 +274,24 @@
 
   window.veshinantamApplyEntityRecords = async records => {
     if (!database) throw new Error('IndexedDB is unavailable; cloud data cannot be stored safely in this browser.');
+    const applicableRecords = [];
+    const outboxTransaction = database.transaction(OUTBOX, 'readwrite');
+    const outboxStore = outboxTransaction.objectStore(OUTBOX);
+    for (const record of records) {
+      const key = `${record.entity_type}:${record.entity_id}`;
+      const current = await requestResult(outboxStore.get(key));
+      const decision = globalThis.VeShinantamEntitySyncPolicy.receiveRemote(current, record.revision);
+      if (decision.nextMutation) outboxStore.put(decision.nextMutation, key);
+      if (decision.apply) applicableRecords.push(record);
+    }
+    await transactionDone(outboxTransaction);
     const state = JSON.parse(readBrowserState() || '{"schedules":[],"tasks":[],"language":"en"}');
     const schedules = new Map((state.schedules || []).map(value => [value.id, value]));
     const tasks = new Map((state.tasks || []).map(value => [value.id, value]));
     const exclusions = new Map((state.exclusions || []).map(value => [value.id, value]));
     const goals = new Map((state.goals || []).map(value => [value.id, value]));
     const deletedScheduleIds = new Set();
-    for (const record of records) {
+    for (const record of applicableRecords) {
       if (record.entity_type === 'SCHEDULE') {
         if (record.deleted) {
           schedules.delete(record.entity_id);

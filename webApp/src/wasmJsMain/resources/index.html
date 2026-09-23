@@ -22,6 +22,7 @@
 </head>
 <body>
   <script src="supabase-config.js"></script>
+  <script src="entity-sync-policy.js"></script>
   <script src="entity-sync.js"></script>
   <script src="preset-updates.js"></script>
   <script>
@@ -31,6 +32,7 @@
       const REVISION_KEY = 'veshinantam.supabase.revision.v1';
       const STATUS_KEY = 'veshinantam.supabase.status.v1';
       const CONFLICT_KEY = 'veshinantam.supabase.conflict.v1';
+      const ENTITY_ACCOUNT_KEY = 'veshinantam.supabase.entity-account.v1';
       const REQUEST_TIMEOUT_MS = 30000;
       const API_RETRY_DELAYS_MS = [600, 1800];
       const PUSH_BATCH_SIZE = 100;
@@ -79,6 +81,7 @@
         localStorage.setItem(SESSION_KEY, JSON.stringify({
           accessToken,
           refreshToken,
+          userId: claims.sub || '',
           email: claims.email || '',
           expiresAt: Number(claims.exp || 0) * 1000
         }));
@@ -126,12 +129,12 @@
             });
             if (response.ok) return response.status === 204 ? null : response.json();
             const detail = await response.text();
-            const retryable = [408, 502, 503, 504].includes(response.status);
+            const retryable = window.VeShinantamEntitySyncPolicy.isRetryableStatus(response.status);
             if (!retryable || attempt >= API_RETRY_DELAYS_MS.length) {
               throw new Error(detail || `Sync failed (${response.status}).`);
             }
           } catch (error) {
-            const isNetworkFailure = error?.name === 'TypeError' || error?.message?.includes('did not respond within');
+            const isNetworkFailure = window.VeShinantamEntitySyncPolicy.isRetryableNetworkError(error);
             if (!isNetworkFailure || attempt >= API_RETRY_DELAYS_MS.length) throw error;
           }
           setStatus(`The cloud server is busy; retrying (${attempt + 1}/${API_RETRY_DELAYS_MS.length})…`);
@@ -236,11 +239,25 @@
       };
       const incrementalEntitySync = async (state) => {
         setStatus('Preparing device changes…');
+        const session = await authenticatedSession();
+        const currentAccountId = session?.userId || decodeJwt(session?.accessToken || '').sub || '';
+        const binding = window.VeShinantamEntitySyncPolicy.accountBinding(
+          localStorage.getItem(ENTITY_ACCOUNT_KEY),
+          currentAccountId
+        );
+        if (!binding.allowed) {
+          if (binding.reason === 'different-account') {
+            throw new Error("This device's offline data is linked to another account. Clear this site's data before linking a different account.");
+          }
+          throw new Error('Your account identity could not be verified. Please sign in again.');
+        }
+        if (binding.bind) localStorage.setItem(ENTITY_ACCOUNT_KEY, binding.bind);
         const parsedState = JSON.parse(state);
         await window.veshinantamEnsureEntitySeed(parsedState);
         const mutations = await window.veshinantamReadOutbox();
         let remoteWonConflict = false;
         const conflictRecords = [];
+        let newerLocalChangesPending = false;
         let uploaded = 0;
         for (let offset = 0; offset < mutations.length; offset += PUSH_BATCH_SIZE) {
           const batch = mutations.slice(offset, offset + PUSH_BATCH_SIZE);
@@ -261,8 +278,15 @@
           for (const mutation of batch) {
             const result = results.get(mutation.mutationId);
             if (!result) throw new Error(`The sync server omitted mutation ${mutation.mutationId}.`);
-            remoteWonConflict = remoteWonConflict || Boolean(result.conflict);
-            if (result.conflict) conflictRecords.push({
+            const matched = await window.veshinantamSettleOutbox(
+              mutation.entityType,
+              mutation.entityId,
+              mutation.mutationId,
+              result.revision
+            );
+            newerLocalChangesPending = newerLocalChangesPending || !matched;
+            remoteWonConflict = remoteWonConflict || Boolean(result.conflict && matched);
+            if (result.conflict && matched) conflictRecords.push({
               entity_type: mutation.entityType,
               entity_id: mutation.entityId,
               payload: result.remote_payload,
@@ -270,7 +294,6 @@
               revision: result.revision,
               updated_at: new Date().toISOString()
             });
-            await window.veshinantamRemoveOutbox(mutation.entityType, mutation.entityId);
             uploaded += 1;
           }
         }
@@ -289,7 +312,11 @@
             downloaded += records.length;
           }
         } while (records.length === PULL_PAGE_SIZE);
-        setStatus(remoteWonConflict ? 'Synchronized. A newer cloud change was kept for one item.' : 'Synced successfully.');
+        setStatus(newerLocalChangesPending
+          ? 'Synchronized. Newer device changes are queued; choose Sync now again.'
+          : remoteWonConflict
+            ? 'Synchronized. A newer cloud change was kept for one item.'
+            : 'Synced successfully.');
         reload();
       };
       window.veshinantamSync = state => {

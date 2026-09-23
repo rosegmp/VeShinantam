@@ -48,7 +48,7 @@ tasks.register<Sync>("stageSite") {
         val site = rootProject.layout.projectDirectory.dir("dist").asFile
         val worker = site.resolve("service-worker.js")
         val builtIn = setOf(
-            "index.html", "veshinantam.js", "entity-sync.js", "preset-updates.js", "supabase-config.js",
+            "index.html", "veshinantam.js", "entity-sync-policy.js", "entity-sync.js", "preset-updates.js", "supabase-config.js",
             "manifest.webmanifest", "icon.svg", "service-worker.js", "preset-catalog.json",
         )
         val generatedFiles = site.walkTopDown()
