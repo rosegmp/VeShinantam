@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import app.veshinantam.BuildConfig
 import app.veshinantam.data.readAtMost
 import app.veshinantam.domain.material.PresetCatalog
+import app.veshinantam.shared.preset.RemotePresetCatalog
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -27,6 +28,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 
 data class VerifiedPresetCatalog(
@@ -34,6 +36,7 @@ data class VerifiedPresetCatalog(
     val sequence: Long,
     val positionAsOf: LocalDate,
     val currentReferences: Map<String, String>,
+    val fullUpdate: RemotePresetCatalog? = null,
 )
 
 enum class PresetUpdateResult { UPDATED, UP_TO_DATE, NOT_CONFIGURED, NETWORK_ERROR, INVALID_SIGNATURE, INVALID_CATALOG }
@@ -84,7 +87,18 @@ object PresetCatalogEnvelope {
         }
         require(valid) { "Catalog signature is invalid" }
         val payload = JSONObject(payloadBytes.toString(StandardCharsets.UTF_8))
-        require(payload.getInt("schemaVersion") == SCHEMA_VERSION) { "Unsupported catalog schema" }
+        val schemaVersion = payload.getInt("schemaVersion")
+        require(schemaVersion == SCHEMA_VERSION || schemaVersion == 2) { "Unsupported catalog schema" }
+        if (schemaVersion == 2) {
+            val update = Json.decodeFromString<RemotePresetCatalog>(payload.toString())
+            return VerifiedPresetCatalog(
+                version = update.catalogVersion,
+                sequence = update.sequence,
+                positionAsOf = LocalDate.parse(update.positionAsOf),
+                currentReferences = update.positions,
+                fullUpdate = update,
+            )
+        }
         val positionsObject = payload.getJSONObject("positions")
         val positions = positionsObject.keys().asSequence().associateWith { positionsObject.getString(it) }
         return VerifiedPresetCatalog(
@@ -139,12 +153,20 @@ class PresetCatalogUpdateClient(
         if (catalog.sequence <= PresetCatalog.activeSequence) return save(PresetUpdateResult.UP_TO_DATE)
         if (catalog.positionAsOf.isAfter(LocalDate.now(clock))) return save(PresetUpdateResult.INVALID_CATALOG)
         if (runCatching {
-                PresetCatalog.validateVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+                if (catalog.fullUpdate == null) {
+                    PresetCatalog.validateVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+                } else {
+                    PresetCatalog.validateRemoteUpdate(catalog.fullUpdate)
+                }
             }.isFailure
         ) return save(PresetUpdateResult.INVALID_CATALOG)
         return try {
             PresetCatalogUpdateStore(context, publicKeyBase64).saveVerified(envelope)
-            PresetCatalog.applyVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+            if (catalog.fullUpdate == null) {
+                PresetCatalog.applyVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+            } else {
+                PresetCatalog.applyRemoteUpdate(catalog.fullUpdate)
+            }
             save(PresetUpdateResult.UPDATED)
         } catch (_: Exception) {
             save(PresetUpdateResult.INVALID_CATALOG)
@@ -172,8 +194,14 @@ class PresetCatalogUpdateStore(
         return try {
             val catalog = PresetCatalogEnvelope.verifyAndDecode(source.readText(), publicKeyBase64)
             if (catalog.sequence <= PresetCatalog.activeSequence) return false
-            PresetCatalog.validateVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
-            PresetCatalog.applyVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+            require(!catalog.positionAsOf.isAfter(LocalDate.now())) { "Catalog position date is in the future" }
+            if (catalog.fullUpdate == null) {
+                PresetCatalog.validateVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+                PresetCatalog.applyVerifiedUpdate(catalog.version, catalog.sequence, catalog.positionAsOf, catalog.currentReferences)
+            } else {
+                PresetCatalog.validateRemoteUpdate(catalog.fullUpdate)
+                PresetCatalog.applyRemoteUpdate(catalog.fullUpdate)
+            }
             true
         } catch (_: Exception) {
             source.delete()

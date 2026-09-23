@@ -4,6 +4,9 @@ import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.preset.MaterialCatalog
 import app.veshinantam.shared.preset.SharedPresetCatalog
 import app.veshinantam.shared.preset.SharedPresetProgram
+import app.veshinantam.shared.preset.RemotePresetCatalog
+import app.veshinantam.shared.preset.RemotePresetCatalogValidator
+import app.veshinantam.shared.preset.RemotePresetPatch
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -12,6 +15,8 @@ data class WebPresetCatalogUpdate(
     val sequence: Long,
     val positionAsOf: String,
     val positions: Map<String, String>,
+    val schemaVersion: Int = 1,
+    val programs: List<RemotePresetPatch> = emptyList(),
 )
 
 /** Browser equivalent of Android's verified, bundled-fallback preset catalog. */
@@ -32,9 +37,18 @@ object WebPresetCatalog {
 
     fun applyVerifiedUpdate(update: WebPresetCatalogUpdate) {
         require(update.catalogVersion.isNotBlank())
-        require(update.sequence > SharedPresetCatalog.SEQUENCE)
+        require(update.sequence > sequence)
         val asOf = parseIsoDate(update.positionAsOf)
         require(asOf >= SharedPresetCatalog.positionAsOf)
+        if (update.schemaVersion == 2) {
+            val programs = RemotePresetCatalogValidator.programs(RemotePresetCatalog(
+                update.schemaVersion, update.catalogVersion, update.sequence, update.positionAsOf,
+                update.positions, update.programs,
+            ))
+            activeUpdate = ActiveUpdate(update.catalogVersion, update.sequence, asOf, programs)
+            return
+        }
+        require(update.schemaVersion == 1)
         require(update.positions.keys == SharedPresetCatalog.programs.mapTo(mutableSetOf()) { it.id })
         val updated = SharedPresetCatalog.programs.map { program ->
             val reference = update.positions.getValue(program.id)
@@ -96,8 +110,6 @@ object WebPresetCatalog {
     }
 
     private fun parseIsoDate(value: String): IsoDate {
-        val parts = value.split('-')
-        require(parts.size == 3)
-        return IsoDate(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+        return requireNotNull(IsoDate.parse(value)) { "Invalid position date" }
     }
 }

@@ -1,0 +1,6 @@
+{
+  "format": "app.veshinantam.preset-catalog",
+  "keyId": "veshinantam-preset-v1",
+  "payload": "ewogICJzY2hlbWFWZXJzaW9uIjogMiwKICAiY2F0YWxvZ1ZlcnNpb24iOiAiMjAyNi4wOS4yMy0xMSIsCiAgInNlcXVlbmNlIjogMTEsCiAgInBvc2l0aW9uQXNPZiI6ICIyMDI2LTA5LTIzIiwKICAicG9zaXRpb25zIjoge30sCiAgInByb2dyYW1zIjogW10KfQo=",
+  "signature": "MEYCIQCUCJyMEtBICNTJKT69rFf4tt1MTqtCcRmCFFHSPlHjTwIhAOxrqZzGx8XQgpiA0gZb8p4lOqEiYkl6jdlibjybEHW2"
+}

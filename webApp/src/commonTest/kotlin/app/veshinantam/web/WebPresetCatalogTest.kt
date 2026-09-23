@@ -2,6 +2,8 @@ package app.veshinantam.web
 
 import app.veshinantam.shared.IsoDate
 import app.veshinantam.shared.preset.SharedPresetCatalog
+import app.veshinantam.shared.preset.RemotePresetPatch
+import app.veshinantam.shared.preset.RemotePresetUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,5 +41,22 @@ class WebPresetCatalogTest {
         assertFailsWith<IllegalArgumentException> {
             WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate("bad", 11, "2026-09-18", unknown))
         }
+    }
+
+    @Test
+    fun acceptsANewSignedPresetDefinition() {
+        WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate(
+            catalogVersion = "2026.09.23-11",
+            sequence = 11,
+            positionAsOf = "2026-09-23",
+            positions = mapOf("daily-sample" to "Sample 1"),
+            schemaVersion = 2,
+            programs = listOf(RemotePresetPatch(
+                "daily-sample", "Daily Sample", "לימוד יומי", "CUSTOM_UNIT", 1,
+                listOf(0, 1, 2, 3, 4), units = listOf(RemotePresetUnit("Sample 1", "דוגמה א")),
+            )),
+        ))
+        assertEquals("Daily Sample", WebPresetCatalog.programs.last().nameEnglish)
+        assertEquals(11, WebPresetCatalog.sequence)
     }
 }

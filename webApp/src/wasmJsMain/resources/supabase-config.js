@@ -7,6 +7,6 @@ window.VESHINANTAM_SUPABASE = {
 
 // Optional: use the same HTTPS endpoint and base64 DER P-256 public key as Android.
 window.VESHINANTAM_PRESET_UPDATES = {
-  endpoint: "",
-  publicKey: ""
+  endpoint: "https://rosegmp.github.io/VeShinantam/preset-catalog.json",
+  publicKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyGpGMqgEt3PlYOfRW5D9Yq9Vh/a3eYIgRxO6ez1YRae1xyJwCyYvQ+rWa5un2aZIPO3FG+52YIeRcdXecmomrA=="
 };

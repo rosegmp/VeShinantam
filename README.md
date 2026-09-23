@@ -41,7 +41,7 @@ The web app is deployed automatically from `main` to [GitHub Pages](https://rose
 - Versioned JSON backup and transactional restore through Android’s system file picker, covering schedules, tasks, completion history, exclusions, goals, and user preferences
 - Optional Supabase account with a durable per-entity outbox, revisions, tombstones, deterministic conflict handling, and automatic network-constrained retries; rollout remains gated until the matching Android/web release
 - Printable A4 schedule PDFs for the next 7, 14, 30, 60, or 90 days, localized for English/Hebrew and the selected sefarim and primary-calendar display, with one checkbox per task
-- Optional HTTPS preset-position updates with a pinned ECDSA signature, monotonic rollback protection, strict bundled-reference validation, atomic private caching, daily WorkManager checks, and automatic bundled fallback
+- Signed HTTPS preset catalog updates can add or revise bilingual preset schedules without a new APK, with rollback protection, offline caching, daily optional checks, and a bundled fallback
 - Exported Room schemas with on-device upgrade tests for every database version, plus committed compatibility fixtures for every supported backup format
 - Repeatable device smoke and release-build scripts with clean-build reproducibility and SHA-256 verification
 - Complete product specification, wireframes, and implementation roadmap in `docs/`

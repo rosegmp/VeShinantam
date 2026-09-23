@@ -1,53 +1,79 @@
 # Signed preset catalog updates
 
-Normal app use is fully offline. A release build can opt into preset-position updates by setting the Gradle property `presetCatalogUpdateUrl` to an HTTPS URL. When the property is absent, update controls explain that the bundled catalog is in use and no network request is made.
+Android 0.1.13 and the web app can read the same signed catalog at
+`https://rosegmp.github.io/VeShinantam/preset-catalog.json`. The bundled
+catalog remains available offline. An update changes the presets offered when
+creating a schedule; it does not replace a learner's saved schedules or tasks.
 
-## Trust model
+## Publish a future update
 
-- The app accepts only HTTPS and does not follow redirects.
-- Downloads and decoded payloads are limited to 1 MiB.
-- The outer JSON envelope contains `format`, `keyId`, base64 `payload`, and a base64 DER ECDSA signature.
-- The signature is SHA-256 with ECDSA over the exact decoded payload bytes, using a pinned P-256 public key.
-- The payload contains schema version `1`, a display version, a strictly increasing sequence number, an as-of date, and one current English reference for every bundled preset ID.
-- Every ID and reference must resolve against the bundled reference-only material. Updates cannot add sefer text, modify schedules, or read/upload progress.
-- Verified files are flushed and atomically renamed into the private app files directory. Invalid cached files are discarded and the bundled catalog remains available.
+1. Edit `catalog/preset-catalog.payload.json`. Increase `sequence` above the
+   latest published sequence, set `catalogVersion` and `positionAsOf`, and add
+   the desired `programs` patches and `positions`.
+2. Run `node scripts/preset-catalog.mjs sign`. This signs the exact UTF-8 payload
+   bytes using the private key at `artifacts/preset-catalog-private-key.pem` and
+   writes `webApp/src/wasmJsMain/resources/preset-catalog.json`.
+3. Commit the payload and signed envelope, then push `main`. The GitHub Pages
+   workflow publishes the new file. The service worker always requests this
+   endpoint from the network, so an old web cache cannot hide an update.
+4. On Android, open Settings and tap **Check for updates**, or enable automatic
+   updates for daily checks. On web, enable **Automatic catalog updates** in
+   Settings; the app reloads and checks the signed file.
 
-Example envelope:
+The private key is ignored by Git and must be backed up securely outside this
+workspace. Never commit it or upload it to GitHub. Losing it requires a new APK
+with a new pinned public key. `node scripts/preset-catalog.mjs init-key` creates
+the key only if one does not already exist; it must not be run for every update.
+
+## Version 2 payload
+
+`programs` is a list of changes. For an existing ID, include only fields to
+replace. For a new ID, provide `nameEnglish`, `nameHebrew`, `materialType`,
+`dailyQuantity`, `selectedWeekdays`, and at least one bilingual `units` entry.
+`positions` maps any changed or new preset ID to the exact English text of its
+starting unit. Unchanged bundled positions advance from the bundled anchor
+date to `positionAsOf` automatically.
 
 ```json
 {
-  "format": "app.veshinantam.preset-catalog",
-  "keyId": "veshinantam-preset-v1",
-  "payload": "BASE64_OF_EXACT_PAYLOAD_BYTES",
-  "signature": "BASE64_OF_DER_ECDSA_SIGNATURE"
+  "schemaVersion": 2,
+  "catalogVersion": "2026.10.01-12",
+  "sequence": 12,
+  "positionAsOf": "2026-10-01",
+  "positions": { "new-daily-program": "First section" },
+  "programs": [
+    {
+      "id": "new-daily-program",
+      "nameEnglish": "New Daily Program",
+      "nameHebrew": "תוכנית יומית חדשה",
+      "materialType": "CUSTOM_UNIT",
+      "dailyQuantity": 1,
+      "selectedWeekdays": [0, 1, 2, 3, 4, 5],
+      "excludedDates": [],
+      "units": [
+        { "english": "First section", "hebrew": "קטע ראשון" },
+        { "english": "Second section", "hebrew": "קטע שני" }
+      ]
+    }
+  ]
 }
 ```
 
-Example decoded payload:
+Weekdays use Sunday `0` through Saturday `6`. Material types are `DAF`,
+`AMUD`, `MISHNAH`, `PEREK`, `PAGE`, `SEIF`, `SIMAN`, and `CUSTOM_UNIT`.
+An existing program can change its names, pace, weekdays, exclusions, or units;
+if its units change, set a `positions` entry that exists in the new unit list.
+To keep a previously added remote program in a later catalog, include its full
+definition again: every signed catalog is evaluated against the bundled catalog.
+The current signed envelope and decoded payload must each fit within 1 MiB.
 
-```json
-{
-  "schemaVersion": 1,
-  "catalogVersion": "2026.09.10-8",
-  "sequence": 8,
-  "positionAsOf": "2026-09-09",
-  "positions": {
-    "daf-yomi-bavli": "Chullin 132",
-    "oraysa": "Yevamos 104b"
-  }
-}
-```
+The signature uses ECDSA P-256 with SHA-256 over the decoded payload bytes.
+Android and web pin the same DER SubjectPublicKeyInfo public key and reject
+invalid signatures, unknown material types, duplicate IDs or units, invalid
+dates, and unknown starting references. The parser still accepts version 1
+position-only payloads signed by the current key. Cached files signed by an
+older key are discarded and the bundled catalog is used until a new check.
 
-The real payload must include every bundled preset ID. Before private distribution, generate and securely retain an offline P-256 signing key, provide its base64 DER SubjectPublicKeyInfo value as `presetCatalogPublicKey`, and never commit the private key. Configure builds with, for example:
-
-```powershell
-.\gradlew.bat -PpresetCatalogUpdateUrl=https://updates.example.org/veshinantam/catalog.json -PpresetCatalogPublicKey=BASE64_DER_PUBLIC_KEY assembleRelease
-```
-
-Signature rotation is intentionally deferred to the later diagnostics/key-rotation enhancement; the current schema recognizes one explicit key ID.
-
-## Web configuration
-
-The web app accepts the same envelope, key ID, DER ECDSA signature, and payload as Android. Configure `window.VESHINANTAM_PRESET_UPDATES` in `supabase-config.js` with the HTTPS endpoint and the same base64 DER SubjectPublicKeyInfo value. The browser verifies the signature with WebCrypto, while the Kotlin layer independently requires a newer sequence and one resolvable reference for every bundled preset.
-
-Verified envelopes are cached in browser storage. The cache is reverified at every startup; invalid, incomplete, or unknown-reference catalogs are discarded, and the bundled catalog remains active. Enabling automatic catalog updates reloads the app once so it can perform the verified check before schedule creation begins.
+Catalog updates contain schedule references and rules. The bundled Pele Yoetz
+full text and in-app reader code are separate APK/web assets and are not
+replaced by this catalog format.

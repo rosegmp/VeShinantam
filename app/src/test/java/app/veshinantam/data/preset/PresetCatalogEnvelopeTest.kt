@@ -73,6 +73,43 @@ class PresetCatalogEnvelopeTest {
         assertEquals(11, PresetCatalog.activeSequence)
     }
 
+    @Test
+    fun `signed version two catalog can add a preset`() {
+        val keyPair = KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair()
+        val payload = JSONObject().apply {
+            put("schemaVersion", 2)
+            put("catalogVersion", "2026.09.23-11")
+            put("sequence", 11)
+            put("positionAsOf", "2026-09-23")
+            put("positions", JSONObject().put("daily-sample", "Sample 1"))
+            put("programs", org.json.JSONArray().put(JSONObject().apply {
+                put("id", "daily-sample")
+                put("nameEnglish", "Daily Sample")
+                put("nameHebrew", "לימוד יומי")
+                put("materialType", "CUSTOM_UNIT")
+                put("dailyQuantity", 1)
+                put("selectedWeekdays", org.json.JSONArray(listOf(0, 1, 2, 3, 4)))
+                put("units", org.json.JSONArray().put(JSONObject().put("english", "Sample 1").put("hebrew", "דוגמה א")))
+            }))
+        }.toString().toByteArray(StandardCharsets.UTF_8)
+        val signature = Signature.getInstance("SHA256withECDSA").run {
+            initSign(keyPair.private)
+            update(payload)
+            sign()
+        }
+        val envelope = JSONObject().apply {
+            put("format", "app.veshinantam.preset-catalog")
+            put("keyId", PresetCatalogEnvelope.KEY_ID)
+            put("payload", Base64.getEncoder().encodeToString(payload))
+            put("signature", Base64.getEncoder().encodeToString(signature))
+        }.toString()
+        val verified = PresetCatalogEnvelope.verifyAndDecode(envelope, Base64.getEncoder().encodeToString(keyPair.public.encoded))
+        PresetCatalog.applyRemoteUpdate(requireNotNull(verified.fullUpdate))
+
+        assertEquals("Daily Sample", PresetCatalog.programs.last().nameEnglish)
+        assertEquals(11, PresetCatalog.activeSequence)
+    }
+
     private fun signedEnvelope(
         keyPair: java.security.KeyPair,
         sequence: Long,

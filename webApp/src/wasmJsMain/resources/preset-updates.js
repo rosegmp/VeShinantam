@@ -5,6 +5,9 @@
   const KEY_ID = 'veshinantam-preset-v1';
   const config = window.VESHINANTAM_PRESET_UPDATES || {};
   let activePayload = null;
+  let activeEnvelope = null;
+  let confirmedPayload = null;
+  let confirmedEnvelope = null;
 
   const decodeBase64 = value => Uint8Array.from(atob(value), character => character.charCodeAt(0));
   const readLength = (bytes, offset) => {
@@ -47,29 +50,51 @@
     );
     if (!valid) throw new Error('Catalog signature is invalid');
     const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
-    if (payload.schemaVersion !== 1 || typeof payload.catalogVersion !== 'string' ||
+    if (![1, 2].includes(payload.schemaVersion) || typeof payload.catalogVersion !== 'string' ||
         !Number.isSafeInteger(payload.sequence) || payload.sequence < 1 ||
         !/^\d{4}-\d{2}-\d{2}$/.test(payload.positionAsOf) ||
         !payload.positions || Array.isArray(payload.positions) || typeof payload.positions !== 'object') {
       throw new Error('Catalog payload is invalid');
     }
+    if (payload.schemaVersion === 2 && !Array.isArray(payload.programs)) throw new Error('Catalog programs are invalid');
     return payload;
   };
   const accept = async envelopeText => {
     const payload = await verify(envelopeText);
-    if (!activePayload || payload.sequence > activePayload.sequence) activePayload = payload;
-    return payload;
+    if (activePayload && payload.sequence <= activePayload.sequence) return false;
+    activePayload = payload;
+    activeEnvelope = envelopeText;
+    return true;
   };
 
   window.veshinantamReadPresetCatalog = () => activePayload ? JSON.stringify(activePayload) : null;
+  window.veshinantamConfirmPresetCatalog = () => {
+    if (!activeEnvelope) return;
+    try { localStorage.setItem(CACHE_KEY, activeEnvelope); }
+    catch (_) { return; }
+    confirmedPayload = activePayload;
+    confirmedEnvelope = activeEnvelope;
+  };
   window.veshinantamDiscardPresetCatalog = () => {
-    activePayload = null;
-    localStorage.removeItem(CACHE_KEY);
+    if (confirmedEnvelope && activeEnvelope !== confirmedEnvelope) {
+      activePayload = confirmedPayload;
+      activeEnvelope = confirmedEnvelope;
+    } else {
+      activePayload = null;
+      activeEnvelope = null;
+      confirmedPayload = null;
+      confirmedEnvelope = null;
+      localStorage.removeItem(CACHE_KEY);
+    }
   };
   window.veshinantamPresetCatalogReady = window.veshinantamStorageReady.then(async () => {
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && config.publicKey) {
-      try { await accept(cached); } catch (_) { localStorage.removeItem(CACHE_KEY); }
+      try {
+        await accept(cached);
+        confirmedPayload = activePayload;
+        confirmedEnvelope = cached;
+      } catch (_) { localStorage.removeItem(CACHE_KEY); }
     }
     let state = {};
     try { state = JSON.parse(window.veshinantamReadState() || '{}'); } catch (_) { /* Use defaults. */ }
@@ -89,8 +114,7 @@
       const declaredLength = Number(response.headers.get('content-length') || 0);
       if (declaredLength > MAX_BYTES) return;
       const envelope = await response.text();
-      const payload = await accept(envelope);
-      if (payload.sequence > 8) localStorage.setItem(CACHE_KEY, envelope);
+      await accept(envelope);
     } catch (_) { /* The verified cached or bundled catalog remains active. */ }
   });
 })();

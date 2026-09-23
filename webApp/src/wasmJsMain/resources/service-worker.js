@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'veshinantam-web-';
-const CACHE = 'veshinantam-web-v34';
+const CACHE = 'veshinantam-web-v35';
 const PRECACHE = [
   './',
   './index.html',
@@ -39,6 +39,8 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  // The signed catalog must always be fetched from the network; verified copies live in app storage.
+  if (new URL(request.url).pathname.endsWith('/preset-catalog.json')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

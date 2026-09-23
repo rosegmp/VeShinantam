@@ -32,11 +32,12 @@ android {
         applicationId = "app.veshinantam"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.1.12"
-        val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl").orElse("").get()
+        versionCode = 14
+        versionName = "0.1.13"
+        val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl")
+            .orElse("https://rosegmp.github.io/VeShinantam/preset-catalog.json").get()
         val presetCatalogPublicKey = providers.gradleProperty("presetCatalogPublicKey").orElse(
-            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx3gli60LF/hLHlkuh9AqlgM3rpo3bP5L3fQySwJH8ggsHmMMmgSdisKnL+ljpJGSuEqE82uN/UBItAYlPpfZpA==",
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyGpGMqgEt3PlYOfRW5D9Yq9Vh/a3eYIgRxO6ez1YRae1xyJwCyYvQ+rWa5un2aZIPO3FG+52YIeRcdXecmomrA==",
         ).get()
         buildConfigField("String", "PRESET_CATALOG_UPDATE_URL", "\"${presetCatalogUpdateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "PRESET_CATALOG_PUBLIC_KEY", "\"${presetCatalogPublicKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")

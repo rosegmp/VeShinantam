@@ -13,4 +13,11 @@
             <certificates src="user" />
         </trust-anchors>
     </domain-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">rosegmp.github.io</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>

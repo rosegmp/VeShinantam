@@ -3,6 +3,8 @@ package app.veshinantam.domain.material
 import app.veshinantam.domain.model.MaterialType
 import app.veshinantam.shared.CanonicalMaterialType
 import app.veshinantam.shared.preset.SharedPresetCatalog
+import app.veshinantam.shared.preset.RemotePresetCatalogValidator
+import app.veshinantam.shared.preset.RemotePresetCatalog
 import java.time.DayOfWeek
 import java.time.LocalDate
 
@@ -50,6 +52,25 @@ object PresetCatalog {
     }
 
     val programs: List<PresetProgram> get() = activeUpdate?.programs ?: bundledPrograms
+
+    fun validateRemoteUpdate(update: RemotePresetCatalog) {
+        require(update.sequence > activeSequence)
+        RemotePresetCatalogValidator.programs(update)
+    }
+
+    fun applyRemoteUpdate(update: RemotePresetCatalog) {
+        require(update.sequence > activeSequence)
+        val programs = RemotePresetCatalogValidator.programs(update).map { shared ->
+            PresetProgram(
+                shared.id, shared.nameEnglish, shared.nameHebrew, shared.materialType.toAndroidMaterialType(),
+                shared.dailyQuantity, shared.selectedWeekdays.mapTo(mutableSetOf(), ::dayOfWeek),
+                shared.excludedDates.mapTo(mutableSetOf()) { LocalDate.of(it.year, it.month, it.day) },
+                shared.units, shared.currentIndex,
+            )
+        }
+        val asOf = requireNotNull(app.veshinantam.shared.IsoDate.parse(update.positionAsOf))
+        activeUpdate = ActiveUpdate(update.catalogVersion, update.sequence, LocalDate.of(asOf.year, asOf.month, asOf.day), programs)
+    }
 
     fun validateVerifiedUpdate(version: String, sequence: Long, asOf: LocalDate, currentReferences: Map<String, String>) {
         require(version.isNotBlank())

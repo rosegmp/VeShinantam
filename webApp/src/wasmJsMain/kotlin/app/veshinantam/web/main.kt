@@ -175,6 +175,10 @@ private external fun readPresetCatalog(): String?
 private external fun discardPresetCatalog()
 
 @OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamConfirmPresetCatalog()")
+private external fun confirmPresetCatalog()
+
+@OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => window.location.reload()")
 private external fun reloadForPresetCatalog()
 
@@ -423,11 +427,19 @@ private external fun hebrewCalendarPeriodJson(iso: String, hebrewUi: Boolean): S
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    fun applyCatalog(raw: String) {
+        val update = Json.decodeFromString<WebPresetCatalogUpdate>(raw)
+        require(update.positionAsOf <= LocalBrowserStore().currentLocalDate()) { "Catalog position date is in the future" }
+        WebPresetCatalog.applyVerifiedUpdate(update)
+        confirmPresetCatalog()
+    }
     readPresetCatalog()?.let { raw ->
-        runCatching {
-            val update = Json { ignoreUnknownKeys = true }.decodeFromString<WebPresetCatalogUpdate>(raw)
-            WebPresetCatalog.applyVerifiedUpdate(update)
-        }.onFailure { discardPresetCatalog() }
+        runCatching { applyCatalog(raw) }.onFailure {
+            discardPresetCatalog()
+            readPresetCatalog()?.let { previous ->
+                runCatching { applyCatalog(previous) }.onFailure { discardPresetCatalog() }
+            }
+        }
     }
     ComposeViewport(document.body!!) {
         val store = remember { LocalBrowserStore() }
