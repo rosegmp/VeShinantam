@@ -45,6 +45,7 @@ jobs:
 
       - name: Validate shared, Android, and web behavior
         run: |
+          node --test --test-isolation=none scripts/account-session.test.cjs
           node --test --test-isolation=none scripts/entity-sync-policy.test.cjs
           node --test --test-isolation=none scripts/indexeddb-recovery.test.cjs
           node --test --test-isolation=none scripts/service-worker-recovery.test.cjs

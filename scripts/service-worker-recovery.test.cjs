@@ -61,12 +61,13 @@ test('new worker activates only after every offline asset is cached', async () =
   await worker.dispatch('install');
   assert.equal(worker.skippedWaiting(), true);
   assert.equal(worker.precached.includes('./entity-sync-policy.js'), true);
+  assert.equal(worker.precached.includes('./account-session.js'), true);
   assert.equal(worker.precached.includes('./entity-sync.js'), true);
   assert.equal(worker.precached.includes('./veshinantam.js'), true);
 });
 
 test('interrupted precache rejects installation and leaves the prior cache untouched', async () => {
-  const worker = workerHarness({ failPrecache: true, cacheKeys: ['veshinantam-web-v38'] });
+  const worker = workerHarness({ failPrecache: true, cacheKeys: ['veshinantam-web-v39'] });
   await assert.rejects(worker.dispatch('install'), /interrupted download/);
   assert.equal(worker.skippedWaiting(), false);
   assert.deepEqual(worker.deleted, []);
@@ -74,9 +75,9 @@ test('interrupted precache rejects installation and leaves the prior cache untou
 
 test('activation removes only superseded app caches', async () => {
   const worker = workerHarness({
-    cacheKeys: ['veshinantam-web-v37', 'veshinantam-web-v38', 'veshinantam-web-v39', 'another-app-v1'],
+    cacheKeys: ['veshinantam-web-v38', 'veshinantam-web-v39', 'veshinantam-web-v40', 'another-app-v1'],
   });
   await worker.dispatch('activate');
-  assert.deepEqual(worker.deleted.sort(), ['veshinantam-web-v37', 'veshinantam-web-v38']);
+  assert.deepEqual(worker.deleted.sort(), ['veshinantam-web-v38', 'veshinantam-web-v39']);
   assert.equal(worker.claimedClients(), true);
 });

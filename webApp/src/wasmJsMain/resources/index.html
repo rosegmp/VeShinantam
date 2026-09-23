@@ -23,6 +23,7 @@
 <body>
   <script src="supabase-config.js"></script>
   <script src="entity-sync-policy.js"></script>
+  <script src="account-session.js"></script>
   <script src="entity-sync.js"></script>
   <script src="preset-updates.js"></script>
   <script>
@@ -67,25 +68,9 @@
         return message;
       };
       const normalize = (value) => JSON.stringify(typeof value === 'string' ? JSON.parse(value) : value);
-      const decodeJwt = (token) => {
-        try {
-          const body = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-          return JSON.parse(decodeURIComponent(Array.from(atob(body), c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')));
-        } catch (_) { return {}; }
-      };
-      const readSession = () => {
-        try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
-      };
-      const saveSession = (accessToken, refreshToken) => {
-        const claims = decodeJwt(accessToken);
-        localStorage.setItem(SESSION_KEY, JSON.stringify({
-          accessToken,
-          refreshToken,
-          userId: claims.sub || '',
-          email: claims.email || '',
-          expiresAt: Number(claims.exp || 0) * 1000
-        }));
-      };
+      const readSession = () => window.VeShinantamAccountSession.read(localStorage, SESSION_KEY);
+      const saveSession = (accessToken, refreshToken) =>
+        window.VeShinantamAccountSession.save(localStorage, SESSION_KEY, accessToken, refreshToken);
 
       if (configured && location.hash.includes('access_token=')) {
         const values = new URLSearchParams(location.hash.slice(1));
@@ -101,18 +86,13 @@
       }
 
       const authenticatedSession = async () => {
-        const session = readSession();
-        if (!session) throw new Error('Please sign in again.');
-        if (!window.VeShinantamEntitySyncPolicy.sessionNeedsRefresh(session.expiresAt)) return session;
-        const response = await timedFetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
-          method: 'POST',
-          headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: session.refreshToken })
+        return window.VeShinantamAccountSession.authenticated({
+          storage: localStorage,
+          sessionKey: SESSION_KEY,
+          config,
+          timedFetch,
+          policy: window.VeShinantamEntitySyncPolicy,
         });
-        if (!response.ok) throw new Error('Your session expired. Please sign in again.');
-        const refreshed = await response.json();
-        saveSession(refreshed.access_token, refreshed.refresh_token);
-        return readSession();
       };
       const api = async (path, options = {}) => {
         const session = await authenticatedSession();
@@ -240,7 +220,8 @@
       const incrementalEntitySync = async (state) => {
         setStatus('Preparing device changes…');
         const session = await authenticatedSession();
-        const currentAccountId = session?.userId || decodeJwt(session?.accessToken || '').sub || '';
+        const currentAccountId = session?.userId ||
+          window.VeShinantamAccountSession.decodeJwt(session?.accessToken || '').sub || '';
         const binding = window.VeShinantamEntitySyncPolicy.accountBinding(
           localStorage.getItem(ENTITY_ACCOUNT_KEY),
           currentAccountId
