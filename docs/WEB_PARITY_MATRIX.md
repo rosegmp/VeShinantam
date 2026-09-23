@@ -26,7 +26,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Signed preset updates | Complete | Complete | Same HTTPS envelope/key ID, pinned P-256 signature verification, strict reference validation, atomic browser cache replacement, and bundled fallback |
 | Light/dark mode | Complete | Complete | Both clients follow the system preference with matching accessible blue/gold schemes and semantic surface/status colors |
 | Accessibility hardening | Complete | Partial | Keyboard roles/state for navigation, task completion, collapsible sections, and calendar cells plus reduced-motion support are implemented; formal screen-reader, focus-order, 200% zoom, contrast, and RTL browser validation remains |
-| Release/migration verification | Complete | Partial | JVM/Wasm, Android, web, entity-sync policy, token-refresh policy, atomic service-worker upgrade/recovery, and production bundle-size checks gate deployment in CI; browser matrix, IndexedDB recovery, and live two-device refresh tests remain |
+| Release/migration verification | Complete | Partial | JVM/Wasm, Android, web, entity-sync policy, token-refresh policy, atomic service-worker upgrade/recovery, production bundle-size checks, and Chrome/Firefox Wasm suites gate deployment in CI; Edge/Safari and installed-PWA validation, IndexedDB recovery, and live two-device refresh tests remain |
 
 ## Platform exceptions
 

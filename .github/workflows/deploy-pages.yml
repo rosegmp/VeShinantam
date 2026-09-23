@@ -33,6 +33,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Set up Firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -43,7 +48,7 @@ jobs:
           node --test --test-isolation=none scripts/entity-sync-policy.test.cjs
           node --test --test-isolation=none scripts/service-worker-recovery.test.cjs
           ./gradlew kotlinWasmUpgradePackageLock --rerun-tasks
-          ./gradlew :shared:allTests :app:testDebugUnitTest :webApp:allTests
+          ./gradlew -PfullBrowserMatrix=true :shared:allTests :app:testDebugUnitTest :webApp:allTests
 
       - name: Build production web app
         run: |
