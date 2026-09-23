@@ -103,7 +103,7 @@
       const authenticatedSession = async () => {
         const session = readSession();
         if (!session) throw new Error('Please sign in again.');
-        if (session.expiresAt > Date.now() + 60000) return session;
+        if (!window.VeShinantamEntitySyncPolicy.sessionNeedsRefresh(session.expiresAt)) return session;
         const response = await timedFetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
           headers: { 'apikey': config.publishableKey, 'Content-Type': 'application/json' },

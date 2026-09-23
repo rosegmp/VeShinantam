@@ -34,7 +34,9 @@ the same item changes while an upload is in flight, the replacement mutation is
 retained and rebased to the server revision. Remote pulls likewise rebase but do
 not overwrite pending local edits or deletes. These concurrency, duplicate,
 retry, delete, and account-binding policies run in CI through
-`scripts/entity-sync-policy.test.cjs`.
+`scripts/entity-sync-policy.test.cjs`. The same gate verifies that fresh access
+tokens are reused while expired, malformed, and near-expiry sessions enter the
+refresh path before synchronization.
 
 ## Release build
 

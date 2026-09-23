@@ -60,3 +60,12 @@ test('retry policy covers transient responses and network timeouts only', () => 
   assert.equal(policy.isRetryableNetworkError({ message: 'The sync server did not respond within 30 seconds.' }), true);
   assert.equal(policy.isRetryableNetworkError({ message: 'permission denied' }), false);
 });
+
+test('token refresh policy refreshes expired and near-expiry sessions', () => {
+  const now = 1_000_000;
+  assert.equal(policy.sessionNeedsRefresh(now + 120_000, now), false);
+  assert.equal(policy.sessionNeedsRefresh(now + 60_001, now), false);
+  assert.equal(policy.sessionNeedsRefresh(now + 60_000, now), true);
+  assert.equal(policy.sessionNeedsRefresh(now - 1, now), true);
+  assert.equal(policy.sessionNeedsRefresh(undefined, now), true);
+});

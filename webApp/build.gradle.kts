@@ -68,5 +68,22 @@ tasks.register<Sync>("stageSite") {
         check(runtimeAssets.isNotEmpty() && runtimeAssets.all(stagedWorker::contains)) {
             "Every Wasm runtime must be present in the offline precache manifest."
         }
+        val javascriptBytes = site.resolve("veshinantam.js").length()
+        val wasmBytes = runtimeAssets.sumOf { site.resolve(it).length() }
+        val largestWasmBytes = runtimeAssets.maxOf { site.resolve(it).length() }
+        check(javascriptBytes <= 650L * 1024) {
+            "Production JavaScript exceeded the 650 KiB regression budget: ${javascriptBytes / 1024} KiB."
+        }
+        check(largestWasmBytes <= 9L * 1024 * 1024) {
+            "A production Wasm runtime exceeded the 9 MiB regression budget: ${largestWasmBytes / 1024 / 1024} MiB."
+        }
+        check(wasmBytes <= 14L * 1024 * 1024) {
+            "Production Wasm runtimes exceeded the 14 MiB combined regression budget: ${wasmBytes / 1024 / 1024} MiB."
+        }
+        logger.lifecycle(
+            "Web size budgets passed: JS={} KiB, Wasm={} KiB combined.",
+            javascriptBytes / 1024,
+            wasmBytes / 1024,
+        )
     }
 }

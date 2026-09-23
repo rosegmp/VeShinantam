@@ -232,13 +232,13 @@ Indicative effort: 2 weeks
 ### Quality gates
 
 - Automated common-domain tests run for JVM and Wasm in continuous integration.
-- Sync policy tests cover retry classification, duplicate acknowledgements, concurrent edit/delete conflicts, mutation rebasing, and account-switch rejection. Live two-device and token-expiry integration checks complete this gate.
+- Sync policy tests cover retry classification, duplicate acknowledgements, concurrent edit/delete conflicts, mutation rebasing, account-switch rejection, and token-refresh boundaries. Live two-device refresh integration completes this gate.
 - Migration tests cover every supported Android database/backup and web IndexedDB/local-storage version.
 - Browser matrix covers current Chrome, Edge, Firefox, and Safari, plus installed PWA behavior where supported.
 - Accessibility review covers keyboard-only use, focus order, landmarks, screen readers, 200% zoom, contrast, reduced motion, and Hebrew RTL.
 - Security review covers RLS, RPC authorization, public-key handling, redirect allowlists, session storage, dependency audit, and account deletion/export.
-- Performance budgets cover cold load, IndexedDB startup, large histories, month navigation, and incremental sync.
-- Service-worker and database upgrades have rollback/recovery tests.
+- Production JS/Wasm byte budgets gate deployment; runtime budgets still cover cold load, IndexedDB startup, large histories, month navigation, and incremental sync.
+- Service-worker upgrades have atomic install/activation rollback tests; IndexedDB upgrades still need browser-level recovery coverage.
 
 ### Rollout
 
