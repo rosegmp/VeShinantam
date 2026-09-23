@@ -19,6 +19,7 @@ import app.veshinantam.shared.CanonicalSchedule
 import app.veshinantam.shared.CanonicalScheduleKind
 import app.veshinantam.shared.CanonicalScheduleState
 import app.veshinantam.shared.CanonicalSefarimLanguage
+import app.veshinantam.shared.text.HebrewReferenceFormatter
 import app.veshinantam.shared.CanonicalTask
 import app.veshinantam.shared.CanonicalTaskType
 import app.veshinantam.shared.SharedMaterialUnit
@@ -621,8 +622,11 @@ private fun compareTodayTasks(left: StoredTask, right: StoredTask, order: WebTod
     return directed.takeIf { it != 0 } ?: left.id.compareTo(right.id)
 }
 
+fun normalizedHebrewReference(english: String, hebrew: String): String =
+    HebrewReferenceFormatter.normalize(english, hebrew)
+
 private fun displayedReference(task: StoredTask, preferHebrew: Boolean): String =
-    if (preferHebrew) task.referenceHebrew.ifBlank { task.referenceEnglish }
+    if (preferHebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish }
     else task.referenceEnglish.ifBlank { task.referenceHebrew }
 
 private fun compareReferenceLabels(left: StoredTask, right: StoredTask, preferHebrew: Boolean): Int {

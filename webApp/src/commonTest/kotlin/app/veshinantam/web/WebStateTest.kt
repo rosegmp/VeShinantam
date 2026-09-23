@@ -82,6 +82,19 @@ class WebStateTest {
     }
 
     @Test
+    fun printableScheduleNormalizesLegacyHebrewReferences() {
+        val state = WebAppState(
+            schedules = listOf(StoredSchedule("daf", "Daf Yomi", "Gemara", 1)),
+            tasks = listOf(StoredTask("legacy", "daf", "Yevamos 104b", "יבמות 104:", today, "LEARNING")),
+            language = "he",
+            sefarimLanguage = "HEBREW",
+        )
+
+        assertEquals("יבמות דף קד:", buildPrintableSchedule(state, today, 7).rows.single().reference)
+        assertEquals("יבמות דף קד:", normalizedHebrewReference("Yevamos 104b", "יבמות 104:"))
+    }
+
+    @Test
     fun portableCanonicalBackupRebuildsWebState() {
         val source = WebAppState.sample(today).copy(
             reminderEnabled = true,

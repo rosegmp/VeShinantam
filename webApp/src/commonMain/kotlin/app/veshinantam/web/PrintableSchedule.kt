@@ -37,6 +37,7 @@ fun buildPrintableSchedule(state: WebAppState, startDate: String, dayCount: Int)
         ))
         .map { task ->
             val schedule = requireNotNull(activeSchedules[task.scheduleId])
+            val hebrewReference = normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew)
             PrintableScheduleRow(
                 date = task.dueDate,
                 scheduleName = if (state.language == "he") schedule.nameHebrew.ifBlank { schedule.name } else schedule.name.ifBlank { schedule.nameHebrew },
@@ -47,8 +48,8 @@ fun buildPrintableSchedule(state: WebAppState, startDate: String, dayCount: Int)
                 },
                 reference = when (state.sefarimLanguage) {
                     "ENGLISH" -> task.referenceEnglish.ifBlank { task.referenceHebrew }
-                    "HEBREW" -> task.referenceHebrew.ifBlank { task.referenceEnglish }
-                    else -> listOf(task.referenceEnglish, task.referenceHebrew).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+                    "HEBREW" -> hebrewReference.ifBlank { task.referenceEnglish }
+                    else -> listOf(task.referenceEnglish, hebrewReference).filter { it.isNotBlank() }.distinct().joinToString(" · ")
                 },
                 completed = task.completed,
             )

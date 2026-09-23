@@ -15,7 +15,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | English/Hebrew UI and RTL | Complete | Complete | Maintain browser accessibility and directional isolation |
 | Sefarim display language | Complete | Complete | English, Hebrew, or both, independently from UI language; preference is backed up and synchronized |
 | Preferences and settings | Complete | Complete | Language, reference language, primary calendar, default chazarah, Today sort, reminder time/state, and preset-update preference round-trip and synchronize without clobbering platform-specific behavior |
-| Hebrew references/numerals | Complete | Partial | Shared formatter and reference snapshots |
+| Hebrew references/numerals | Complete | Complete | One shared JVM/Wasm formatter normalizes Hebrew numerals and legacy Daf wording across Android, web task views, readers, and printable schedules; cross-platform reference snapshots gate regressions |
 | Offline persistence | Room | IndexedDB + installable offline shell | IndexedDB authoritative store with migrations/outbox; atomic service-worker upgrades pre-cache both Wasm runtimes and preserve the last working shell after interrupted updates |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |
 | Cross-device sync | Incremental client enabled | Incremental client enabled | Both use the current entity API; full two-device conflict, retry, migration, and token-expiry integration verification remains in milestone 7 |

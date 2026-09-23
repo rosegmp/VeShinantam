@@ -2,7 +2,7 @@ package app.veshinantam.ui.calendar
 
 import android.icu.util.HebrewCalendar
 import android.icu.util.TimeZone
-import app.veshinantam.localization.HebrewNumerals
+import app.veshinantam.shared.text.HebrewNumerals
 import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneOffset

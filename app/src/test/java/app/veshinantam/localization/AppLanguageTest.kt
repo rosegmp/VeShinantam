@@ -1,5 +1,7 @@
 package app.veshinantam.localization
 
+import app.veshinantam.shared.text.HebrewNumerals
+import app.veshinantam.shared.text.HebrewReferenceFormatter
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

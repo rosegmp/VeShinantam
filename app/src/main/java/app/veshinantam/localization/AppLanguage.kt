@@ -7,6 +7,7 @@ import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
+import app.veshinantam.shared.text.HebrewReferenceFormatter
 import java.util.Locale
 
 enum class AppLanguage(val languageTag: String) {
@@ -102,51 +103,6 @@ object BidiText {
             }
         } ?: return value
         return isolate(value, contentLanguage, uiLanguage)
-    }
-}
-
-object HebrewReferenceFormatter {
-    private val numberPattern = Regex("\\d+")
-    private val plainGemaraPattern = Regex("^[^\\d,]+ \\d+[ab]?$", RegexOption.IGNORE_CASE)
-
-    fun normalize(english: String, hebrew: String): String {
-        if (hebrew.isBlank()) return hebrew
-        val converted = numberPattern.replace(hebrew) { HebrewNumerals.format(it.value.toInt()) }
-        return if (plainGemaraPattern.matches(english) && " perek " !in english.lowercase(Locale.ROOT) && "דף" !in converted) {
-            addDafBeforeTrailingLocation(converted)
-        } else converted
-    }
-
-    private fun addDafBeforeTrailingLocation(value: String): String {
-        val lastSpace = value.lastIndexOf(' ')
-        return if (lastSpace >= 0) value.substring(0, lastSpace + 1) + "דף " + value.substring(lastSpace + 1) else value
-    }
-}
-
-object HebrewNumerals {
-    fun format(value: Int): String {
-        require(value in 1..999)
-        var remaining = value
-        val result = StringBuilder()
-        while (remaining >= 400) {
-            result.append('ת')
-            remaining -= 400
-        }
-        val hundreds = listOf(300 to 'ש', 200 to 'ר', 100 to 'ק')
-        hundreds.firstOrNull { remaining >= it.first }?.let { (amount, letter) ->
-            result.append(letter)
-            remaining -= amount
-        }
-        if (remaining == 15) return result.append("טו").toString()
-        if (remaining == 16) return result.append("טז").toString()
-        val tens = listOf(90 to 'צ', 80 to 'פ', 70 to 'ע', 60 to 'ס', 50 to 'נ', 40 to 'מ', 30 to 'ל', 20 to 'כ', 10 to 'י')
-        tens.firstOrNull { remaining >= it.first }?.let { (amount, letter) ->
-            result.append(letter)
-            remaining -= amount
-        }
-        val ones = "אבגדהוזחט"
-        if (remaining > 0) result.append(ones[remaining - 1])
-        return result.toString()
     }
 }
 

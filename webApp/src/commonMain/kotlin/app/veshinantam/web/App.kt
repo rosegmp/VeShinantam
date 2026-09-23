@@ -1302,13 +1302,14 @@ private fun TaskGroup(
             if (!expanded) return@Column
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             tasks.forEachIndexed { index, task ->
+                val hebrewReference = normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew)
                 val primary = when (sefarimLanguage) {
                     "ENGLISH" -> task.referenceEnglish
-                    "HEBREW" -> task.referenceHebrew
-                    else -> if (hebrew) task.referenceHebrew else task.referenceEnglish
+                    "HEBREW" -> hebrewReference
+                    else -> if (hebrew) hebrewReference else task.referenceEnglish
                 }
                 val secondary = if (sefarimLanguage == "BOTH") {
-                    if (hebrew) task.referenceEnglish else task.referenceHebrew
+                    if (hebrew) task.referenceEnglish else hebrewReference
                 } else null
                 Row(
                     modifier = Modifier.fillMaxWidth()
@@ -1391,7 +1392,7 @@ private fun WebSefariaTextDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
-        title = { Text(if (hebrew) task.referenceHebrew.ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        title = { Text(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -1409,7 +1410,7 @@ private fun WebSefariaTextDialog(
                     is WebTextState.Ready -> {
                         val content = value.content
                         if (sefarimLanguage != "ENGLISH") content.hebrew?.let { version ->
-                            Text(content.hebrewReference.ifBlank { task.referenceHebrew }, fontWeight = FontWeight.Bold, color = DeepBlue)
+                            Text(content.hebrewReference.ifBlank { normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew) }, fontWeight = FontWeight.Bold, color = DeepBlue)
                             Text(version.segments.joinToString("\n\n"), fontSize = 17.sp)
                             Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
                         }
@@ -1454,7 +1455,7 @@ private fun WebPeleYoetzTextDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
-        title = { Text(if (hebrew) task.referenceHebrew.ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        title = { Text(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),

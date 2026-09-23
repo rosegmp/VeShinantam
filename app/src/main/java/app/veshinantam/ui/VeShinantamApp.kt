@@ -185,7 +185,7 @@ import app.veshinantam.localization.LanguageSettings
 import app.veshinantam.localization.PrimaryCalendar
 import app.veshinantam.localization.SefarimDisplay
 import app.veshinantam.localization.SefarimLanguage
-import app.veshinantam.localization.HebrewNumerals
+import app.veshinantam.shared.text.HebrewNumerals
 import app.veshinantam.notifications.ReminderPreference
 import app.veshinantam.notifications.ReminderScheduler
 import app.veshinantam.notifications.ReminderSettings
