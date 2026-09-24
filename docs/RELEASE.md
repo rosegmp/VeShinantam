@@ -35,7 +35,7 @@ Before distributing an update, increase `versionCode` in `app/build.gradle.kts`.
 .\scripts\build-release.ps1 -VerifyReproducible
 ```
 
-The release script writes the versioned APK and its `.sha256` file to `artifacts/`. With `-VerifyReproducible`, it builds twice from a clean tree and requires the APK hashes to match.
+The release script writes the versioned APK and its `.sha256` file to `artifacts/`. With `-VerifyReproducible`, it builds twice from a clean tree. Unsigned APKs must match byte for byte. Android's preferred RSA-PSS v2 signatures contain random salt, so signed APKs may have different whole-file hashes; in that case the script requires all protected APK content to match byte for byte, verifies both signatures, and requires the same signer certificate. The `.sha256` file always records the exact distributable APK bytes.
 
 The device smoke script requires one booted emulator or connected device. It checks fresh-install launch and onboarding, every Room migration path, schedule creation, Today retrieval, completion and undo, and a transactional backup round trip. It avoids Gradle's optional Unified Test Platform download and can therefore run after the project's Android dependencies have been cached for offline use.
 
