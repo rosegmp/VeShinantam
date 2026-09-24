@@ -45,6 +45,18 @@ data class SefariaTextContent(
 }
 
 object SefariaReferenceMapper {
+    private val mishnahLocation = Regex("""^(.+?) (?:perek )?(\d+(?::\d+)?)$""")
+    // The catalog uses Ashkenazi display names; Sefaria uses these index titles.
+    private val mishnahTractateNames = mapOf(
+        "Berachos" to "Berakhot", "Sheviis" to "Sheviit", "Terumos" to "Terumot",
+        "Maasros" to "Maasrot", "Shabbos" to "Shabbat", "Taanis" to "Taanit",
+        "Yevamos" to "Yevamot", "Kesubos" to "Ketubot", "Bava Basra" to "Bava Batra",
+        "Makkos" to "Makkot", "Shevuos" to "Shevuot", "Eduyos" to "Eduyot",
+        "Avos" to "Avot", "Menachos" to "Menachot", "Bechoros" to "Bekhorot",
+        "Arachin" to "Arakhin", "Kerisus" to "Keritot", "Middos" to "Middot",
+        "Ohalos" to "Oholot", "Taharos" to "Tahorot", "Mikvaos" to "Mikvaot",
+        "Machshirin" to "Makhshirin", "Uktzin" to "Oktzin",
+    )
     private val mishnahBerurahReference = Regex(
         """^Mishnah Berurah, chelek \d+ siman (\d+)(?: seif (\d+))?$""",
         RegexOption.IGNORE_CASE,
@@ -106,9 +118,15 @@ object SefariaReferenceMapper {
             referenceEnglish.startsWith("Pele Yoetz, Day ") ->
                 referenceEnglish.replaceFirst("Pele Yoetz, Day ", "Pele Yoetz ")
             (materialType == "MISHNAH" || materialType == "PEREK") &&
-                !referenceEnglish.startsWith("Mishnah ") &&
                 !referenceEnglish.startsWith("Mishneh Torah, ") &&
-                !referenceEnglish.startsWith("Psalms ") -> "Mishnah $referenceEnglish"
+                !referenceEnglish.startsWith("Psalms ") -> {
+                val location = referenceEnglish.removePrefix("Mishnah ")
+                val match = mishnahLocation.matchEntire(location)
+                if (match == null) "Mishnah $location" else {
+                    val tractate = match.groupValues[1]
+                    "Mishnah ${mishnahTractateNames[tractate] ?: tractate} ${match.groupValues[2]}"
+                }
+            }
             else -> referenceEnglish
         }
         if (mapped.isBlank()) return unavailable("No text reference is available for this task.", "אין מראה מקום זמין למשימה זו.")

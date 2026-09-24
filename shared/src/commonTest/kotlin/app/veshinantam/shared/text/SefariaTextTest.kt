@@ -20,7 +20,11 @@ class SefariaTextTest {
         assertEquals("Kitzur Shulchan Arukh 133:1-8", request("Kitzur Shulchan Aruch 133:1-8", "CUSTOM_UNIT").reference)
         assertEquals("Mishnah Berurah 1", request("Mishnah Berurah, chelek 1 siman 1", "SIMAN").reference)
         assertEquals("Mishnah Berurah 1:3", request("Mishnah Berurah, chelek 1 siman 1 seif 3", "SEIF").reference)
-        assertEquals("Mishnah Berachos 1", request("Berachos 1", "PEREK").reference)
+        assertEquals("Mishnah Berakhot 1", request("Berachos 1", "PEREK").reference)
+        assertEquals("Mishnah Berakhot 1", request("Berachos perek 1", "PEREK").reference)
+        assertEquals("Mishnah Oholot 1:1", request("Ohalos 1:1", "MISHNAH", "mishnah-yomis").reference)
+        assertEquals("Mishnah Oholot 1:1", request("Mishnah Ohalos 1:1", "MISHNAH").reference)
+        assertEquals("Mishnah Avot 1:1", request("Avos 1:1", "MISHNAH").reference)
     }
 
     @Test
