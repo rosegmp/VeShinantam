@@ -13,6 +13,8 @@ class SefariaTextTest {
             assertIs<SefariaTextLookup.Available>(SefariaReferenceMapper.lookup(reference, type, preset)).request
 
         assertEquals("Chullin 133", request("Chullin 133", "DAF", "daf-yomi-bavli").reference)
+        assertEquals("Yevamot 105a", request("Yevamos 105a", "AMUD", "oraysa").reference)
+        assertEquals("Horayot 2a", request("Horayos 2a", "AMUD", "oraysa").reference)
         assertEquals("Mishnah Kelim 30:2", request("Kelim 30:2", "MISHNAH", "mishnah-yomis").reference)
         assertEquals("Mishneh Torah, Other Sources of Defilement 9", request("Rambam, Other Sources of Defilement 9", "PEREK").reference)
         assertEquals("Psalms 120-134", request("Tehillim 120-134", "PEREK").reference)

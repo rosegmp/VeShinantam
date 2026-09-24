@@ -46,13 +46,14 @@ data class SefariaTextContent(
 
 object SefariaReferenceMapper {
     private val mishnahLocation = Regex("""^(.+?) (?:perek )?(\d+(?::\d+)?)$""")
+    private val bavliLocation = Regex("""^(.+?) (\d+[ab]?)$""")
     // The catalog uses Ashkenazi display names; Sefaria uses these index titles.
     private val mishnahTractateNames = mapOf(
         "Berachos" to "Berakhot", "Sheviis" to "Sheviit", "Terumos" to "Terumot",
         "Maasros" to "Maasrot", "Shabbos" to "Shabbat", "Taanis" to "Taanit",
         "Yevamos" to "Yevamot", "Kesubos" to "Ketubot", "Bava Basra" to "Bava Batra",
         "Makkos" to "Makkot", "Shevuos" to "Shevuot", "Eduyos" to "Eduyot",
-        "Avos" to "Avot", "Menachos" to "Menachot", "Bechoros" to "Bekhorot",
+        "Avos" to "Avot", "Horayos" to "Horayot", "Menachos" to "Menachot", "Bechoros" to "Bekhorot",
         "Arachin" to "Arakhin", "Kerisus" to "Keritot", "Middos" to "Middot",
         "Ohalos" to "Oholot", "Taharos" to "Tahorot", "Mikvaos" to "Mikvaot",
         "Machshirin" to "Makhshirin", "Uktzin" to "Oktzin",
@@ -117,6 +118,13 @@ object SefariaReferenceMapper {
                 referenceEnglish.replaceFirst("Kitzur Shulchan Aruch ", "Kitzur Shulchan Arukh ")
             referenceEnglish.startsWith("Pele Yoetz, Day ") ->
                 referenceEnglish.replaceFirst("Pele Yoetz, Day ", "Pele Yoetz ")
+            materialType == "DAF" || materialType == "AMUD" -> {
+                val match = bavliLocation.matchEntire(referenceEnglish)
+                if (match == null) referenceEnglish else {
+                    val tractate = match.groupValues[1]
+                    "${mishnahTractateNames[tractate] ?: tractate} ${match.groupValues[2]}"
+                }
+            }
             (materialType == "MISHNAH" || materialType == "PEREK") &&
                 !referenceEnglish.startsWith("Mishneh Torah, ") &&
                 !referenceEnglish.startsWith("Psalms ") -> {
