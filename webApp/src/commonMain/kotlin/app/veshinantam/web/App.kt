@@ -123,6 +123,9 @@ import app.veshinantam.shared.SharedProgressMilestone
 import app.veshinantam.shared.SharedProgressMilestoneKind
 import app.veshinantam.shared.SharedProgressTask
 import app.veshinantam.shared.SharedSavedGoal
+import app.veshinantam.shared.ScheduleLearningFilter
+import app.veshinantam.shared.scheduleLearningCounts
+import app.veshinantam.shared.scheduleLearningFilter
 import app.veshinantam.shared.preset.SharedPresetCatalog
 import app.veshinantam.shared.preset.SharedPresetProgram
 import app.veshinantam.shared.preset.GemaraUnit
@@ -858,7 +861,8 @@ private fun AppContent(
                 hebrewCalendarPeriod = hebrewCalendarPeriod,
             )
             Destination.SCHEDULES -> SchedulesScreen(
-                state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit, onRequestBulkCompletion,
+                state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit,
+                onRequestBulkCompletion, onToggle, onRead,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew, onSaveGoals)
         }
@@ -1806,7 +1810,21 @@ private fun SchedulesScreen(
     onRequestDelete: (String) -> Unit,
     onRequestEdit: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
+    onToggle: (String) -> Unit,
+    onRead: (StoredTask, String?) -> Unit,
 ) {
+    var selectedLearningScheduleId by remember { mutableStateOf<String?>(null) }
+    state.schedules.firstOrNull { it.id == selectedLearningScheduleId }?.let { schedule ->
+        WebScheduleLearningDialog(
+            schedule = schedule,
+            tasks = state.tasks.filter { it.scheduleId == schedule.id && it.type == LearningTaskType.LEARNING.name },
+            today = today,
+            hebrew = hebrew,
+            onToggle = onToggle,
+            onRead = { task -> onRead(task, schedule.presetId) },
+            onDismiss = { selectedLearningScheduleId = null },
+        )
+    }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -1874,6 +1892,11 @@ private fun SchedulesScreen(
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             FlowRow(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { selectedLearningScheduleId = schedule.id }) {
+                                    Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "הצג לימוד" else "View learning")
+                                }
                                 TextButton(onClick = { onRequestEdit(schedule.id) }) {
                                     Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -1894,6 +1917,11 @@ private fun SchedulesScreen(
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { selectedLearningScheduleId = schedule.id }) {
+                                    Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "הצג לימוד" else "View learning")
+                                }
                                 TextButton(onClick = { onRestore(schedule.id) }) {
                                     Icon(Icons.Default.Unarchive, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -1911,6 +1939,118 @@ private fun SchedulesScreen(
             }
         }
     }
+}
+
+@Composable
+private fun WebScheduleLearningDialog(
+    schedule: StoredSchedule,
+    tasks: List<StoredTask>,
+    today: String,
+    hebrew: Boolean,
+    onToggle: (String) -> Unit,
+    onRead: (StoredTask) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var filter by remember(schedule.id) { mutableStateOf(ScheduleLearningFilter.ALL) }
+    val sortedTasks = remember(tasks) { tasks.sortedWith(compareBy<StoredTask> { it.dueDate }.thenBy { it.stableKey }) }
+    val counts = remember(sortedTasks, today) {
+        scheduleLearningCounts(sortedTasks.map { it.dueDate to it.completed }, today)
+    }
+    val filteredTasks = remember(sortedTasks, today, filter) {
+        sortedTasks.filter { task ->
+            filter == ScheduleLearningFilter.ALL || scheduleLearningFilter(task.dueDate, task.completed, today) == filter
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(if (hebrew) schedule.nameHebrew.ifBlank { schedule.name } else schedule.name, color = DeepBlue)
+                Text(if (hebrew) "כל הלימוד המתוכנן" else "All scheduled learning", color = MutedInk, fontSize = 13.sp)
+            }
+        },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 590.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ScheduleLearningFilter.entries.forEach { option ->
+                        FilterChip(
+                            selected = filter == option,
+                            onClick = { filter = option },
+                            label = { Text("${webScheduleLearningFilterLabel(option, hebrew)} (${counts.count(option)})") },
+                        )
+                    }
+                }
+                if (filteredTasks.isEmpty()) {
+                    Text(
+                        if (hebrew) "אין לימוד התואם למסנן הזה." else "No learning matches this filter.",
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                        color = MutedInk,
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                        filteredTasks.groupBy { it.dueDate }.forEach { (date, dateTasks) ->
+                            item(key = "date-$date") {
+                                Surface(
+                                    color = DeepBlueContainer,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                ) {
+                                    Text(
+                                        friendlyDate(date, hebrew),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                            items(dateTasks, key = { it.id }) { task ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = task.completed,
+                                        onCheckedChange = { onToggle(task.id) },
+                                        modifier = Modifier.semantics {
+                                            contentDescription = if (hebrew) {
+                                                normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish }
+                                            } else task.referenceEnglish
+                                        },
+                                    )
+                                    Text(
+                                        if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish }
+                                        else task.referenceEnglish,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    IconButton(onClick = { onRead(task) }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.MenuBook,
+                                            if (hebrew) "קריאת הטקסט" else "Read text",
+                                            tint = DeepBlue,
+                                        )
+                                    }
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+    )
+}
+
+private fun webScheduleLearningFilterLabel(filter: ScheduleLearningFilter, hebrew: Boolean): String = when (filter) {
+    ScheduleLearningFilter.COMPLETED -> if (hebrew) "הושלם" else "Completed"
+    ScheduleLearningFilter.MISSED -> if (hebrew) "הוחמץ" else "Missed"
+    ScheduleLearningFilter.TODAY -> if (hebrew) "היום" else "Today"
+    ScheduleLearningFilter.FUTURE -> if (hebrew) "עתידי" else "Future"
+    ScheduleLearningFilter.ALL -> if (hebrew) "הכול" else "All"
 }
 
 @Composable

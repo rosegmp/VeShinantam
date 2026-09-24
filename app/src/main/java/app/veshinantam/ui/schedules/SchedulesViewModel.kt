@@ -9,16 +9,37 @@ import app.veshinantam.data.PendingSchedulePlan
 import app.veshinantam.data.PresetScheduleDraft
 import app.veshinantam.data.ScheduleRepository
 import app.veshinantam.data.local.ScheduleEntity
+import app.veshinantam.data.local.TaskEntity
 import app.veshinantam.domain.model.ScheduleState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SchedulesViewModel(private val repository: ScheduleRepository) : ViewModel() {
+    private val selectedLearningScheduleId = MutableStateFlow<String?>(null)
+
     val schedules = repository.observeSchedules()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val exclusions = repository.observeExclusions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val selectedLearningTasks = selectedLearningScheduleId
+        .flatMapLatest { scheduleId ->
+            if (scheduleId == null) flowOf(emptyList<TaskEntity>()) else repository.observeLearningTasks(scheduleId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun selectLearningSchedule(scheduleId: String?) {
+        selectedLearningScheduleId.value = scheduleId
+    }
+
+    fun setCompleted(taskId: String, completed: Boolean) {
+        viewModelScope.launch { repository.setCompleted(taskId, completed) }
+    }
 
     fun preview(draft: CustomScheduleDraft): PendingSchedulePlan = repository.buildCustomPlan(draft)
 

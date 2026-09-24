@@ -191,6 +191,14 @@
     <string name="schedule_paused">מושהית</string>
     <string name="schedule_archived">בארכיון</string>
     <string name="view_schedule_details">הצגת פרטים</string>
+    <string name="view_schedule_learning">הצגת הלימוד</string>
+    <string name="schedule_learning">כל הלימוד המתוכנן</string>
+    <string name="learning_filter_completed">הושלם</string>
+    <string name="learning_filter_missed">הוחמץ</string>
+    <string name="learning_filter_today">היום</string>
+    <string name="learning_filter_future">עתידי</string>
+    <string name="learning_filter_all">הכול</string>
+    <string name="no_learning_in_filter">אין לימוד התואם למסנן הזה.</string>
     <string name="edit_schedule">עריכת התוכנית</string>
     <string name="edit_schedule_title">עריכת המשך התוכנית</string>
     <string name="edit_future_explanation">משימות שהושלמו וכל המשימות שתאריכן לפני היום יישארו ללא שינוי. לימוד שטרם הושלם מהיום והלאה והחזרות הנגזרות ממנו ייקבעו מחדש.</string>

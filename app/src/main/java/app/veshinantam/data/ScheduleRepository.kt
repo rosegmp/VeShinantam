@@ -100,6 +100,7 @@ class ScheduleRepository(
 
     fun observeProgressTasks(): Flow<List<ProgressTaskRow>> = dao.observeProgressTasks()
     fun observeProgressGoals(): Flow<List<ProgressGoalEntity>> = dao.observeProgressGoals()
+    fun observeLearningTasks(scheduleId: String): Flow<List<TaskEntity>> = dao.observeLearningTasks(scheduleId)
     suspend fun learningTasks(scheduleId: String): List<TaskEntity> = dao.getLearningTasks(scheduleId)
 
     suspend fun replaceProgressGoals(goals: List<ProgressGoalEntity>) {

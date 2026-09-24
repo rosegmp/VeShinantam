@@ -95,6 +95,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -148,6 +149,7 @@ import app.veshinantam.data.preset.PresetUpdateResult
 import app.veshinantam.data.preset.PresetUpdateSettings
 import app.veshinantam.data.local.ScheduleEntity
 import app.veshinantam.data.local.ScheduleExclusionEntity
+import app.veshinantam.data.local.TaskEntity
 import app.veshinantam.data.local.TodayTaskRow
 import app.veshinantam.data.sync.AccountSyncState
 import app.veshinantam.data.text.SefariaTextRepository
@@ -175,6 +177,9 @@ import app.veshinantam.domain.material.SeferChoice
 import app.veshinantam.domain.material.UnitReference
 import app.veshinantam.domain.material.PresetCatalog
 import app.veshinantam.shared.preset.SharedPresetCatalog
+import app.veshinantam.shared.ScheduleLearningFilter
+import app.veshinantam.shared.scheduleLearningCounts
+import app.veshinantam.shared.scheduleLearningFilter
 import app.veshinantam.shared.text.SefariaReferenceMapper
 import app.veshinantam.shared.text.SefariaTextLookup
 import app.veshinantam.domain.material.PresetProgram
@@ -1606,6 +1611,7 @@ private fun SchedulesRoute(modifier: Modifier = Modifier, openWizardRequest: Int
     val schedulesViewModel: SchedulesViewModel = viewModel(factory = SchedulesViewModel.Factory(application.scheduleRepository))
     val schedules by schedulesViewModel.schedules.collectAsStateWithLifecycle()
     val exclusions by schedulesViewModel.exclusions.collectAsStateWithLifecycle()
+    val selectedLearningTasks by schedulesViewModel.selectedLearningTasks.collectAsStateWithLifecycle()
     var creatorMode by remember { mutableStateOf<ScheduleCreatorMode?>(null) }
     LaunchedEffect(openWizardRequest) {
         if (openWizardRequest > 0) creatorMode = ScheduleCreatorMode.WIZARD
@@ -1643,6 +1649,9 @@ private fun SchedulesRoute(modifier: Modifier = Modifier, openWizardRequest: Int
             onCompletePastChazarah = schedulesViewModel::completePastChazarah,
             onAddExclusion = schedulesViewModel::addExclusion,
             onRemoveExclusion = schedulesViewModel::removeExclusion,
+            selectedLearningTasks = selectedLearningTasks,
+            onSelectLearningSchedule = schedulesViewModel::selectLearningSchedule,
+            onSetCompleted = schedulesViewModel::setCompleted,
             onDelete = schedulesViewModel::delete,
             modifier = modifier,
         )
@@ -1662,6 +1671,9 @@ private fun ScheduleList(
     onCompletePastChazarah: (String) -> Unit,
     onAddExclusion: (String, LocalDate) -> Unit,
     onRemoveExclusion: (String, LocalDate) -> Unit,
+    selectedLearningTasks: List<TaskEntity>,
+    onSelectLearningSchedule: (String?) -> Unit,
+    onSetCompleted: (String, Boolean) -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1671,6 +1683,9 @@ private fun ScheduleList(
     var pendingCompletePast by remember { mutableStateOf<Pair<ScheduleEntity, PastCompletionKind>?>(null) }
     var selectedDetails by remember { mutableStateOf<ScheduleEntity?>(null) }
     var selectedEditing by remember { mutableStateOf<ScheduleEntity?>(null) }
+    var selectedLearningId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedLearning = schedules.firstOrNull { it.id == selectedLearningId }
+    LaunchedEffect(selectedLearningId) { onSelectLearningSchedule(selectedLearningId) }
     selectedEditing?.let { schedule ->
         EditFutureScheduleDialog(
             schedule = schedule,
@@ -1688,6 +1703,14 @@ private fun ScheduleList(
             onAddExclusion = { onAddExclusion(schedule.id, it) },
             onRemoveExclusion = { onRemoveExclusion(schedule.id, it) },
             onDismiss = { selectedDetails = null },
+        )
+    }
+    selectedLearning?.let { schedule ->
+        ScheduleLearningDialog(
+            schedule = schedule,
+            tasks = selectedLearningTasks,
+            onSetCompleted = onSetCompleted,
+            onDismiss = { selectedLearningId = null },
         )
     }
     pendingDelete?.let { schedule ->
@@ -1797,6 +1820,9 @@ private fun ScheduleList(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(onClick = { selectedLearningId = schedule.id }) {
+                            Text(stringResource(R.string.view_schedule_learning))
+                        }
                         OutlinedButton(onClick = { selectedDetails = schedule }) {
                             Text(stringResource(R.string.view_schedule_details))
                         }
@@ -1834,6 +1860,147 @@ private fun ScheduleList(
         }
     }
 }
+
+@Composable
+private fun ScheduleLearningDialog(
+    schedule: ScheduleEntity,
+    tasks: List<TaskEntity>,
+    onSetCompleted: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val primaryCalendar = LocalPrimaryCalendar.current
+    val today = remember { LocalDate.now() }
+    var filterName by rememberSaveable(schedule.id) { mutableStateOf(ScheduleLearningFilter.ALL.name) }
+    var readerTask by remember { mutableStateOf<TaskEntity?>(null) }
+    val filter = ScheduleLearningFilter.valueOf(filterName)
+    val scheduleTasks = remember(tasks, schedule.id) { tasks.filter { it.scheduleId == schedule.id } }
+    val counts = remember(scheduleTasks, today) {
+        scheduleLearningCounts(scheduleTasks.map { it.plannedDate.toString() to (it.completedAt != null) }, today.toString())
+    }
+    val filteredTasks = remember(scheduleTasks, today, filter) {
+        scheduleTasks.filter { task ->
+            filter == ScheduleLearningFilter.ALL ||
+                scheduleLearningFilter(task.plannedDate.toString(), task.completedAt != null, today.toString()) == filter
+        }
+    }
+    readerTask?.let { task ->
+        SefariaTextDialog(
+            task = task.asTodayTask(schedule),
+            locale = locale,
+            onDismiss = { readerTask = null },
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(localizedName(schedule.nameEnglish, schedule.nameHebrew, locale))
+                Text(
+                    stringResource(R.string.schedule_learning),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ScheduleLearningFilter.entries.forEach { option ->
+                        FilterChip(
+                            selected = filter == option,
+                            onClick = { filterName = option.name },
+                            label = { Text("${scheduleLearningFilterLabel(option)} (${counts.count(option)})") },
+                        )
+                    }
+                }
+                if (filteredTasks.isEmpty()) {
+                    Text(
+                        stringResource(R.string.no_learning_in_filter),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                        filteredTasks.groupBy { it.plannedDate }.forEach { (date, dateTasks) ->
+                            item(key = "date-$date") {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                ) {
+                                    Text(
+                                        displayDate(date, primaryCalendar, locale),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                }
+                            }
+                            items(dateTasks, key = { it.id }) { task ->
+                                val taskReference = referenceLabel(task.labelEnglish, task.labelHebrew, locale)
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = task.completedAt != null,
+                                        onCheckedChange = { onSetCompleted(task.id, it) },
+                                        modifier = Modifier.semantics {
+                                            contentDescription = taskReference
+                                        },
+                                    )
+                                    Text(
+                                        taskReference,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                    IconButton(onClick = { readerTask = task }) {
+                                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = stringResource(R.string.read_text))
+                                    }
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
+}
+
+@Composable
+private fun scheduleLearningFilterLabel(filter: ScheduleLearningFilter): String = stringResource(
+    when (filter) {
+        ScheduleLearningFilter.COMPLETED -> R.string.learning_filter_completed
+        ScheduleLearningFilter.MISSED -> R.string.learning_filter_missed
+        ScheduleLearningFilter.TODAY -> R.string.learning_filter_today
+        ScheduleLearningFilter.FUTURE -> R.string.learning_filter_future
+        ScheduleLearningFilter.ALL -> R.string.learning_filter_all
+    },
+)
+
+private fun TaskEntity.asTodayTask(schedule: ScheduleEntity): TodayTaskUi = TodayTaskUi(
+    id = id,
+    labelEnglish = labelEnglish,
+    labelHebrew = labelHebrew,
+    plannedDate = plannedDate,
+    section = when {
+        completedAt != null -> TodaySection.COMPLETED_TODAY
+        plannedDate < LocalDate.now() -> TodaySection.OVERDUE_LEARNING
+        else -> TodaySection.NEW_LEARNING
+    },
+    isCompleted = completedAt != null,
+    materialType = materialType,
+    presetId = schedule.presetId,
+    scheduleId = scheduleId,
+    originalLearningDate = originalLearningDate,
+)
 
 @Composable
 private fun EditFutureScheduleDialog(

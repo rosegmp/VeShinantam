@@ -188,6 +188,14 @@
     <string name="schedule_paused">Paused</string>
     <string name="schedule_archived">Archived</string>
     <string name="view_schedule_details">View details</string>
+    <string name="view_schedule_learning">View learning</string>
+    <string name="schedule_learning">All scheduled learning</string>
+    <string name="learning_filter_completed">Completed</string>
+    <string name="learning_filter_missed">Missed</string>
+    <string name="learning_filter_today">Today</string>
+    <string name="learning_filter_future">Future</string>
+    <string name="learning_filter_all">All</string>
+    <string name="no_learning_in_filter">No learning matches this filter.</string>
     <string name="edit_schedule">Edit schedule</string>
     <string name="edit_schedule_title">Edit future schedule</string>
     <string name="edit_future_explanation">Completed tasks and every task dated before today will stay unchanged. Unfinished learning from today onward and its chazarah will be rescheduled.</string>

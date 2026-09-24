@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'veshinantam-web-';
-const CACHE = 'veshinantam-web-v42';
+const CACHE = 'veshinantam-web-v43';
 const PRECACHE = [
   './',
   './index.html',

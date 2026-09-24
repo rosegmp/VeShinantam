@@ -54,6 +54,9 @@ interface ScheduleDao {
     @Query("SELECT * FROM tasks WHERE scheduleId = :scheduleId AND type = 'LEARNING' ORDER BY plannedDate, stableKey")
     suspend fun getLearningTasks(scheduleId: String): List<TaskEntity>
 
+    @Query("SELECT * FROM tasks WHERE scheduleId = :scheduleId AND type = 'LEARNING' ORDER BY plannedDate, stableKey")
+    fun observeLearningTasks(scheduleId: String): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE scheduleId = :scheduleId ORDER BY plannedDate, type, stableKey")
     suspend fun getTasks(scheduleId: String): List<TaskEntity>
 
