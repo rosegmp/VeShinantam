@@ -128,6 +128,7 @@ data class TodayTaskRow(
     val labelEnglish: String,
     val labelHebrew: String,
     val plannedDate: LocalDate,
+    val originalLearningDate: LocalDate = plannedDate,
     val completedAt: Instant?,
     val materialType: MaterialType = MaterialType.CUSTOM_UNIT,
     val presetId: String? = null,

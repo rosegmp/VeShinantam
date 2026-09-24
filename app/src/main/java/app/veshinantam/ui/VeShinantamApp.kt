@@ -209,6 +209,7 @@ import app.veshinantam.ui.today.TodayViewModel
 import app.veshinantam.ui.today.TodayDisplaySettings
 import app.veshinantam.ui.today.TodaySortOrder
 import app.veshinantam.ui.today.sortTodayTasks
+import app.veshinantam.ui.today.readerTaskNeighbors
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.DayOfWeek
@@ -1555,6 +1556,8 @@ private fun CalendarRoute(modifier: Modifier = Modifier) {
                         isCompleted = task.completedAt != null,
                         materialType = task.materialType,
                         presetId = task.presetId,
+                        scheduleId = task.scheduleId,
+                        originalLearningDate = task.originalLearningDate,
                     )
                 },
             )
@@ -3508,10 +3511,39 @@ private fun TaskRow(
 
 @Composable
 private fun SefariaTextDialog(task: TodayTaskUi, locale: Locale, onDismiss: () -> Unit) {
+    val application = LocalContext.current.applicationContext as VeShinantamApplication
+    var currentTask by remember(task.id) { mutableStateOf(task) }
+    var learningTasks by remember(task.scheduleId) {
+        mutableStateOf(emptyList<app.veshinantam.data.local.TaskEntity>())
+    }
+    LaunchedEffect(task.scheduleId) {
+        learningTasks = if (task.scheduleId.isBlank()) emptyList()
+        else application.scheduleRepository.learningTasks(task.scheduleId)
+    }
+    val neighbors = readerTaskNeighbors(learningTasks, currentTask)
+    SeferTextDialogContent(
+        task = currentTask,
+        locale = locale,
+        previous = neighbors.previous,
+        next = neighbors.next,
+        onNavigate = { currentTask = it },
+        onDismiss = onDismiss,
+    )
+}
+
+@Composable
+private fun SeferTextDialogContent(
+    task: TodayTaskUi,
+    locale: Locale,
+    previous: TodayTaskUi?,
+    next: TodayTaskUi?,
+    onNavigate: (TodayTaskUi) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val hebrewUi = AppLanguage.fromTag(locale.language) == AppLanguage.HEBREW
     val mishnahBerurahPage = remember(task.labelEnglish) { MishnahBerurahPageReference.parse(task.labelEnglish) }
     if (mishnahBerurahPage != null) {
-        MishnahBerurahScanDialog(task, mishnahBerurahPage, locale, onDismiss)
+        MishnahBerurahScanDialog(task, mishnahBerurahPage, locale, previous, next, onNavigate, onDismiss)
         return
     }
     val lookup = remember(task.id) {
@@ -3520,7 +3552,7 @@ private fun SefariaTextDialog(task: TodayTaskUi, locale: Locale, onDismiss: () -
     if (lookup is SefariaTextLookup.Unavailable) {
         val peleYoetz = PeleYoetzVolumeReference.parse(task.labelEnglish)
         if (peleYoetz != null) {
-            PeleYoetzDocumentDialog(task, peleYoetz, locale, onDismiss)
+            PeleYoetzDocumentDialog(task, peleYoetz, locale, previous, next, onNavigate, onDismiss)
             return
         }
         AlertDialog(
@@ -3529,6 +3561,7 @@ private fun SefariaTextDialog(task: TodayTaskUi, locale: Locale, onDismiss: () -
             title = { Text(stringResource(R.string.text_unavailable)) },
             text = { Text(if (hebrewUi) lookup.messageHebrew else lookup.messageEnglish) },
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+            dismissButton = { ReaderNavigationButtons(previous, next, onNavigate) },
         )
         return
     }
@@ -3583,7 +3616,26 @@ private fun SefariaTextDialog(task: TodayTaskUi, locale: Locale, onDismiss: () -
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+        dismissButton = { ReaderNavigationButtons(previous, next, onNavigate) },
     )
+}
+
+@Composable
+private fun ReaderNavigationButtons(
+    previous: TodayTaskUi?,
+    next: TodayTaskUi?,
+    onNavigate: (TodayTaskUi) -> Unit,
+) {
+    Row {
+        TextButton(onClick = { previous?.let(onNavigate) }, enabled = previous != null) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
+            Text(stringResource(R.string.previous_text))
+        }
+        TextButton(onClick = { next?.let(onNavigate) }, enabled = next != null) {
+            Text(stringResource(R.string.next_text))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
+    }
 }
 
 @Composable
@@ -3591,6 +3643,9 @@ private fun PeleYoetzDocumentDialog(
     task: TodayTaskUi,
     reference: PeleYoetzVolumeReference,
     locale: Locale,
+    previous: TodayTaskUi?,
+    next: TodayTaskUi?,
+    onNavigate: (TodayTaskUi) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -3622,6 +3677,7 @@ private fun PeleYoetzDocumentDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+        dismissButton = { ReaderNavigationButtons(previous, next, onNavigate) },
     )
 }
 
@@ -3745,6 +3801,9 @@ private fun MishnahBerurahScanDialog(
     task: TodayTaskUi,
     reference: MishnahBerurahPageReference,
     locale: Locale,
+    previous: TodayTaskUi?,
+    next: TodayTaskUi?,
+    onNavigate: (TodayTaskUi) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -3862,6 +3921,7 @@ private fun MishnahBerurahScanDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+        dismissButton = { ReaderNavigationButtons(previous, next, onNavigate) },
     )
     if (showFullScreen) {
         FullScreenPdfViewer(

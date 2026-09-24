@@ -585,6 +585,28 @@ data class WebCalendarCell(val isoDate: String?, val gregorianDay: Int?)
 
 data class WebTodayTask(val task: StoredTask, val section: WebTodaySection)
 
+data class WebReaderTaskNeighbors(val previous: StoredTask?, val next: StoredTask?)
+
+fun readerTaskNeighbors(tasks: List<StoredTask>, current: StoredTask): WebReaderTaskNeighbors {
+    val learningTasks = tasks.asSequence()
+        .filter { it.scheduleId == current.scheduleId && it.type == LearningTaskType.LEARNING.name }
+        .sortedWith(compareBy<StoredTask>({ it.originalLearningDate }, { it.stableKey }, { it.id }))
+        .toList()
+    val currentIndex = learningTasks.indexOfFirst { it.id == current.id }.takeIf { it >= 0 }
+        ?: learningTasks.indexOfFirst {
+            it.originalLearningDate == current.originalLearningDate &&
+                it.referenceEnglish == current.referenceEnglish && it.referenceHebrew == current.referenceHebrew
+        }.takeIf { it >= 0 }
+        ?: learningTasks.indexOfFirst {
+            it.referenceEnglish == current.referenceEnglish && it.referenceHebrew == current.referenceHebrew
+        }.takeIf { it >= 0 }
+        ?: return WebReaderTaskNeighbors(null, null)
+    return WebReaderTaskNeighbors(
+        previous = learningTasks.getOrNull(currentIndex - 1),
+        next = learningTasks.getOrNull(currentIndex + 1),
+    )
+}
+
 fun todayTasks(tasks: List<StoredTask>, today: String, sortOrder: String, preferHebrew: Boolean): List<WebTodayTask> {
     val order = runCatching { WebTodaySortOrder.valueOf(sortOrder) }.getOrDefault(WebTodaySortOrder.SCHEDULED_FIRST)
     return tasks.asSequence()

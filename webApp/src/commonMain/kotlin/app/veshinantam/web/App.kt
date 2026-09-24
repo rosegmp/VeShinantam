@@ -678,11 +678,15 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         )
     }
     textReaderSelection?.let { selection ->
+        val neighbors = readerTaskNeighbors(appState.tasks, selection.task)
         WebSefariaTextDialog(
             selection = selection,
             store = store,
             hebrew = hebrew,
             sefarimLanguage = appState.sefarimLanguage,
+            previous = neighbors.previous,
+            next = neighbors.next,
+            onNavigate = { task -> textReaderSelection = selection.copy(task = task) },
             onDismiss = { textReaderSelection = null },
         )
     }
@@ -1374,12 +1378,15 @@ private fun WebSefariaTextDialog(
     store: BrowserStore,
     hebrew: Boolean,
     sefarimLanguage: String,
+    previous: StoredTask?,
+    next: StoredTask?,
+    onNavigate: (StoredTask) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val task = selection.task
     val peleYoetz = remember(task.referenceEnglish) { PeleYoetzReference.parse(task.referenceEnglish) }
     if (peleYoetz != null) {
-        WebPeleYoetzTextDialog(task, peleYoetz, hebrew, onDismiss)
+        WebPeleYoetzTextDialog(task, peleYoetz, hebrew, previous, next, onNavigate, onDismiss)
         return
     }
     val lookup = remember(task.id, selection.presetId) {
@@ -1392,6 +1399,7 @@ private fun WebSefariaTextDialog(
             title = { Text(if (hebrew) "הטקסט אינו זמין" else "Text unavailable") },
             text = { Text(if (hebrew) lookup.messageHebrew else lookup.messageEnglish) },
             confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+            dismissButton = { WebReaderNavigationButtons(previous, next, hebrew, onNavigate) },
         )
         return
     }
@@ -1455,7 +1463,27 @@ private fun WebSefariaTextDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+        dismissButton = { WebReaderNavigationButtons(previous, next, hebrew, onNavigate) },
     )
+}
+
+@Composable
+private fun WebReaderNavigationButtons(
+    previous: StoredTask?,
+    next: StoredTask?,
+    hebrew: Boolean,
+    onNavigate: (StoredTask) -> Unit,
+) {
+    Row {
+        TextButton(onClick = { previous?.let(onNavigate) }, enabled = previous != null) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
+            Text(if (hebrew) "הקודם" else "Previous")
+        }
+        TextButton(onClick = { next?.let(onNavigate) }, enabled = next != null) {
+            Text(if (hebrew) "הבא" else "Next")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+        }
+    }
 }
 
 @Composable
@@ -1463,6 +1491,9 @@ private fun WebPeleYoetzTextDialog(
     task: StoredTask,
     reference: PeleYoetzReference,
     hebrew: Boolean,
+    previous: StoredTask?,
+    next: StoredTask?,
+    onNavigate: (StoredTask) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var text by remember(reference.day) { mutableStateOf<String?>(null) }
@@ -1503,6 +1534,7 @@ private fun WebPeleYoetzTextDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+        dismissButton = { WebReaderNavigationButtons(previous, next, hebrew, onNavigate) },
     )
 }
 

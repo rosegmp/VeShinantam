@@ -367,6 +367,8 @@
     <string name="expand_schedule">הרחבת התוכנית</string>
     <string name="collapse_schedule">כיווץ התוכנית</string>
     <string name="read_text">קריאת הטקסט</string>
+    <string name="previous_text">הקודם</string>
+    <string name="next_text">הבא</string>
     <string name="text_unavailable">הטקסט אינו זמין</string>
     <string name="loading_text">הטקסט נטען…</string>
     <string name="text_load_failed">לא ניתן לטעון את הטקסט. יש לבדוק את החיבור ולנסות שוב.</string>

@@ -333,6 +333,24 @@ class WebStateTest {
     }
 
     @Test
+    fun readerNavigationUsesTheFullLearningSequenceAndResolvesChazarahSource() {
+        val learning = listOf(
+            StoredTask("learn-1", "daf-yomi", "Yevamos 44b", "יבמות דף מד:", "2026-09-10", "LEARNING", originalLearningDate = "2026-09-10"),
+            StoredTask("learn-2", "daf-yomi", "Yevamos 45a", "יבמות דף מה.", "2026-09-11", "LEARNING", originalLearningDate = "2026-09-11"),
+            StoredTask("learn-3", "daf-yomi", "Yevamos 45b", "יבמות דף מה:", "2026-09-12", "LEARNING", originalLearningDate = "2026-09-12"),
+        )
+        val review = StoredTask(
+            "review", "daf-yomi", "Yevamos 45a", "יבמות דף מה.", today, "CHAZARAH",
+            originalLearningDate = "2026-09-11",
+        )
+
+        val neighbors = readerTaskNeighbors(learning + review, review)
+
+        assertEquals("learn-1", neighbors.previous?.id)
+        assertEquals("learn-3", neighbors.next?.id)
+    }
+
+    @Test
     fun calendarSummariesDistinguishStatusAndHonorFilters() {
         val tasks = listOf(
             StoredTask("learning-done", "daf-yomi", "Berachos 2", "ברכות ב", today, "LEARNING", completed = true),

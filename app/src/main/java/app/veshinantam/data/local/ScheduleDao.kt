@@ -99,6 +99,7 @@ interface ScheduleDao {
           tasks.materialType AS materialType,
           schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
+          tasks.originalLearningDate AS originalLearningDate,
           tasks.completedAt AS completedAt
         FROM tasks
         INNER JOIN schedules ON schedules.id = tasks.scheduleId
@@ -128,6 +129,7 @@ interface ScheduleDao {
           tasks.materialType AS materialType,
           schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
+          tasks.originalLearningDate AS originalLearningDate,
           tasks.completedAt AS completedAt
         FROM tasks
         INNER JOIN schedules ON schedules.id = tasks.scheduleId
@@ -151,6 +153,7 @@ interface ScheduleDao {
           tasks.materialType AS materialType,
           schedules.presetId AS presetId,
           tasks.plannedDate AS plannedDate,
+          tasks.originalLearningDate AS originalLearningDate,
           tasks.completedAt AS completedAt
         FROM tasks
         INNER JOIN schedules ON schedules.id = tasks.scheduleId

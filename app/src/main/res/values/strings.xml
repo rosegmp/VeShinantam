@@ -360,6 +360,8 @@
     <string name="expand_schedule">Expand schedule</string>
     <string name="collapse_schedule">Collapse schedule</string>
     <string name="read_text">Read text</string>
+    <string name="previous_text">Previous</string>
+    <string name="next_text">Next</string>
     <string name="text_unavailable">Text unavailable</string>
     <string name="loading_text">Loading text…</string>
     <string name="text_load_failed">The text could not be loaded. Check your connection and try again.</string>

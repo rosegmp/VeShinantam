@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import app.veshinantam.data.ScheduleRepository
 import app.veshinantam.data.local.TodayTaskRow
+import app.veshinantam.data.local.TaskEntity
 import app.veshinantam.domain.model.TaskType
 import app.veshinantam.domain.model.MaterialType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,11 @@ data class TodayTaskUi(
     val isCompleted: Boolean,
     val materialType: MaterialType = MaterialType.CUSTOM_UNIT,
     val presetId: String? = null,
+    val scheduleId: String = "",
+    val originalLearningDate: LocalDate = plannedDate,
 )
+
+data class ReaderTaskNeighbors(val previous: TodayTaskUi?, val next: TodayTaskUi?)
 
 data class TodayScheduleUi(
     val id: String,
@@ -125,10 +130,44 @@ internal fun mapTodayRows(rows: List<TodayTaskRow>, today: LocalDate): List<Toda
                             isCompleted = row.completedAt != null,
                             materialType = row.materialType,
                             presetId = row.presetId,
+                            scheduleId = row.scheduleId,
+                            originalLearningDate = row.originalLearningDate,
                         )
                     }.sortedWith(compareBy<TodayTaskUi>({ it.section.ordinal }, { it.plannedDate }, { it.id })),
                 )
             }
+
+internal fun readerTaskNeighbors(
+    learningTasks: List<TaskEntity>,
+    current: TodayTaskUi,
+): ReaderTaskNeighbors {
+    if (learningTasks.isEmpty()) return ReaderTaskNeighbors(null, null)
+    val currentIndex = learningTasks.indexOfFirst { it.id == current.id }.takeIf { it >= 0 }
+        ?: learningTasks.indexOfFirst {
+            it.originalLearningDate == current.originalLearningDate &&
+                it.labelEnglish == current.labelEnglish && it.labelHebrew == current.labelHebrew
+        }.takeIf { it >= 0 }
+        ?: learningTasks.indexOfFirst {
+            it.labelEnglish == current.labelEnglish && it.labelHebrew == current.labelHebrew
+        }.takeIf { it >= 0 }
+        ?: return ReaderTaskNeighbors(null, null)
+
+    fun taskAt(index: Int): TodayTaskUi? = learningTasks.getOrNull(index)?.let { task ->
+        TodayTaskUi(
+            id = task.id,
+            labelEnglish = task.labelEnglish,
+            labelHebrew = task.labelHebrew,
+            plannedDate = task.plannedDate,
+            section = current.section,
+            isCompleted = task.completedAt != null,
+            materialType = task.materialType,
+            presetId = current.presetId,
+            scheduleId = task.scheduleId,
+            originalLearningDate = task.originalLearningDate,
+        )
+    }
+    return ReaderTaskNeighbors(taskAt(currentIndex - 1), taskAt(currentIndex + 1))
+}
 
 internal fun sortTodayTasks(
     tasks: List<TodayTaskUi>,

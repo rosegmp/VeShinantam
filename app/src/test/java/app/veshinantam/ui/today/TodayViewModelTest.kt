@@ -1,6 +1,8 @@
 package app.veshinantam.ui.today
 
 import app.veshinantam.data.local.TodayTaskRow
+import app.veshinantam.data.local.TaskEntity
+import app.veshinantam.domain.model.MaterialType
 import app.veshinantam.domain.model.TaskType
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -90,6 +92,24 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `reader navigation uses full learning sequence and resolves chazarah source`() {
+        val learning = listOf(
+            learningTask("learn-1", "Yevamos 44b", "יבמות דף מד:", today.minusDays(2)),
+            learningTask("learn-2", "Yevamos 45a", "יבמות דף מה.", today.minusDays(1)),
+            learningTask("learn-3", "Yevamos 45b", "יבמות דף מה:", today),
+        )
+        val review = task("review", "Yevamos 45a", "יבמות דף מה.", today).copy(
+            scheduleId = "schedule",
+            originalLearningDate = today.minusDays(1),
+        )
+
+        val neighbors = readerTaskNeighbors(learning, review)
+
+        assertEquals("learn-1", neighbors.previous?.id)
+        assertEquals("learn-3", neighbors.next?.id)
+    }
+
+    @Test
     fun `reference sorting follows the selected sefarim language`() {
         val tasks = listOf(
             task("english-first", "Berachos", "שבת", today),
@@ -159,5 +179,23 @@ class TodayViewModelTest {
         labelHebrew = "ברכות ב.",
         plannedDate = date,
         completedAt = if (completed) Instant.parse("2026-09-07T12:00:00Z") else null,
+    )
+
+    private fun learningTask(id: String, english: String, hebrew: String, date: LocalDate) = TaskEntity(
+        id = id,
+        stableKey = id,
+        scheduleId = "schedule",
+        type = TaskType.LEARNING,
+        labelEnglish = english,
+        labelHebrew = hebrew,
+        materialType = MaterialType.AMUD,
+        quantity = 1.0,
+        plannedDate = date,
+        originalLearningDate = date,
+        reviewIdentity = null,
+        generationRevision = 1,
+        completedAt = null,
+        completionLocalDate = null,
+        completionZoneId = null,
     )
 }
