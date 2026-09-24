@@ -19,6 +19,12 @@ configuration enables entity sync in `webApp/src/wasmJsMain/resources/supabase-c
 4. Sign in to the same account on the web app and sync there. Check a few
    schedules and completed tasks before editing on both devices.
 
+The GitHub test APKs use the Android debug certificate. The first production
+APK uses a permanent release certificate and therefore cannot update a test
+APK in place. Export a backup before uninstalling the test APK, then restore it
+after installing production. Do not repeat this migration for later production
+updates; they must all retain the same release certificate.
+
 The app keeps local data when a sync request fails. Investigate the displayed
 error before retrying; the web and Android clients must both use the current
 entity API.
@@ -52,3 +58,11 @@ For an installation-compatible test APK signed by the local Android debug key:
 ```powershell
 .\gradlew.bat clean testDebugUnitTest assembleDebug
 ```
+
+## Backend production gate
+
+The checked-in `supabase/migrations` ledger must match the deployed migration
+versions. Before a release, run the Supabase security and performance advisors
+and resolve or explicitly review every finding. Verify a real authenticated
+round trip between Android and web; static policy tests do not replace this
+live gate.

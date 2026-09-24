@@ -58,11 +58,17 @@ Place the verified APK in a private OneDrive folder or another access-controlled
 
 Do not publish the keystore, Gradle password file, or preset-catalog signing private key with the APK. Back up current app data before installing a release candidate, and never reduce `versionCode` for an update.
 
+The GitHub test APKs are debug-signed. Android will not install a production-signed APK over them. Before moving a test installation to production, export a backup, uninstall the test APK, install the production APK, and restore the backup. Future production releases will update in place as long as they use the same release key.
+
 ## Release checklist
 
 - Unit tests and database migration tests pass.
 - Backup compatibility fixtures for every supported backup version pass.
+- Local and deployed Supabase migration versions match; security and performance advisors have no unreviewed findings.
+- Live Android-to-web sync passes with one production account, including a completion made on each client and a sign-out/sign-in token refresh.
 - English/Hebrew light, dark, RTL, and large-font smoke checks pass.
+- TalkBack passes on a physical phone, and the supported minimum and maximum Android API levels pass smoke testing.
+- The browser matrix in `WEB_BROWSER_QA.md` is recorded for the release candidate.
 - `versionCode` is greater than the previously distributed build.
 - APK signature and certificate digest are verified.
 - APK SHA-256 is recorded and matches the distributed copy.

@@ -30,6 +30,6 @@ The script returns a failure if any build, installation, launch, hierarchy, migr
 
 ## Latest verification
 
-On September 10, 2026, the complete suite passed on the `Pixel_10_Pro` emulator running Android 17 / API 37. Two clean `0.1.0` unsigned release builds also produced the identical SHA-256 checksum `0BACF14A77E470BEC5C424EB202C6248BE6563DF038866107AB6B3EFDF49253B`.
+On September 24, 2026, the complete suite passed for `0.1.15` (code 16) on the connected Samsung `SM_S916U` emulator. It covered every Room migration through schema 8, fresh-install onboarding, schedule creation and Today retrieval, completion and undo, and a transactional backup round trip. After the production version bump, two clean `1.0.0` (code 17) unsigned release builds passed unit tests and release lint and produced the identical SHA-256 checksum `4EF20A7A8F17F399F68E9B7F852DCFADE94791306CC7D81BB729AE4E95E8F4B8`. A new code-17 device pass remains required because the emulator disconnected before installation.
 
-The reproducibility artifact used `-AllowUnsigned -SkipLint` because no private release key is configured and this host cannot download the uncached lint runner through its TLS configuration. It is verification-only and must not be distributed as a final release.
+The reproducibility artifact used `-AllowUnsigned` because no permanent release key is configured. It is verification-only and must not be distributed as a final release.
