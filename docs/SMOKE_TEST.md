@@ -18,7 +18,7 @@ Boot an emulator or connect an unlocked Android device, then run:
 1. Build and install the app and device-test APKs.
 2. Clear app state and launch `MainActivity` as a first installation.
 3. Confirm the localized onboarding is visible in the Android accessibility hierarchy.
-4. Open exported Room schemas 1 through 6 and migrate each through the production migration chain to schema 7.
+4. Open every exported legacy Room schema and migrate each through the production migration chain to schema 8.
 5. Seed a version-1 schedule and task and verify the rows and all later defaults survive migration.
 6. Create a custom Gemara schedule through `ScheduleRepository` and persist it transactionally.
 7. Read its current learning through the production Today query.

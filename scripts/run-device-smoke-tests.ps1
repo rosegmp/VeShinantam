@@ -54,7 +54,7 @@ try {
         "app.veshinantam.test/app.veshinantam.data.local.MigrationTestInstrumentation" 2>&1 | Out-String)
     $testOutput.TrimEnd() | Write-Output
     if ($LASTEXITCODE -ne 0 -or
-        $testOutput -notmatch "database migrations 1-7 passed" -or
+        $testOutput -notmatch "database migrations 1-8 passed" -or
         $testOutput -notmatch "end-to-end schedule, Today, completion, and backup smoke passed") {
         throw "The on-device smoke suite failed."
     }
