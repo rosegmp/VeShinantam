@@ -140,7 +140,6 @@ object SharedPresetCatalog {
 
     /** Official preset cycles do not add interval chazarah unless the learner opts in. */
     fun defaultAdditionalChazarahOffsets(programId: String): List<Int> {
-        require(programs.any { it.id == programId }) { "Unknown preset: $programId" }
         return emptyList()
     }
 

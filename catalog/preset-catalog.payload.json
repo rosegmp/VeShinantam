@@ -1,16 +1,16 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026.09.24-12",
-  "sequence": 12,
+  "catalogVersion": "2026.09.24-13",
+  "sequence": 13,
   "positionAsOf": "2026-09-24",
   "positions": {
-    "mishnah-yomis-sefaria": "Oholot 5:1"
+    "mishnah-yomis": "Oholot 5:1"
   },
   "programs": [
     {
-      "id": "mishnah-yomis-sefaria",
-      "nameEnglish": "Mishnah Yomis (Sefaria)",
-      "nameHebrew": "משנה יומית (ספריא)",
+      "id": "mishnah-yomis",
+      "nameEnglish": "Mishnah Yomis",
+      "nameHebrew": "משנה יומית",
       "materialType": "MISHNAH",
       "dailyQuantity": 2,
       "selectedWeekdays": [

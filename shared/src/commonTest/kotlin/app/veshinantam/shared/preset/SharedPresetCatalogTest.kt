@@ -83,5 +83,6 @@ class SharedPresetCatalogTest {
         assertEquals("Ohalos 2:3", program.units[program.currentIndex + 1].english)
         assertEquals(2, learning.count { it.plannedDate == IsoDate(2026, 9, 16) })
         assertEquals(emptyList(), SharedPresetCatalog.defaultAdditionalChazarahOffsets(program.id))
+        assertEquals(emptyList(), SharedPresetCatalog.defaultAdditionalChazarahOffsets("remote-preset"))
     }
 }

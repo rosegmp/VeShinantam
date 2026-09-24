@@ -1,4 +1,4 @@
-"""Add a signed-catalog-ready Mishnah preset using Sefaria's tractate titles."""
+"""Build a catalog patch for the bundled Mishnah preset using Sefaria titles."""
 
 import json
 import re
@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PRESET_ID = "mishnah-yomis-sefaria"
+PRESET_ID = "mishnah-yomis"
 ALIASES = {
     "Berachos": "Berakhot", "Sheviis": "Sheviit", "Terumos": "Terumot",
     "Maasros": "Maasrot", "Shabbos": "Shabbat", "Taanis": "Taanit",
@@ -75,12 +75,12 @@ def main() -> None:
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     if payload["sequence"] != 11 or payload["programs"]:
         raise ValueError("Review the existing catalog before adding this preset")
-    payload.update(catalogVersion="2026.09.24-12", sequence=12, positionAsOf=as_of.isoformat())
+    payload.update(catalogVersion="2026.09.24-13", sequence=13, positionAsOf=as_of.isoformat())
     payload["positions"][PRESET_ID] = units[current_index]["english"]
     payload["programs"].append({
         "id": PRESET_ID,
-        "nameEnglish": "Mishnah Yomis (Sefaria)",
-        "nameHebrew": "משנה יומית (ספריא)",
+        "nameEnglish": "Mishnah Yomis",
+        "nameHebrew": "משנה יומית",
         "materialType": "MISHNAH",
         "dailyQuantity": 2,
         "selectedWeekdays": list(range(7)),
