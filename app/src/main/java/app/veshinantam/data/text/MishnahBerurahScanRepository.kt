@@ -3,7 +3,6 @@ package app.veshinantam.data.text
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
@@ -83,18 +82,13 @@ class MishnahBerurahScanRepository(context: Context) {
         return requireNotNull(read(reference.chelek))
     }
 
-    suspend fun render(config: MishnahBerurahScanConfig, pageIndex: Int): RenderedPdfPage = withContext(Dispatchers.IO) {
+    suspend fun render(config: MishnahBerurahScanConfig, pageIndex: Int, requestedWidth: Int = 0): RenderedPdfPage = withContext(Dispatchers.IO) {
         appContext.contentResolver.openFileDescriptor(config.uri, "r")?.use { descriptor ->
             PdfRenderer(descriptor).use { renderer ->
                 require(pageIndex in 0 until renderer.pageCount) { "That page is outside the selected PDF." }
                 renderer.openPage(pageIndex).use { page ->
-                    val width = minOf(page.width, MAX_RENDER_WIDTH)
-                    val height = (page.height.toDouble() * width / page.width).toInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
-                        eraseColor(Color.WHITE)
-                    }
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    RenderedPdfPage(bitmap, renderer.pageCount)
+                    val screenWidth = appContext.resources.displayMetrics.widthPixels
+                    PdfPageRasterizer.render(page, renderer.pageCount, requestedWidth.takeIf { it > 0 } ?: screenWidth)
                 }
             }
         } ?: error("The selected PDF is no longer available.")
@@ -106,6 +100,5 @@ class MishnahBerurahScanRepository(context: Context) {
 
     private companion object {
         const val PREFERENCES = "mishnah_berurah_scans"
-        const val MAX_RENDER_WIDTH = 1_600
     }
 }

@@ -158,6 +158,7 @@ import app.veshinantam.data.text.MishnahBerurahPageReference
 import app.veshinantam.data.text.MishnahBerurahScanConfig
 import app.veshinantam.data.text.MishnahBerurahScanRepository
 import app.veshinantam.data.text.PeleYoetzScanRepository
+import app.veshinantam.data.text.PdfRenderSizing
 import app.veshinantam.data.text.PeleYoetzDocumentRepository
 import app.veshinantam.data.text.PeleYoetzVolumeReference
 import app.veshinantam.data.text.RenderedPdfPage
@@ -228,6 +229,7 @@ import java.util.Locale
 import java.text.NumberFormat
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -3950,12 +3952,14 @@ private fun PeleYoetzPdfUnavailableDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
     )
-    if (showFullScreen) {
+    val selectedPeleYoetzPdf = config
+    if (showFullScreen && selectedPeleYoetzPdf != null) {
         FullScreenPdfViewer(
             title = stringResource(R.string.pele_yoetz_volume_title, reference.volume),
             page = renderedPage,
             pageIndex = currentPage,
             pageCount = pageCount,
+            renderPage = { index, width -> repository.render(selectedPeleYoetzPdf, index, width) },
             onPrevious = { currentPage-- },
             onNext = { currentPage++ },
             onDismiss = { showFullScreen = false },
@@ -4090,12 +4094,14 @@ private fun MishnahBerurahScanDialog(
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
         dismissButton = { ReaderNavigationButtons(previous, next, onNavigate) },
     )
-    if (showFullScreen) {
+    val selectedMishnahBerurahPdf = config
+    if (showFullScreen && selectedMishnahBerurahPdf != null) {
         FullScreenPdfViewer(
             title = referenceLabel(task.labelEnglish, task.labelHebrew, locale),
             page = renderedPage,
             pageIndex = currentPage,
             pageCount = pageCount,
+            renderPage = { index, width -> repository.render(selectedMishnahBerurahPdf, index, width) },
             onPrevious = { currentPage-- },
             onNext = { currentPage++ },
             onDismiss = { showFullScreen = false },
@@ -4109,6 +4115,7 @@ private fun FullScreenPdfViewer(
     page: RenderedPdfPage?,
     pageIndex: Int,
     pageCount: Int,
+    renderPage: suspend (Int, Int) -> RenderedPdfPage,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onDismiss: () -> Unit,
@@ -4116,6 +4123,22 @@ private fun FullScreenPdfViewer(
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
     var offset by remember(pageIndex) { mutableStateOf(Offset.Zero) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var detailedPage by remember(pageIndex, page?.bitmap) { mutableStateOf<RenderedPdfPage?>(null) }
+    val targetWidth = page?.bitmap?.takeIf { viewportSize.width > 0 && viewportSize.height > 0 }?.let { bitmap ->
+        val fittedWidth = minOf(
+            viewportSize.width.toFloat(),
+            viewportSize.height.toFloat() * bitmap.width / bitmap.height,
+        )
+        PdfRenderSizing.width(bitmap.width, bitmap.height, (fittedWidth * scale).roundToInt())
+    } ?: 0
+    LaunchedEffect(pageIndex, page?.bitmap, targetWidth) {
+        val preview = page ?: return@LaunchedEffect
+        if (targetWidth > maxOf(preview.bitmap.width, detailedPage?.bitmap?.width ?: 0)) {
+            delay(150)
+            runCatching { renderPage(pageIndex, targetWidth) }
+                .onSuccess { detailedPage = it }
+        }
+    }
 
     fun clampOffset(value: Offset, atScale: Float): Offset {
         if (atScale <= 1f) return Offset.Zero
@@ -4175,11 +4198,12 @@ private fun FullScreenPdfViewer(
                         .onSizeChanged { viewportSize = it },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (page == null) {
+                    val visiblePage = detailedPage ?: page
+                    if (visiblePage == null) {
                         CircularProgressIndicator()
                     } else {
                         Image(
-                            bitmap = page.bitmap.asImageBitmap(),
+                            bitmap = visiblePage.bitmap.asImageBitmap(),
                             contentDescription = title,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
