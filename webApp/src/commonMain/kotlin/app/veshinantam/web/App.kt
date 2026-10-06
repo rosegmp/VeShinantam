@@ -1356,6 +1356,7 @@ private fun TaskGroup(
                     Column(Modifier.weight(1f)) {
                         Text(
                             primary,
+                            modifier = Modifier.fillMaxWidth(),
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1365,15 +1366,18 @@ private fun TaskGroup(
                                     else -> if (hebrew) TextDirection.Rtl else TextDirection.Ltr
                                 },
                             ),
+                            textAlign = if (primary.any { it in '\u0590'..'\u05FF' }) TextAlign.Right else TextAlign.Start,
                             color = if (task.completed) MutedInk else MaterialTheme.colorScheme.onSurface,
                         )
                         secondary?.takeIf { it.isNotBlank() }?.let {
                             Text(
                                 it,
+                                modifier = Modifier.fillMaxWidth(),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontSize = 14.sp,
                                     textDirection = if (hebrew) TextDirection.Ltr else TextDirection.Rtl,
                                 ),
+                                textAlign = if (it.any { char -> char in '\u0590'..'\u05FF' }) TextAlign.Right else TextAlign.Start,
                                 color = MutedInk,
                             )
                         }
@@ -1444,7 +1448,7 @@ private fun WebSefariaTextDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
-        title = { Text(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        title = { WebSeferReaderTitle(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -1462,8 +1466,21 @@ private fun WebSefariaTextDialog(
                     is WebTextState.Ready -> {
                         val content = value.content
                         if (sefarimLanguage != "ENGLISH") content.hebrew?.let { version ->
-                            Text(content.hebrewReference.ifBlank { normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew) }, fontWeight = FontWeight.Bold, color = DeepBlue)
-                            Text(version.segments.joinToString("\n\n"), fontSize = 17.sp)
+                            Text(
+                                content.hebrewReference.ifBlank { normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew) },
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                                textAlign = TextAlign.Right,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepBlue,
+                            )
+                            Text(
+                                version.segments.joinToString("\n\n"),
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                                textAlign = TextAlign.Right,
+                                fontSize = 17.sp,
+                            )
                             Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
                         }
                         if (sefarimLanguage != "HEBREW") content.english?.let { version ->
@@ -1509,6 +1526,17 @@ private fun WebReaderNavigationButtons(
 }
 
 @Composable
+private fun WebSeferReaderTitle(reference: String) {
+    val hebrew = reference.any { it in '\u0590'..'\u05FF' }
+    Text(
+        reference,
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.titleLarge.copy(textDirection = if (hebrew) TextDirection.Rtl else TextDirection.Ltr),
+        textAlign = if (hebrew) TextAlign.Right else TextAlign.Start,
+    )
+}
+
+@Composable
 private fun WebPeleYoetzTextDialog(
     task: StoredTask,
     reference: PeleYoetzReference,
@@ -1530,7 +1558,7 @@ private fun WebPeleYoetzTextDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
-        title = { Text(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        title = { WebSeferReaderTitle(if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish } else task.referenceEnglish) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -1543,9 +1571,13 @@ private fun WebPeleYoetzTextDialog(
                     )
                     text == null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
                     else -> {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                            Text(text.orEmpty(), fontSize = 17.sp, modifier = Modifier.fillMaxWidth())
-                        }
+                        Text(
+                            text.orEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                            textAlign = TextAlign.Right,
+                            fontSize = 17.sp,
+                        )
                         Text(
                             if (hebrew) "מקור: מסמך לוח חזק המצורף." else "Source: the supplied Hachzek schedule document.",
                             fontSize = 12.sp,
@@ -2043,6 +2075,8 @@ private fun WebScheduleLearningDialog(
                                         if (hebrew) normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew).ifBlank { task.referenceEnglish }
                                         else task.referenceEnglish,
                                         modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = if (hebrew) TextDirection.Rtl else TextDirection.Ltr),
+                                        textAlign = if (hebrew) TextAlign.Right else TextAlign.Start,
                                     )
                                     IconButton(onClick = { onRead(task) }) {
                                         Icon(

@@ -1651,7 +1651,14 @@ private fun CalendarTaskCard(
                 },
             )
             Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                Text(reference, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    reference,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        textDirection = if (reference.containsHebrew()) TextDirection.Rtl else TextDirection.Ltr,
+                    ),
+                    textAlign = if (reference.containsHebrew()) TextAlign.Right else TextAlign.Start,
+                )
                 Text("$schedule • $type", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onRead) {
@@ -2015,7 +2022,10 @@ private fun ScheduleLearningDialog(
                                     Text(
                                         taskReference,
                                         modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.bodyLarge,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            textDirection = if (taskReference.containsHebrew()) TextDirection.Rtl else TextDirection.Ltr,
+                                        ),
+                                        textAlign = if (taskReference.containsHebrew()) TextAlign.Right else TextAlign.Start,
                                     )
                                     IconButton(onClick = { readerTask = task }) {
                                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = stringResource(R.string.read_text))
@@ -3815,7 +3825,14 @@ private fun TaskRow(
                 modifier = Modifier.semantics { contentDescription = description },
             )
             Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                Text(reference, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    reference,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        textDirection = if (reference.containsHebrew()) TextDirection.Rtl else TextDirection.Ltr,
+                    ),
+                    textAlign = if (reference.containsHebrew()) TextAlign.Right else TextAlign.Start,
+                )
                 if (task.section == TodaySection.OVERDUE_LEARNING || task.section == TodaySection.OVERDUE_CHAZARAH) {
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -3898,7 +3915,7 @@ private fun SeferTextDialogContent(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        title = { SeferReaderTitle(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -3916,9 +3933,20 @@ private fun SeferTextDialogContent(
                     is SefariaTextResult.Ready -> {
                         val content = value.content
                         if (sefarimLanguage != SefarimLanguage.ENGLISH) content.hebrew?.let { version ->
-                            Text(content.hebrewReference.ifBlank { task.labelHebrew }, fontWeight = FontWeight.Bold)
+                            Text(
+                                content.hebrewReference.ifBlank { task.labelHebrew },
+                                modifier = Modifier.fillMaxWidth(),
+                                fontWeight = FontWeight.Bold,
+                                style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl),
+                                textAlign = TextAlign.Right,
+                            )
                             version.segments.forEach { segment ->
-                                Text(segment, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    segment,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                                    textAlign = TextAlign.Right,
+                                )
                             }
                             Text("${version.title} · ${version.license}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -3962,6 +3990,17 @@ private fun ReaderNavigationButtons(
 }
 
 @Composable
+private fun SeferReaderTitle(reference: String) {
+    val hebrew = reference.containsHebrew()
+    Text(
+        reference,
+        modifier = Modifier.fillMaxWidth(),
+        style = LocalTextStyle.current.copy(textDirection = if (hebrew) TextDirection.Rtl else TextDirection.Ltr),
+        textAlign = if (hebrew) TextAlign.Right else TextAlign.Start,
+    )
+}
+
+@Composable
 private fun PeleYoetzDocumentDialog(
     task: TodayTaskUi,
     reference: PeleYoetzVolumeReference,
@@ -3978,7 +4017,7 @@ private fun PeleYoetzDocumentDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        title = { SeferReaderTitle(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
@@ -3990,7 +4029,12 @@ private fun PeleYoetzDocumentDialog(
                         color = MaterialTheme.colorScheme.error,
                     )
                 } else {
-                    Text(text, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl))
+                    Text(
+                        text,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                        textAlign = TextAlign.Right,
+                    )
                     Text(
                         if (hebrewUi) "מקור: מסמך לוח חזק המצורף." else "Source: the supplied Hachzek schedule document.",
                         style = MaterialTheme.typography.labelSmall,
@@ -4162,7 +4206,7 @@ private fun MishnahBerurahScanDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-        title = { Text(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
+        title = { SeferReaderTitle(referenceLabel(task.labelEnglish, task.labelHebrew, locale)) },
         text = {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()),
@@ -4513,6 +4557,8 @@ private fun SelectionDropdown(
 @Composable
 private fun referenceLabel(english: String, hebrew: String, locale: Locale): String =
     SefarimDisplay.label(english, hebrew, LocalSefarimLanguage.current, AppLanguage.fromTag(locale.language))
+
+private fun String.containsHebrew(): Boolean = any { it in '\u0590'..'\u05FF' }
 
 private val MaterialType.presetUnitResource: Int
     get() = when (this) {

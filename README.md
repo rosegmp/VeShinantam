@@ -22,6 +22,7 @@ The web app is deployed automatically from `main` to [GitHub Pages](https://rose
 - Persistent in-app English/Hebrew interface switching with immediate RTL/LTR refresh, also applied to widgets and notifications
 - An independent English, Hebrew, or bilingual sefarim-display preference used for learning references across Today, Calendar, material selectors, and the widget; schedule names remain single-language
 - An optional in-app reader for precisely mapped daily assignments, loading licensed Hebrew and English editions from Sefaria on demand and retaining only license-permitted passages in a small device-local cache
+- Sefaria reader text decodes the HTML entities present in some Tehillim verses, and Hebrew passages and references are rendered right-aligned
 - Android page-based Mishnah Berurah assignments can open a user-selected HebrewBooks PDF locally; each chelek is calibrated once to its printed daf/amud sequence, while automated access to or downloads from HebrewBooks remain excluded by its terms
 - Hebrew sefer references use Hebrew-letter numbering, including daf/amud notation such as `ברכות דף ב.`
 - Consistent Ashkenazi transliteration in user-facing English references

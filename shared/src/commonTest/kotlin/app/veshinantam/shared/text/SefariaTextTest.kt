@@ -64,4 +64,13 @@ class SefariaTextTest {
         assertTrue(content.mayCache)
         assertFalse(content.copy(versions = content.versions.map { it.copy(license = "unknown") }).mayCache)
     }
+
+    @Test
+    fun decodesEntitiesInTehillimVerses() {
+        val content = SefariaTextParser.parse(
+            """{"ref":"Psalms 141:4","versions":[{"language":"he","versionTitle":"Miqra","license":"Public Domain","text":["אַל־תַּט־לִבִּי לְדָבָר&thinsp;׀&thinsp;רָע&nbsp;וּבַל־אֶלְחָם", "&#x5D0;&#1489; &amp; &#39;quote&#39;"]}]}""",
+        )
+        assertEquals("אַל־תַּט־לִבִּי לְדָבָר\u2009׀\u2009רָע וּבַל־אֶלְחָם", content.hebrew?.segments?.first())
+        assertEquals("אב & 'quote'", content.hebrew?.segments?.last())
+    }
 }

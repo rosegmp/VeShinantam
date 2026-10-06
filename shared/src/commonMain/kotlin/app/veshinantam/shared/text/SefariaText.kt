@@ -181,8 +181,32 @@ object SefariaTextParser {
 
     private fun flatten(element: JsonElement): List<String> = when (element) {
         is JsonArray -> element.flatMap(::flatten)
-        is JsonPrimitive -> listOfNotNull(element.contentOrNull?.trim()?.takeIf(String::isNotEmpty))
+        is JsonPrimitive -> listOfNotNull(element.contentOrNull?.let(::decodeHtmlEntities)?.trim()?.takeIf(String::isNotEmpty))
         else -> emptyList()
+    }
+
+    private val htmlEntity = Regex("&(#(?:[xX][0-9A-Fa-f]+|[0-9]+)|[A-Za-z][A-Za-z0-9]+);")
+    private val namedEntities = mapOf(
+        "amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'",
+        "nbsp" to " ", "thinsp" to "\u2009", "ensp" to "\u2002", "emsp" to "\u2003",
+        "ndash" to "–", "mdash" to "—", "hellip" to "…",
+        "lsquo" to "‘", "rsquo" to "’", "ldquo" to "“", "rdquo" to "”",
+        "lrm" to "\u200E", "rlm" to "\u200F", "shy" to "",
+    )
+
+    private fun decodeHtmlEntities(value: String): String = htmlEntity.replace(value) { match ->
+        val name = match.groupValues[1]
+        if (!name.startsWith('#')) namedEntities[name] ?: match.value
+        else {
+            val hex = name.startsWith("#x", ignoreCase = true)
+            val codePoint = name.drop(if (hex) 2 else 1).toIntOrNull(if (hex) 16 else 10)
+            if (codePoint == null || codePoint !in 1..0x10FFFF || codePoint in 0xD800..0xDFFF) match.value
+            else if (codePoint <= 0xFFFF) codePoint.toChar().toString()
+            else {
+                val scalar = codePoint - 0x10000
+                "${(0xD800 + (scalar shr 10)).toChar()}${(0xDC00 + (scalar and 0x3FF)).toChar()}"
+            }
+        }
     }
 
     private fun warningMessage(root: JsonObject): String? = (root["warnings"] as? JsonObject)
