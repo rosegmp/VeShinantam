@@ -59,6 +59,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -3501,8 +3502,13 @@ private fun TodayScreen(
     var sortOrder by remember { mutableStateOf(displaySettings.readSortOrder()) }
     var groupBy by remember { mutableStateOf(displaySettings.readGroupBy()) }
     var autoCollapseCompleted by remember { mutableStateOf(displaySettings.readAutoCollapseCompleted()) }
-    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
-    val expandedSchedules = remember { mutableStateMapOf<String, Boolean>() }
+    val expandedSections = remember(displaySettings) {
+        mutableStateMapOf<String, Boolean>().apply { putAll(displaySettings.readExpandedSections()) }
+    }
+    val expandedSchedules = remember(displaySettings) {
+        mutableStateMapOf<String, Boolean>().apply { putAll(displaySettings.readExpandedSchedules()) }
+    }
+    var displayMenuExpanded by remember { mutableStateOf(false) }
     var readerTask by remember { mutableStateOf<TodayTaskUi?>(null) }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -3510,59 +3516,73 @@ private fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Text(
-                text = displayDate(state.today, primaryCalendar, locale, FormatStyle.FULL),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        item {
-            SelectionDropdown(
-                label = stringResource(R.string.sort_items),
-                options = listOf(
-                    stringResource(R.string.sort_scheduled_first),
-                    stringResource(R.string.sort_newest_due_first),
-                    stringResource(R.string.sort_reference_ascending),
-                    stringResource(R.string.sort_reference_descending),
-                ),
-                selectedIndex = sortOrder.ordinal,
-                onSelected = { index ->
-                    sortOrder = TodaySortOrder.entries[index]
-                    displaySettings.saveSortOrder(sortOrder)
-                    (context.applicationContext as VeShinantamApplication).supabaseSyncService.scheduleAutomaticSync()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item {
-            SelectionDropdown(
-                label = stringResource(R.string.group_today_by),
-                options = listOf(
-                    stringResource(R.string.group_by_schedule),
-                    stringResource(R.string.group_by_learning_status),
-                ),
-                selectedIndex = groupBy.ordinal,
-                onSelected = { index ->
-                    groupBy = TodayGroupBy.entries[index]
-                    displaySettings.saveGroupBy(groupBy)
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().toggleable(
-                    value = autoCollapseCompleted,
-                    role = Role.Switch,
-                    onValueChange = { enabled ->
-                        autoCollapseCompleted = enabled
-                        displaySettings.saveAutoCollapseCompleted(enabled)
-                    },
-                ).padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.auto_collapse_completed_schedules), modifier = Modifier.weight(1f))
-                Switch(checked = autoCollapseCompleted, onCheckedChange = null)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = displayDate(state.today, primaryCalendar, locale, FormatStyle.FULL),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    IconButton(onClick = { displayMenuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.today_display_options))
+                    }
+                    DropdownMenu(
+                        expanded = displayMenuExpanded,
+                        onDismissRequest = { displayMenuExpanded = false },
+                    ) {
+                        Text(
+                            stringResource(R.string.sort_items),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                        listOf(
+                            R.string.sort_scheduled_first,
+                            R.string.sort_newest_due_first,
+                            R.string.sort_reference_ascending,
+                            R.string.sort_reference_descending,
+                        ).forEachIndexed { index, label ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(label)) },
+                                leadingIcon = { RadioButton(selected = sortOrder.ordinal == index, onClick = null) },
+                                onClick = {
+                                    sortOrder = TodaySortOrder.entries[index]
+                                    displaySettings.saveSortOrder(sortOrder)
+                                    (context.applicationContext as VeShinantamApplication).supabaseSyncService.scheduleAutomaticSync()
+                                    displayMenuExpanded = false
+                                },
+                            )
+                        }
+                        HorizontalDivider()
+                        Text(
+                            stringResource(R.string.group_today_by),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                        listOf(R.string.group_by_schedule, R.string.group_by_learning_status)
+                            .forEachIndexed { index, label ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(label)) },
+                                    leadingIcon = { RadioButton(selected = groupBy.ordinal == index, onClick = null) },
+                                    onClick = {
+                                        groupBy = TodayGroupBy.entries[index]
+                                        displaySettings.saveGroupBy(groupBy)
+                                        displayMenuExpanded = false
+                                    },
+                                )
+                            }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.auto_collapse_completed_schedules)) },
+                            trailingIcon = { Switch(checked = autoCollapseCompleted, onCheckedChange = null) },
+                            onClick = {
+                                autoCollapseCompleted = !autoCollapseCompleted
+                                displaySettings.saveAutoCollapseCompleted(autoCollapseCompleted)
+                                displayMenuExpanded = false
+                            },
+                        )
+                    }
+                }
             }
         }
         if (state.schedules.isEmpty()) item { EmptyTodayCard() }
@@ -3575,6 +3595,7 @@ private fun TodayScreen(
                 item(key = "header-$scheduleKey") {
                     ScheduleHeader(schedule, locale, scheduleExpanded) {
                         expandedSchedules[scheduleKey] = !scheduleExpanded
+                        displaySettings.saveScheduleExpanded(scheduleKey, !scheduleExpanded)
                     }
                 }
                 if (scheduleExpanded) {
@@ -3588,6 +3609,7 @@ private fun TodayScreen(
                             item(key = "section-$sectionKey") {
                                 SectionHeader(section, tasks.size, expanded) {
                                     expandedSections[sectionKey] = !expanded
+                                    displaySettings.saveSectionExpanded(sectionKey, !expanded)
                                 }
                             }
                             if (expanded) {
@@ -3611,6 +3633,7 @@ private fun TodayScreen(
                     item(key = "section-$sectionKey") {
                         SectionHeader(section, schedules.sumOf { it.tasks.size }, expanded) {
                             expandedSections[sectionKey] = !expanded
+                            displaySettings.saveSectionExpanded(sectionKey, !expanded)
                         }
                     }
                     if (expanded) schedules.forEach { schedule ->
@@ -3622,6 +3645,7 @@ private fun TodayScreen(
                         item(key = "header-$scheduleKey") {
                             ScheduleHeader(schedule, locale, scheduleExpanded) {
                                 expandedSchedules[scheduleKey] = !scheduleExpanded
+                                displaySettings.saveScheduleExpanded(scheduleKey, !scheduleExpanded)
                             }
                         }
                         if (scheduleExpanded) {

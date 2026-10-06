@@ -36,10 +36,28 @@ class TodayDisplaySettings(context: Context) {
         preferences.edit().putBoolean(KEY_AUTO_COLLAPSE_COMPLETED, enabled).apply()
     }
 
+    fun readExpandedSections(): Map<String, Boolean> = readExpandedStates(KEY_SECTION_PREFIX)
+
+    fun saveSectionExpanded(key: String, expanded: Boolean) = saveExpandedState(KEY_SECTION_PREFIX, key, expanded)
+
+    fun readExpandedSchedules(): Map<String, Boolean> = readExpandedStates(KEY_SCHEDULE_PREFIX)
+
+    fun saveScheduleExpanded(key: String, expanded: Boolean) = saveExpandedState(KEY_SCHEDULE_PREFIX, key, expanded)
+
+    private fun readExpandedStates(prefix: String): Map<String, Boolean> = preferences.all.mapNotNull { (key, value) ->
+        if (key.startsWith(prefix) && value is Boolean) key.removePrefix(prefix) to value else null
+    }.toMap()
+
+    private fun saveExpandedState(prefix: String, key: String, expanded: Boolean) {
+        preferences.edit().putBoolean(prefix + key, expanded).apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "today_display"
         const val KEY_SORT_ORDER = "sort_order"
         const val KEY_GROUP_BY = "group_by"
         const val KEY_AUTO_COLLAPSE_COMPLETED = "auto_collapse_completed"
+        const val KEY_SECTION_PREFIX = "expanded_section:"
+        const val KEY_SCHEDULE_PREFIX = "expanded_schedule:"
     }
 }
