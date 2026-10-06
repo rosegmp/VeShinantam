@@ -243,6 +243,7 @@
     <string name="notification_channel_description">סיכום יומי אחד של הלימוד והחזרות להיום</string>
     <string name="reminder_settings">הגדרות תזכורת</string>
     <string name="settings">הגדרות</string>
+    <string name="display_and_language">תצוגה ושפה</string>
     <string name="account_and_sync">חשבון וסנכרון</string>
     <string name="account_not_configured">סנכרון החשבון אינו מוגדר בגרסה זו.</string>
     <string name="account_sign_in_explanation">היכנס באמצעות דוא״ל וסיסמה. נתוני הלימוד יישארו זמינים גם ללא חיבור.</string>

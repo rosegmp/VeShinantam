@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.ZoomIn
@@ -709,6 +710,8 @@ private fun FirstLaunchWelcome(
     }
 }
 
+private enum class SettingsPage { HOME, DISPLAY, LEARNING, REMINDERS, BACKUP, PRINT, PRESETS }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsDialog(
@@ -740,6 +743,7 @@ private fun SettingsDialog(
     }
     var choosingTime by remember { mutableStateOf(false) }
     var confirmingRestore by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(SettingsPage.HOME) }
     var printDayCount by remember { mutableStateOf(30) }
     var automaticPresetUpdates by remember(presetUpdateState.automaticUpdates) { mutableStateOf(presetUpdateState.automaticUpdates) }
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
@@ -749,6 +753,17 @@ private fun SettingsDialog(
         )
     }
     val parsedDefaultChazarah = ChazarahDefaults.parse(defaultChazarahText)
+    val settingsScrollState = rememberScrollState()
+    LaunchedEffect(page) { settingsScrollState.scrollTo(0) }
+    val pageTitle = when (page) {
+        SettingsPage.HOME -> R.string.settings
+        SettingsPage.DISPLAY -> R.string.display_and_language
+        SettingsPage.LEARNING -> R.string.default_chazarah
+        SettingsPage.REMINDERS -> R.string.daily_reminder
+        SettingsPage.BACKUP -> R.string.backup_and_restore
+        SettingsPage.PRINT -> R.string.printable_schedule
+        SettingsPage.PRESETS -> R.string.preset_catalog_updates
+    }
 
     if (choosingTime) {
         val timePickerState = rememberTimePickerState(
@@ -795,244 +810,277 @@ private fun SettingsDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings)) },
+        onDismissRequest = { if (page == SettingsPage.HOME) onDismiss() else page = SettingsPage.HOME },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (page != SettingsPage.HOME) {
+                    IconButton(onClick = { page = SettingsPage.HOME }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.back))
+                    }
+                }
+                Text(stringResource(pageTitle))
+            }
+        },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.heightIn(max = 560.dp).verticalScroll(settingsScrollState),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.interface_language), style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = language == AppLanguage.ENGLISH,
-                            onClick = { language = AppLanguage.ENGLISH },
-                            label = { Text(stringResource(R.string.english)) },
-                        )
-                        FilterChip(
-                            selected = language == AppLanguage.HEBREW,
-                            onClick = { language = AppLanguage.HEBREW },
-                            label = { Text(stringResource(R.string.hebrew)) },
-                        )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.sefarim_language), style = MaterialTheme.typography.titleSmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = sefarimLanguage == SefarimLanguage.ENGLISH,
-                            onClick = { sefarimLanguage = SefarimLanguage.ENGLISH },
-                            label = { Text(stringResource(R.string.english)) },
-                        )
-                        FilterChip(
-                            selected = sefarimLanguage == SefarimLanguage.HEBREW,
-                            onClick = { sefarimLanguage = SefarimLanguage.HEBREW },
-                            label = { Text(stringResource(R.string.hebrew)) },
-                        )
-                        FilterChip(
-                            selected = sefarimLanguage == SefarimLanguage.BOTH,
-                            onClick = { sefarimLanguage = SefarimLanguage.BOTH },
-                            label = { Text(stringResource(R.string.both_languages)) },
-                        )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.primary_calendar), style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = primaryCalendar == PrimaryCalendar.GREGORIAN,
-                            onClick = { primaryCalendar = PrimaryCalendar.GREGORIAN },
-                            label = { Text(stringResource(R.string.gregorian_calendar)) },
-                        )
-                        FilterChip(
-                            selected = primaryCalendar == PrimaryCalendar.HEBREW,
-                            onClick = { primaryCalendar = PrimaryCalendar.HEBREW },
-                            label = { Text(stringResource(R.string.hebrew_calendar)) },
-                        )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.default_chazarah), style = MaterialTheme.typography.titleSmall)
-                    OutlinedTextField(
-                        value = defaultChazarahText,
-                        onValueChange = { defaultChazarahText = it },
-                        label = { Text(stringResource(R.string.default_chazarah_offsets)) },
-                        supportingText = {
-                            Text(
-                                stringResource(
-                                    if (parsedDefaultChazarah == null) {
-                                        R.string.default_chazarah_invalid
-                                    } else {
-                                        R.string.default_chazarah_help
-                                    },
-                                ),
-                            )
-                        },
-                        isError = parsedDefaultChazarah == null,
-                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth().toggleable(
-                        value = enabled,
-                        onValueChange = { enabled = it },
-                        role = Role.Switch,
-                    ).heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.daily_reminder))
-                        Text(
-                            stringResource(if (enabled) R.string.reminder_enabled else R.string.reminder_disabled),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = enabled, onCheckedChange = null)
-                }
-                OutlinedButton(
-                    onClick = { choosingTime = true },
-                    enabled = enabled,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.reminder_time_value, formattedTime))
-                }
-                Text(
-                    stringResource(R.string.reminder_explanation),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                HorizontalDivider()
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.backup_and_restore), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.backup_explanation),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onBackupRequested, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.create_backup))
-                        }
-                        OutlinedButton(onClick = { confirmingRestore = true }, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.restore_backup))
+                when (page) {
+                    SettingsPage.HOME -> {
+                        listOf(
+                            SettingsPage.DISPLAY to R.string.display_and_language,
+                            SettingsPage.LEARNING to R.string.default_chazarah,
+                            SettingsPage.REMINDERS to R.string.daily_reminder,
+                            SettingsPage.BACKUP to R.string.backup_and_restore,
+                            SettingsPage.PRINT to R.string.printable_schedule,
+                            SettingsPage.PRESETS to R.string.preset_catalog_updates,
+                        ).forEach { (destination, title) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { page = destination }.heightIn(min = 48.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(stringResource(title), modifier = Modifier.weight(1f))
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                            }
                         }
                     }
-                    backupNotice?.let { notice ->
-                        val message = if (notice.error != null) {
-                            stringResource(if (notice.restored) R.string.restore_failed else R.string.backup_failed)
-                        } else notice.summary?.let { summary ->
-                            stringResource(
-                                if (notice.restored) R.string.restore_complete else R.string.backup_complete,
-                                summary.scheduleCount,
-                                summary.taskCount,
-                            )
-                        }.orEmpty()
-                        Text(
-                            message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (notice.error == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-                HorizontalDivider()
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.printable_schedule), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.printable_schedule_explanation),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrintableScheduleService.ALLOWED_DAY_COUNTS.forEach { count ->
-                            FilterChip(
-                                selected = printDayCount == count,
-                                onClick = { printDayCount = count },
-                                label = { Text(stringResource(R.string.print_day_count, count)) },
-                            )
-                        }
-                    }
-                    OutlinedButton(onClick = { onPrintRequested(printDayCount) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.create_pdf))
-                    }
-                    printNotice?.let { notice ->
-                        Text(
-                            if (notice.failed) {
-                                stringResource(R.string.print_pdf_failed)
-                            } else {
-                                stringResource(
-                                    R.string.print_pdf_complete,
-                                    notice.summary?.taskCount ?: 0,
-                                    notice.summary?.pageCount ?: 0,
+                    SettingsPage.DISPLAY -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.interface_language), style = MaterialTheme.typography.titleSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = language == AppLanguage.ENGLISH,
+                                    onClick = { language = AppLanguage.ENGLISH },
+                                    label = { Text(stringResource(R.string.english)) },
                                 )
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (notice.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        )
+                                FilterChip(
+                                    selected = language == AppLanguage.HEBREW,
+                                    onClick = { language = AppLanguage.HEBREW },
+                                    label = { Text(stringResource(R.string.hebrew)) },
+                                )
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.sefarim_language), style = MaterialTheme.typography.titleSmall)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = sefarimLanguage == SefarimLanguage.ENGLISH,
+                                    onClick = { sefarimLanguage = SefarimLanguage.ENGLISH },
+                                    label = { Text(stringResource(R.string.english)) },
+                                )
+                                FilterChip(
+                                    selected = sefarimLanguage == SefarimLanguage.HEBREW,
+                                    onClick = { sefarimLanguage = SefarimLanguage.HEBREW },
+                                    label = { Text(stringResource(R.string.hebrew)) },
+                                )
+                                FilterChip(
+                                    selected = sefarimLanguage == SefarimLanguage.BOTH,
+                                    onClick = { sefarimLanguage = SefarimLanguage.BOTH },
+                                    label = { Text(stringResource(R.string.both_languages)) },
+                                )
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.primary_calendar), style = MaterialTheme.typography.titleSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = primaryCalendar == PrimaryCalendar.GREGORIAN,
+                                    onClick = { primaryCalendar = PrimaryCalendar.GREGORIAN },
+                                    label = { Text(stringResource(R.string.gregorian_calendar)) },
+                                )
+                                FilterChip(
+                                    selected = primaryCalendar == PrimaryCalendar.HEBREW,
+                                    onClick = { primaryCalendar = PrimaryCalendar.HEBREW },
+                                    label = { Text(stringResource(R.string.hebrew_calendar)) },
+                                )
+                            }
+                        }
                     }
-                }
-                HorizontalDivider()
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.preset_catalog_updates), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.preset_catalog_version, PresetCatalog.VERSION),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!presetUpdatesConfigured) {
+                    SettingsPage.LEARNING -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = defaultChazarahText,
+                                onValueChange = { defaultChazarahText = it },
+                                label = { Text(stringResource(R.string.default_chazarah_offsets)) },
+                                supportingText = {
+                                    Text(
+                                        stringResource(
+                                            if (parsedDefaultChazarah == null) {
+                                                R.string.default_chazarah_invalid
+                                            } else {
+                                                R.string.default_chazarah_help
+                                            },
+                                        ),
+                                    )
+                                },
+                                isError = parsedDefaultChazarah == null,
+                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    SettingsPage.REMINDERS -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().toggleable(
+                                value = enabled,
+                                onValueChange = { enabled = it },
+                                role = Role.Switch,
+                            ).heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(R.string.daily_reminder))
+                                Text(
+                                    stringResource(if (enabled) R.string.reminder_enabled else R.string.reminder_disabled),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(checked = enabled, onCheckedChange = null)
+                        }
+                        OutlinedButton(
+                            onClick = { choosingTime = true },
+                            enabled = enabled,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.reminder_time_value, formattedTime))
+                        }
                         Text(
-                            stringResource(R.string.preset_updates_not_configured),
+                            stringResource(R.string.reminder_explanation),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().toggleable(
-                            value = automaticPresetUpdates,
-                            enabled = presetUpdatesConfigured,
-                            onValueChange = { automaticPresetUpdates = it },
-                            role = Role.Switch,
-                        ).heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.automatic_preset_updates), modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = automaticPresetUpdates,
-                            onCheckedChange = null,
-                            enabled = presetUpdatesConfigured,
-                        )
+                    SettingsPage.BACKUP -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                stringResource(R.string.backup_explanation),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = onBackupRequested, modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.create_backup))
+                                }
+                                OutlinedButton(onClick = { confirmingRestore = true }, modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.restore_backup))
+                                }
+                            }
+                            backupNotice?.let { notice ->
+                                val message = if (notice.error != null) {
+                                    stringResource(if (notice.restored) R.string.restore_failed else R.string.backup_failed)
+                                } else notice.summary?.let { summary ->
+                                    stringResource(
+                                        if (notice.restored) R.string.restore_complete else R.string.backup_complete,
+                                        summary.scheduleCount,
+                                        summary.taskCount,
+                                    )
+                                }.orEmpty()
+                                Text(
+                                    message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (notice.error == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
                     }
-                    OutlinedButton(
-                        onClick = onCheckPresetUpdates,
-                        enabled = presetUpdatesConfigured && !presetUpdateInProgress,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(if (presetUpdateInProgress) R.string.checking_for_updates else R.string.check_for_updates))
+                    SettingsPage.PRINT -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                stringResource(R.string.printable_schedule_explanation),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PrintableScheduleService.ALLOWED_DAY_COUNTS.forEach { count ->
+                                    FilterChip(
+                                        selected = printDayCount == count,
+                                        onClick = { printDayCount = count },
+                                        label = { Text(stringResource(R.string.print_day_count, count)) },
+                                    )
+                                }
+                            }
+                            OutlinedButton(onClick = { onPrintRequested(printDayCount) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.create_pdf))
+                            }
+                            printNotice?.let { notice ->
+                                Text(
+                                    if (notice.failed) {
+                                        stringResource(R.string.print_pdf_failed)
+                                    } else {
+                                        stringResource(
+                                            R.string.print_pdf_complete,
+                                            notice.summary?.taskCount ?: 0,
+                                            notice.summary?.pageCount ?: 0,
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (notice.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
-                    presetUpdateState.lastResult?.let { result ->
-                        Text(
-                            stringResource(
-                                when (result) {
-                                    PresetUpdateResult.UPDATED -> R.string.preset_update_installed
-                                    PresetUpdateResult.UP_TO_DATE -> R.string.preset_catalog_up_to_date
-                                    PresetUpdateResult.NOT_CONFIGURED -> R.string.preset_updates_not_configured
-                                    PresetUpdateResult.NETWORK_ERROR -> R.string.preset_update_network_error
-                                    PresetUpdateResult.INVALID_SIGNATURE -> R.string.preset_update_invalid_signature
-                                    PresetUpdateResult.INVALID_CATALOG -> R.string.preset_update_invalid_catalog
-                                },
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (result == PresetUpdateResult.INVALID_SIGNATURE || result == PresetUpdateResult.INVALID_CATALOG || result == PresetUpdateResult.NETWORK_ERROR) {
-                                MaterialTheme.colorScheme.error
-                            } else MaterialTheme.colorScheme.primary,
-                        )
+                    SettingsPage.PRESETS -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                stringResource(R.string.preset_catalog_version, PresetCatalog.VERSION),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (!presetUpdatesConfigured) {
+                                Text(
+                                    stringResource(R.string.preset_updates_not_configured),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().toggleable(
+                                    value = automaticPresetUpdates,
+                                    enabled = presetUpdatesConfigured,
+                                    onValueChange = { automaticPresetUpdates = it },
+                                    role = Role.Switch,
+                                ).heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(stringResource(R.string.automatic_preset_updates), modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = automaticPresetUpdates,
+                                    onCheckedChange = null,
+                                    enabled = presetUpdatesConfigured,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onCheckPresetUpdates,
+                                enabled = presetUpdatesConfigured && !presetUpdateInProgress,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(if (presetUpdateInProgress) R.string.checking_for_updates else R.string.check_for_updates))
+                            }
+                            presetUpdateState.lastResult?.let { result ->
+                                Text(
+                                    stringResource(
+                                        when (result) {
+                                            PresetUpdateResult.UPDATED -> R.string.preset_update_installed
+                                            PresetUpdateResult.UP_TO_DATE -> R.string.preset_catalog_up_to_date
+                                            PresetUpdateResult.NOT_CONFIGURED -> R.string.preset_updates_not_configured
+                                            PresetUpdateResult.NETWORK_ERROR -> R.string.preset_update_network_error
+                                            PresetUpdateResult.INVALID_SIGNATURE -> R.string.preset_update_invalid_signature
+                                            PresetUpdateResult.INVALID_CATALOG -> R.string.preset_update_invalid_catalog
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (result == PresetUpdateResult.INVALID_SIGNATURE || result == PresetUpdateResult.INVALID_CATALOG || result == PresetUpdateResult.NETWORK_ERROR) {
+                                        MaterialTheme.colorScheme.error
+                                    } else MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1055,7 +1103,9 @@ private fun SettingsDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            TextButton(onClick = { if (page == SettingsPage.HOME) onDismiss() else page = SettingsPage.HOME }) {
+                Text(stringResource(if (page == SettingsPage.HOME) R.string.cancel else R.string.back))
+            }
         },
     )
 }
@@ -3525,7 +3575,7 @@ private fun TodayScreen(
                 )
                 Box {
                     IconButton(onClick = { displayMenuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.today_display_options))
+                        Icon(Icons.Default.Tune, contentDescription = stringResource(R.string.today_display_options))
                     }
                     DropdownMenu(
                         expanded = displayMenuExpanded,
