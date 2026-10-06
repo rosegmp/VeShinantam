@@ -361,6 +361,10 @@
     <string name="no_weekend_chazarah">No weekend chazarah</string>
     <string name="weekend_with_additional">Friday/Shabbos chazarah + %1$s</string>
     <string name="sort_items">Sort items</string>
+    <string name="group_today_by">Group Today by</string>
+    <string name="group_by_schedule">Schedule</string>
+    <string name="group_by_learning_status">Learning status</string>
+    <string name="auto_collapse_completed_schedules">Auto collapse completed schedules</string>
     <string name="sort_scheduled_first">Scheduled order</string>
     <string name="sort_newest_due_first">Newest due first</string>
     <string name="sort_reference_ascending">Reference A–Z</string>

@@ -368,6 +368,10 @@
     <string name="no_weekend_chazarah">ללא חזרת סוף השבוע</string>
     <string name="weekend_with_additional">חזרת יום שישי ושבת + %1$s</string>
     <string name="sort_items">מיון פריטים</string>
+    <string name="group_today_by">קיבוץ היום לפי</string>
+    <string name="group_by_schedule">תוכנית</string>
+    <string name="group_by_learning_status">מצב הלימוד</string>
+    <string name="auto_collapse_completed_schedules">כיווץ אוטומטי של תוכניות שהושלמו</string>
     <string name="sort_scheduled_first">סדר התוכנית</string>
     <string name="sort_newest_due_first">החדשים תחילה</string>
     <string name="sort_reference_ascending">מראה מקום א׳–ת׳</string>

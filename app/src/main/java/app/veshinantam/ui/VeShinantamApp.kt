@@ -213,6 +213,8 @@ import app.veshinantam.ui.today.TodayTaskUi
 import app.veshinantam.ui.today.TodayUiState
 import app.veshinantam.ui.today.TodayViewModel
 import app.veshinantam.ui.today.TodayDisplaySettings
+import app.veshinantam.ui.today.TodayGroupBy
+import app.veshinantam.ui.today.isTodayScheduleExpanded
 import app.veshinantam.ui.today.TodaySortOrder
 import app.veshinantam.ui.today.sortTodayTasks
 import app.veshinantam.ui.today.readerTaskNeighbors
@@ -3497,6 +3499,8 @@ private fun TodayScreen(
     val context = LocalContext.current
     val displaySettings = remember(context) { TodayDisplaySettings(context.applicationContext) }
     var sortOrder by remember { mutableStateOf(displaySettings.readSortOrder()) }
+    var groupBy by remember { mutableStateOf(displaySettings.readGroupBy()) }
+    var autoCollapseCompleted by remember { mutableStateOf(displaySettings.readAutoCollapseCompleted()) }
     val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
     val expandedSchedules = remember { mutableStateMapOf<String, Boolean>() }
     var readerTask by remember { mutableStateOf<TodayTaskUi?>(null) }
@@ -3530,37 +3534,100 @@ private fun TodayScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (state.schedules.isEmpty()) item { EmptyTodayCard() }
-        state.schedules.forEach { schedule ->
-            val scheduleExpanded = expandedSchedules[schedule.id] ?: true
-            item(key = "header-${schedule.id}") {
-                ScheduleHeader(schedule, locale, scheduleExpanded) {
-                    expandedSchedules[schedule.id] = !scheduleExpanded
-                }
+        item {
+            SelectionDropdown(
+                label = stringResource(R.string.group_today_by),
+                options = listOf(
+                    stringResource(R.string.group_by_schedule),
+                    stringResource(R.string.group_by_learning_status),
+                ),
+                selectedIndex = groupBy.ordinal,
+                onSelected = { index ->
+                    groupBy = TodayGroupBy.entries[index]
+                    displaySettings.saveGroupBy(groupBy)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().toggleable(
+                    value = autoCollapseCompleted,
+                    role = Role.Switch,
+                    onValueChange = { enabled ->
+                        autoCollapseCompleted = enabled
+                        displaySettings.saveAutoCollapseCompleted(enabled)
+                    },
+                ).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.auto_collapse_completed_schedules), modifier = Modifier.weight(1f))
+                Switch(checked = autoCollapseCompleted, onCheckedChange = null)
             }
-            if (scheduleExpanded) {
-                TodaySection.entries.forEach { section ->
-                    val tasks = sortTodayTasks(
-                        schedule.tasks.filter { it.section == section },
-                        sortOrder,
-                        preferHebrewReference,
-                    )
-                    if (tasks.isNotEmpty()) {
-                        val sectionKey = "${schedule.id}-$section"
-                        val expanded = expandedSections[sectionKey] ?: true
-                        item(key = "section-$sectionKey") {
-                            SectionHeader(section, tasks.size, expanded) {
-                                expandedSections[sectionKey] = !expanded
+        }
+        if (state.schedules.isEmpty()) item { EmptyTodayCard() }
+        if (groupBy == TodayGroupBy.SCHEDULE) {
+            state.schedules.forEach { schedule ->
+                val scheduleKey = "schedule-${schedule.id}"
+                val scheduleExpanded = isTodayScheduleExpanded(
+                    expandedSchedules[scheduleKey], schedule, autoCollapseCompleted,
+                )
+                item(key = "header-$scheduleKey") {
+                    ScheduleHeader(schedule, locale, scheduleExpanded) {
+                        expandedSchedules[scheduleKey] = !scheduleExpanded
+                    }
+                }
+                if (scheduleExpanded) {
+                    TodaySection.entries.forEach { section ->
+                        val tasks = sortTodayTasks(
+                            schedule.tasks.filter { it.section == section }, sortOrder, preferHebrewReference,
+                        )
+                        if (tasks.isNotEmpty()) {
+                            val sectionKey = "${schedule.id}-$section"
+                            val expanded = expandedSections[sectionKey] ?: true
+                            item(key = "section-$sectionKey") {
+                                SectionHeader(section, tasks.size, expanded) {
+                                    expandedSections[sectionKey] = !expanded
+                                }
+                            }
+                            if (expanded) {
+                                items(tasks, key = { it.id }) { task ->
+                                    TaskRow(task, locale, { checked -> onCheckedChange(task.id, checked) }, { readerTask = task })
+                                }
                             }
                         }
-                        if (expanded) {
+                    }
+                }
+            }
+        } else {
+            TodaySection.entries.forEach { section ->
+                val schedules = state.schedules.mapNotNull { schedule ->
+                    schedule.copy(tasks = schedule.tasks.filter { it.section == section })
+                        .takeIf { it.tasks.isNotEmpty() }
+                }
+                if (schedules.isNotEmpty()) {
+                    val sectionKey = "status-$section"
+                    val expanded = expandedSections[sectionKey] ?: true
+                    item(key = "section-$sectionKey") {
+                        SectionHeader(section, schedules.sumOf { it.tasks.size }, expanded) {
+                            expandedSections[sectionKey] = !expanded
+                        }
+                    }
+                    if (expanded) schedules.forEach { schedule ->
+                        val scheduleKey = "status-$section-${schedule.id}"
+                        val fullSchedule = state.schedules.first { it.id == schedule.id }
+                        val scheduleExpanded = isTodayScheduleExpanded(
+                            expandedSchedules[scheduleKey], fullSchedule, autoCollapseCompleted,
+                        )
+                        item(key = "header-$scheduleKey") {
+                            ScheduleHeader(schedule, locale, scheduleExpanded) {
+                                expandedSchedules[scheduleKey] = !scheduleExpanded
+                            }
+                        }
+                        if (scheduleExpanded) {
+                            val tasks = sortTodayTasks(schedule.tasks, sortOrder, preferHebrewReference)
                             items(tasks, key = { it.id }) { task ->
-                                TaskRow(
-                                    task = task,
-                                    locale = locale,
-                                    onCheckedChange = { checked -> onCheckedChange(task.id, checked) },
-                                    onRead = { readerTask = task },
-                                )
+                                TaskRow(task, locale, { checked -> onCheckedChange(task.id, checked) }, { readerTask = task })
                             }
                         }
                     }

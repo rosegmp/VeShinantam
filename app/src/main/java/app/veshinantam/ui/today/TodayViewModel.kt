@@ -48,6 +48,12 @@ data class TodayScheduleUi(
     val completedCount: Int get() = tasks.count { it.isCompleted }
 }
 
+internal fun isTodayScheduleExpanded(
+    manualOverride: Boolean?,
+    schedule: TodayScheduleUi,
+    autoCollapseCompleted: Boolean,
+): Boolean = manualOverride ?: !(autoCollapseCompleted && schedule.tasks.isNotEmpty() && schedule.completedCount == schedule.tasks.size)
+
 sealed interface TodayUiState {
     data object Loading : TodayUiState
     data class Ready(val today: LocalDate, val schedules: List<TodayScheduleUi>) : TodayUiState

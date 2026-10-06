@@ -13,6 +13,18 @@ class TodayViewModelTest {
     private val today = LocalDate.of(2026, 9, 7)
 
     @Test
+    fun `completed schedules collapse automatically but can be opened manually`() {
+        val completed = TodayScheduleUi("done", "Done", "", listOf(task("one", "One", "", today).copy(isCompleted = true)))
+        val pending = TodayScheduleUi("pending", "Pending", "", listOf(task("two", "Two", "", today)))
+
+        assertEquals(false, isTodayScheduleExpanded(null, completed, autoCollapseCompleted = true))
+        assertEquals(true, isTodayScheduleExpanded(null, pending, autoCollapseCompleted = true))
+        assertEquals(true, isTodayScheduleExpanded(null, completed, autoCollapseCompleted = false))
+        assertEquals(true, isTodayScheduleExpanded(true, completed, autoCollapseCompleted = true))
+        assertEquals(false, isTodayScheduleExpanded(false, pending, autoCollapseCompleted = false))
+    }
+
+    @Test
     fun `maps sections in required order and overdue tasks oldest first`() {
         val rows = listOf(
             row("new", TaskType.LEARNING, today),
