@@ -97,7 +97,9 @@ object PresetCatalog {
     }
 
     fun programAtDate(program: PresetProgram, date: LocalDate): PresetProgram =
-        program.copy(currentIndex = positionIndexOn(program, date))
+        if (program.id == MonthlyTehillim.PRESET_ID) {
+            program.copy(units = MaterialCatalog.monthlyTehillimUnits, currentIndex = MonthlyTehillim.indexOn(date))
+        } else program.copy(currentIndex = positionIndexOn(program, date))
 
     fun positionIndexOn(program: PresetProgram, date: LocalDate): Int {
         require(date >= positionAsOf) { "Preset positions before $positionAsOf use scheduledDate" }

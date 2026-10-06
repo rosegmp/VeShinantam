@@ -30,6 +30,7 @@ The web app is deployed automatically from `main` to [GitHub Pages](https://rose
 - Room entities, DAO, versioned schema/migration, repository, and debug-only fixtures
 - Custom schedule creation with single-language names and unit labels, start/finish dates, pace or finish-by planning, weekdays, missed-work behavior, optional chazarah overrides, preview, and save
 - Offline preset programs for Daf Yomi Bavli, Oraysa, Dirshu Amud Yomi, Mishnah Yomis, Dirshu Mishnah Berurah, Yerushalmi Yomi (Vilna), Yerushalmi Yomi (Schottenstein), Rambam, Chofetz Chaim, Tehillim, Hachzek Pele Yoetz, and Kitzur Shulchan Aruch Yomi, with versioned worldwide positions and dated earlier-position selection
+- Monthly Tehillim follows the Hebrew day of the month, repeats each month, and combines days 29 and 30 in a 29-day month; existing schedules update while preserving completed history
 - Optional Friday/Shabbos chazarah for every preset and custom schedule, with Oraysa retaining its official daily and weekend pattern; additional interval chazaros remain independently configurable
 - Structured custom material selection for Gemara, Mishnah, Mishnah Berurah, Kitzur, or Other; includes ordered from/to selectors, pre-populated unit lists, exact Gemara daf/amud endpoints, Mishnah mishnah/perek choice, and two-sided Mishnah Berurah page plus seif/siman choices backed by unit-specific structures
 - Room-backed Calendar month browser with Gregorian/Hebrew dates, completion-status grid, schedule/type filters, unrestricted month navigation, and individual completion

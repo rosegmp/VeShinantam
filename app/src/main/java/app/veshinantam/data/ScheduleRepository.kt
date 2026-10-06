@@ -19,6 +19,7 @@ import app.veshinantam.domain.model.ScheduleState
 import app.veshinantam.domain.model.TaskType
 import app.veshinantam.domain.material.PresetCatalog
 import app.veshinantam.domain.material.PresetProgram
+import app.veshinantam.domain.material.MonthlyTehillim
 import app.veshinantam.domain.scheduling.ScheduleEngine
 import app.veshinantam.domain.scheduling.LearningPlacement
 import app.veshinantam.domain.scheduling.LearningRollover
@@ -206,10 +207,15 @@ class ScheduleRepository(
         require(draft.startIndex in 0..draft.program.currentIndex)
         val scheduleId = UUID.randomUUID().toString()
         val rules = ScheduleRules(draft.program.selectedWeekdays, draft.program.excludedDates)
-        val material = draft.program.units.subList(draft.startIndex, draft.program.units.size).mapIndexed { index, reference ->
-            MaterialUnit("$scheduleId-unit-$index", index, BilingualLabel(reference.english, reference.hebrew))
+        val isMonthlyTehillim = draft.program.id == MonthlyTehillim.PRESET_ID
+        val learning = if (isMonthlyTehillim) {
+            MonthlyTehillim.learningBetween(draft.startDate, draft.startDate.plusDays(MonthlyTehillim.HORIZON_DAYS))
+        } else {
+            val material = draft.program.units.subList(draft.startIndex, draft.program.units.size).mapIndexed { index, reference ->
+                MaterialUnit("$scheduleId-unit-$index", index, BilingualLabel(reference.english, reference.hebrew))
+            }
+            engine.generateByDailyQuantity(material, draft.startDate, draft.program.dailyQuantity, rules)
         }
-        val learning = engine.generateByDailyQuantity(material, draft.startDate, draft.program.dailyQuantity, rules)
         val additionalReviews = engine.generateChazarah(
             learning,
             draft.chazarahPattern,
@@ -230,11 +236,11 @@ class ScheduleRepository(
             nameEnglish = draft.program.nameEnglish,
             nameHebrew = draft.program.nameHebrew,
             kind = ScheduleKind.PRESET,
-            sourceType = "PRESET:${PresetCatalog.VERSION}",
+            sourceType = "PRESET:${PresetCatalog.VERSION}" + (if (isMonthlyTehillim) MonthlyTehillim.SOURCE_MARKER else ""),
             materialType = draft.program.materialType,
             presetId = draft.program.id,
             startDate = draft.startDate,
-            targetDate = learning.maxOfOrNull { it.plannedDate },
+            targetDate = if (isMonthlyTehillim) null else learning.maxOfOrNull { it.plannedDate },
             dailyQuantity = draft.program.dailyQuantity,
             selectedWeekdays = draft.program.selectedWeekdays.joinToString(",") { it.name },
             chazarahDayOffsets = draft.chazarahPattern.dayOffsets.joinToString(","),
@@ -242,7 +248,7 @@ class ScheduleRepository(
             officialOraysaChazarah = draft.includeWeekendChazarah,
             missedWorkBehavior = draft.missedWorkBehavior,
             state = ScheduleState.ACTIVE,
-            generationRevision = 1,
+            generationRevision = if (isMonthlyTehillim) MonthlyTehillim.REVISION else 1,
             createdAt = clock.instant(),
         )
         val entities = (learning + reviews).map { planned ->
@@ -258,7 +264,7 @@ class ScheduleRepository(
                 plannedDate = planned.plannedDate,
                 originalLearningDate = planned.originalLearningDate,
                 reviewIdentity = planned.reviewIdentity,
-                generationRevision = 1,
+                generationRevision = if (isMonthlyTehillim) MonthlyTehillim.REVISION else 1,
                 completedAt = null,
                 completionLocalDate = null,
                 completionZoneId = null,
@@ -431,8 +437,9 @@ class ScheduleRepository(
         today: LocalDate = LocalDate.now(clock.withZone(zoneProvider())),
         notifyDataChanged: Boolean = true,
     ) {
-        var changed = false
+        var changed = ensureMonthlyTehillim(today)
         dao.getActiveShiftForwardSchedules().forEach { schedule ->
+            if (schedule.presetId == MonthlyTehillim.PRESET_ID) return@forEach
             changed = rescheduleLearning(
                 schedule = schedule,
                 excludedDates = dao.getExclusions(schedule.id).mapTo(mutableSetOf()) { it.date },
@@ -440,6 +447,61 @@ class ScheduleRepository(
             ) || changed
         }
         if (changed && notifyDataChanged) onDataChanged()
+    }
+
+    private suspend fun ensureMonthlyTehillim(today: LocalDate): Boolean {
+        var changed = false
+        dao.getAllSchedules().asSequence()
+            .filter { it.presetId == MonthlyTehillim.PRESET_ID && it.state == ScheduleState.ACTIVE }
+            .forEach { schedule ->
+                val tasks = dao.getTasks(schedule.id)
+                val lastLearning = tasks.asSequence().filter { it.type == TaskType.LEARNING }
+                    .maxOfOrNull { it.plannedDate }
+                if (schedule.sourceType.endsWith(MonthlyTehillim.SOURCE_MARKER) &&
+                    lastLearning != null && !lastLearning.isBefore(today.plusDays(60))) return@forEach
+
+                val migrating = !schedule.sourceType.endsWith(MonthlyTehillim.SOURCE_MARKER)
+                val revision = schedule.generationRevision + 1
+                val start = maxOf(schedule.startDate, today)
+                val learning = MonthlyTehillim.learningBetween(start, start.plusDays(MonthlyTehillim.HORIZON_DAYS))
+                val rules = ScheduleRules(DayOfWeek.entries.toSet(), emptySet())
+                val offsets = schedule.chazarahDayOffsets.split(',').mapNotNull { it.toIntOrNull() }
+                val reviews = engine.generateChazarah(
+                    learning, ChazarahPattern(offsets, schedule.repeatsAnnually), rules,
+                    annualReviewsThroughYear = start.year + 10,
+                )
+                val taskIdsToDelete = tasks.filter { it.completedAt == null && (migrating || !it.plannedDate.isBefore(today)) }
+                    .map { it.id }
+                val preservedKeys = tasks.asSequence().filter { it.id !in taskIdsToDelete }
+                    .mapTo(mutableSetOf()) { it.stableKey }
+                val completedLearningDates = tasks.asSequence()
+                    .filter { it.type == TaskType.LEARNING && it.completedAt != null }
+                    .mapTo(mutableSetOf()) { it.plannedDate }
+                val replacements = (learning + reviews).filter {
+                    (it.type != TaskType.LEARNING || it.plannedDate !in completedLearningDates) && preservedKeys.add(it.stableKey)
+                }.map { planned ->
+                    TaskEntity(
+                        id = UUID.randomUUID().toString(), stableKey = planned.stableKey,
+                        scheduleId = schedule.id, type = planned.type,
+                        labelEnglish = planned.material.label.english,
+                        labelHebrew = planned.material.label.hebrew,
+                        materialType = schedule.materialType, quantity = planned.material.quantity,
+                        plannedDate = planned.plannedDate, originalLearningDate = planned.originalLearningDate,
+                        reviewIdentity = planned.reviewIdentity,
+                        generationRevision = revision,
+                        completedAt = null, completionLocalDate = null, completionZoneId = null,
+                    )
+                }
+                dao.replaceFuturePlan(
+                    schedule.copy(
+                        sourceType = schedule.sourceType.substringBefore(MonthlyTehillim.SOURCE_MARKER) + MonthlyTehillim.SOURCE_MARKER,
+                        targetDate = null, generationRevision = revision,
+                    ),
+                    taskIdsToDelete, replacements,
+                )
+                changed = true
+            }
+        return changed
     }
 
     private suspend fun rescheduleLearning(

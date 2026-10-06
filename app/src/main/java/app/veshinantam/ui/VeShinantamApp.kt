@@ -179,6 +179,7 @@ import app.veshinantam.domain.material.Masechta
 import app.veshinantam.domain.material.SeferChoice
 import app.veshinantam.domain.material.UnitReference
 import app.veshinantam.domain.material.PresetCatalog
+import app.veshinantam.domain.material.MonthlyTehillim
 import app.veshinantam.shared.preset.SharedPresetCatalog
 import app.veshinantam.shared.ScheduleLearningFilter
 import app.veshinantam.shared.scheduleLearningCounts
@@ -1893,8 +1894,10 @@ private fun ScheduleList(
                             }
                         }
                         if (schedule.state != ScheduleState.ARCHIVED) {
-                            TextButton(onClick = { selectedEditing = schedule }) {
-                                Text(stringResource(R.string.edit_schedule))
+                            if (schedule.presetId != MonthlyTehillim.PRESET_ID) {
+                                TextButton(onClick = { selectedEditing = schedule }) {
+                                    Text(stringResource(R.string.edit_schedule))
+                                }
                             }
                             TextButton(onClick = { pendingCompletePast = schedule to PastCompletionKind.LEARNING }) {
                                 Text(stringResource(R.string.complete_past_learning))
@@ -2313,28 +2316,30 @@ private fun ScheduleDetailsDialog(
                 )
                 ScheduleDetailRow(stringResource(R.string.schedule_detail_chazarah), chazarah)
                 ScheduleDetailRow(stringResource(R.string.schedule_detail_missed), missedWork)
-                Text(stringResource(R.string.excluded_dates), style = MaterialTheme.typography.labelMedium)
-                if (exclusions.isEmpty()) {
-                    Text(
-                        stringResource(R.string.no_excluded_dates),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    exclusions.sortedBy { it.date }.forEach { exclusion ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(displayDate(exclusion.date, primaryCalendar, locale))
-                            TextButton(onClick = { onRemoveExclusion(exclusion.date) }) {
-                                Text(stringResource(R.string.remove))
+                if (schedule.presetId != MonthlyTehillim.PRESET_ID) {
+                    Text(stringResource(R.string.excluded_dates), style = MaterialTheme.typography.labelMedium)
+                    if (exclusions.isEmpty()) {
+                        Text(
+                            stringResource(R.string.no_excluded_dates),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        exclusions.sortedBy { it.date }.forEach { exclusion ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(displayDate(exclusion.date, primaryCalendar, locale))
+                                TextButton(onClick = { onRemoveExclusion(exclusion.date) }) {
+                                    Text(stringResource(R.string.remove))
+                                }
                             }
                         }
                     }
-                }
-                OutlinedButton(onClick = { choosingExclusion = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.add_excluded_date))
+                    OutlinedButton(onClick = { choosingExclusion = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.add_excluded_date))
+                    }
                 }
             }
         },
@@ -2650,14 +2655,16 @@ private fun PresetScheduleCreator(
                         ),
                         style = MaterialTheme.typography.labelLarge,
                     )
+                    val currentReference = if (program.id == MonthlyTehillim.PRESET_ID)
+                        MonthlyTehillim.referenceOn(catalogPositionDate) else program.currentReference
                     Text(
-                        referenceLabel(program.currentReference.english, program.currentReference.hebrew, locale),
+                        referenceLabel(currentReference.english, currentReference.hebrew, locale),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
             }
         }
-        if (!guided || guidedStep == 3) item {
+        if ((!guided || guidedStep == 3) && program.id != MonthlyTehillim.PRESET_ID) item {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = startIndex == program.currentIndex,
@@ -2681,7 +2688,7 @@ private fun PresetScheduleCreator(
                 )
             }
         }
-        if (!guided || guidedStep == 3) item {
+        if ((!guided || guidedStep == 3) && program.id != MonthlyTehillim.PRESET_ID) item {
             OutlinedButton(onClick = { choosingPosition = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     "${stringResource(R.string.starting_position)}: " +
@@ -2703,6 +2710,10 @@ private fun PresetScheduleCreator(
         if (!guided || guidedStep == 4) item {
             OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.start_date_value, displayDate(startDate, primaryCalendar, locale)))
+            }
+            if (program.id == MonthlyTehillim.PRESET_ID) {
+                val reference = MonthlyTehillim.referenceOn(startDate)
+                Text(referenceLabel(reference.english, reference.hebrew, locale))
             }
         }
         if (!guided || guidedStep == 4) item {
@@ -2831,7 +2842,9 @@ private fun PresetScheduleCreator(
                         Text(stringResource(R.string.preview), style = MaterialTheme.typography.titleMedium)
                         Text(stringResource(R.string.learning_task_count, plan.learningCount))
                         Text(stringResource(R.string.chazarah_task_count, plan.reviewCount))
-                        Text(stringResource(R.string.completion_date, plan.completionDate?.let { displayDate(it, primaryCalendar, locale) }.orEmpty()))
+                        if (program.id != MonthlyTehillim.PRESET_ID) {
+                            Text(stringResource(R.string.completion_date, plan.completionDate?.let { displayDate(it, primaryCalendar, locale) }.orEmpty()))
+                        }
                         Button(onClick = { savePlan(plan) }, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.save_schedule))
                         }

@@ -20,12 +20,12 @@ class WebPresetCatalogTest {
         }
 
         WebPresetCatalog.applyVerifiedUpdate(
-            WebPresetCatalogUpdate("2026.09.18-11", 11, "2026-09-18", positions),
+            WebPresetCatalogUpdate("2026.10.05-12", SharedPresetCatalog.SEQUENCE + 1, "2026-10-05", positions),
         )
 
-        assertEquals("2026.09.18-11", WebPresetCatalog.version)
-        assertEquals(11, WebPresetCatalog.sequence)
-        assertEquals(IsoDate(2026, 9, 18), WebPresetCatalog.positionAsOf)
+        assertEquals("2026.10.05-12", WebPresetCatalog.version)
+        assertEquals(SharedPresetCatalog.SEQUENCE + 1, WebPresetCatalog.sequence)
+        assertEquals(IsoDate(2026, 10, 5), WebPresetCatalog.positionAsOf)
         assertEquals(positions, WebPresetCatalog.programs.associate { it.id to it.currentReference.english })
     }
 
@@ -33,22 +33,22 @@ class WebPresetCatalogTest {
     fun rejectsMissingOrUnknownPresetPositions() {
         val missing = SharedPresetCatalog.programs.drop(1).associate { it.id to it.currentReference.english }
         assertFailsWith<IllegalArgumentException> {
-            WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate("bad", 11, "2026-09-18", missing))
+            WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate("bad", SharedPresetCatalog.SEQUENCE + 1, "2026-10-05", missing))
         }
 
         val unknown = SharedPresetCatalog.programs.associate { it.id to it.currentReference.english }.toMutableMap()
         unknown[SharedPresetCatalog.programs.first().id] = "Not a real reference"
         assertFailsWith<IllegalArgumentException> {
-            WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate("bad", 11, "2026-09-18", unknown))
+            WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate("bad", SharedPresetCatalog.SEQUENCE + 1, "2026-10-05", unknown))
         }
     }
 
     @Test
     fun acceptsANewSignedPresetDefinition() {
         WebPresetCatalog.applyVerifiedUpdate(WebPresetCatalogUpdate(
-            catalogVersion = "2026.09.23-11",
-            sequence = 11,
-            positionAsOf = "2026-09-23",
+            catalogVersion = "2026.10.05-12",
+            sequence = SharedPresetCatalog.SEQUENCE + 1,
+            positionAsOf = "2026-10-05",
             positions = mapOf("daily-sample" to "Sample 1"),
             schemaVersion = 2,
             programs = listOf(RemotePresetPatch(
@@ -57,6 +57,6 @@ class WebPresetCatalogTest {
             )),
         ))
         assertEquals("Daily Sample", WebPresetCatalog.programs.last().nameEnglish)
-        assertEquals(11, WebPresetCatalog.sequence)
+        assertEquals(SharedPresetCatalog.SEQUENCE + 1, WebPresetCatalog.sequence)
     }
 }

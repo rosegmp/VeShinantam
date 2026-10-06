@@ -24,7 +24,7 @@ class PresetCatalogEnvelopeTest {
         val positions = PresetCatalog.programs.associate { program ->
             program.id to program.units[(program.currentIndex + 1).coerceAtMost(program.units.lastIndex)].english
         }
-        val envelope = signedEnvelope(keyPair, 11, "2026.09.22-11", LocalDate.parse("2026-09-22"), positions)
+        val envelope = signedEnvelope(keyPair, PresetCatalog.BUNDLED_SEQUENCE + 1, "2026.10.05-12", LocalDate.parse("2026-10-05"), positions)
 
         val verified = PresetCatalogEnvelope.verifyAndDecode(
             envelope,
@@ -32,9 +32,9 @@ class PresetCatalogEnvelopeTest {
         )
         PresetCatalog.applyVerifiedUpdate(verified.version, verified.sequence, verified.positionAsOf, verified.currentReferences)
 
-        assertEquals(11, PresetCatalog.activeSequence)
-        assertEquals("2026.09.22-11", PresetCatalog.VERSION)
-        assertEquals(LocalDate.parse("2026-09-22"), PresetCatalog.positionAsOf)
+        assertEquals(PresetCatalog.BUNDLED_SEQUENCE + 1, PresetCatalog.activeSequence)
+        assertEquals("2026.10.05-12", PresetCatalog.VERSION)
+        assertEquals(LocalDate.parse("2026-10-05"), PresetCatalog.positionAsOf)
         assertEquals(positions, PresetCatalog.programs.associate { it.id to it.currentReference.english })
     }
 
@@ -65,12 +65,12 @@ class PresetCatalogEnvelopeTest {
     @Test
     fun `catalog sequence cannot roll back active data`() {
         val positions = PresetCatalog.programs.associate { it.id to it.currentReference.english }
-        PresetCatalog.applyVerifiedUpdate("version-11", 11, LocalDate.parse("2026-09-22"), positions)
+        PresetCatalog.applyVerifiedUpdate("version-12", PresetCatalog.BUNDLED_SEQUENCE + 1, LocalDate.parse("2026-10-05"), positions)
 
         assertThrows(IllegalArgumentException::class.java) {
             PresetCatalog.applyVerifiedUpdate("older", 10, LocalDate.parse("2026-09-10"), positions)
         }
-        assertEquals(11, PresetCatalog.activeSequence)
+        assertEquals(PresetCatalog.BUNDLED_SEQUENCE + 1, PresetCatalog.activeSequence)
     }
 
     @Test
@@ -78,9 +78,9 @@ class PresetCatalogEnvelopeTest {
         val keyPair = KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair()
         val payload = JSONObject().apply {
             put("schemaVersion", 2)
-            put("catalogVersion", "2026.09.23-11")
-            put("sequence", 11)
-            put("positionAsOf", "2026-09-23")
+            put("catalogVersion", "2026.10.05-12")
+            put("sequence", PresetCatalog.BUNDLED_SEQUENCE + 1)
+            put("positionAsOf", "2026-10-05")
             put("positions", JSONObject().put("daily-sample", "Sample 1"))
             put("programs", org.json.JSONArray().put(JSONObject().apply {
                 put("id", "daily-sample")
@@ -107,7 +107,7 @@ class PresetCatalogEnvelopeTest {
         PresetCatalog.applyRemoteUpdate(requireNotNull(verified.fullUpdate))
 
         assertEquals("Daily Sample", PresetCatalog.programs.last().nameEnglish)
-        assertEquals(11, PresetCatalog.activeSequence)
+        assertEquals(PresetCatalog.BUNDLED_SEQUENCE + 1, PresetCatalog.activeSequence)
     }
 
     private fun signedEnvelope(

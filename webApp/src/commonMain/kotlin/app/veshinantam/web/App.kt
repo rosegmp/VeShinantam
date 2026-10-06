@@ -297,6 +297,17 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         store.updateBrowserReminder(appState, todayIso)
     }
 
+    LaunchedEffect(todayIso) {
+        val refreshed = refreshMonthlyTehillim(
+            appState, requireNotNull(IsoDate.parse(todayIso)),
+            { date -> store.hebrewCalendarPeriod(date, false) }, store.currentInstant(),
+        )
+        if (refreshed !== appState) {
+            appState = refreshed
+            store.save(refreshed)
+        }
+    }
+
     fun update(transform: (WebAppState) -> WebAppState) {
         appState = transform(appState)
         store.save(appState)
@@ -475,6 +486,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
         CreateScheduleDialog(
             hebrew = hebrew,
             today = todayIso,
+            hebrewCalendarPeriod = { date -> store.hebrewCalendarPeriod(date, hebrew) },
             onDismiss = { showCreate = false },
             onCreate = { draft ->
                 val id = nextScheduleId(appState.schedules)
@@ -494,8 +506,11 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                     officialOraysaChazarah = draft.includeWeekendChazarah,
                     createdAt = store.currentInstant(),
                     updatedAt = store.currentInstant(),
-                    sourceType = draft.preset?.let { "PRESET:${WebPresetCatalog.version}" } ?: draft.sourceType,
+                    sourceType = draft.preset?.let {
+                        "PRESET:${WebPresetCatalog.version}" + (if (it.id == MONTHLY_TEHILLIM_ID) MONTHLY_TEHILLIM_MARKER else "")
+                    } ?: draft.sourceType,
                     materialType = draft.materialType,
+                    generationRevision = if (draft.preset?.id == MONTHLY_TEHILLIM_ID) 2 else 1,
                 )
                 val engine = SharedScheduleEngine()
                 val rules = SharedScheduleRules(schedule.weekdays, draft.excludedDates)
@@ -508,7 +523,9 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                         labelHebrew = reference.hebrew,
                     )
                 }
-                val learningTasks = draft.targetCompletionDate?.let { target ->
+                val learningTasks = if (draft.preset?.id == MONTHLY_TEHILLIM_ID) {
+                    monthlyTehillimLearning(draft.startDate) { date -> store.hebrewCalendarPeriod(date, hebrew) }
+                } else draft.targetCompletionDate?.let { target ->
                     engine.generateByCompletionDate(units, draft.startDate, target, rules)
                 } ?: engine.generateByDailyQuantity(units, draft.startDate, schedule.pace, rules)
                 val additionalReviews = engine.generateChazarah(
@@ -539,6 +556,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                         materialType = draft.materialType,
                         originalLearningDate = task.originalLearningDate.toString(),
                         reviewIdentity = task.reviewIdentity,
+                        generationRevision = schedule.generationRevision,
                     )
                 }
                 update { state ->
@@ -1897,7 +1915,7 @@ private fun SchedulesScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text(if (hebrew) "הצג לימוד" else "View learning")
                                 }
-                                TextButton(onClick = { onRequestEdit(schedule.id) }) {
+                                if (schedule.presetId != MONTHLY_TEHILLIM_ID) TextButton(onClick = { onRequestEdit(schedule.id) }) {
                                     Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
                                     Text(if (hebrew) "ערוך עתיד" else "Edit future")
@@ -2407,13 +2425,24 @@ private fun ProgressMetric(label: String, value: String) {
 }
 
 @Composable
-private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -> Unit, onCreate: (ScheduleDraft) -> Unit) {
+private fun CreateScheduleDialog(
+    hebrew: Boolean,
+    today: String,
+    hebrewCalendarPeriod: (String) -> WebCalendarPeriod,
+    onDismiss: () -> Unit,
+    onCreate: (ScheduleDraft) -> Unit,
+) {
     val programs = remember { WebPresetCatalog.programs }
     val catalogPositionDate = remember(today) { requireNotNull(IsoDate.parse(today)) }
     var selectedProgramIndex by remember { mutableStateOf(0) }
     val baseProgram = programs.getOrNull(selectedProgramIndex)
     val program = remember(baseProgram, catalogPositionDate) {
-        baseProgram?.let { WebPresetCatalog.programAtDate(it, catalogPositionDate) }
+        baseProgram?.let {
+            if (it.id == MONTHLY_TEHILLIM_ID) it.copy(
+                units = MaterialCatalog.monthlyTehillimUnits,
+                currentIndex = monthlyTehillimDay(catalogPositionDate, hebrewCalendarPeriod(today)) - 1,
+            ) else WebPresetCatalog.programAtDate(it, catalogPositionDate)
+        }
     }
     val custom = program == null
     var programMenuExpanded by remember { mutableStateOf(false) }
@@ -2583,8 +2612,10 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                                 color = MutedInk,
                                 fontSize = 13.sp,
                             )
+                            val currentReference = if (program.id == MONTHLY_TEHILLIM_ID)
+                                monthlyTehillimReference(catalogPositionDate, hebrewCalendarPeriod(today)) else program.currentReference
                             Text(
-                                if (hebrew) program.currentReference.hebrew else program.currentReference.english,
+                                if (hebrew) currentReference.hebrew else currentReference.english,
                                 color = DeepBlue,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -2596,7 +2627,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                             )
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    if (program.id != MONTHLY_TEHILLIM_ID) FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         FilterChip(
                             selected = startIndex == program.currentIndex,
                             onClick = { startIndex = program.currentIndex; positionQuery = "" },
@@ -2610,12 +2641,12 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                             )
                         }
                     }
-                    Text(
+                    if (program.id != MONTHLY_TEHILLIM_ID) Text(
                         (if (hebrew) "נקודת התחלה: " else "Starting position: ") +
                             (if (hebrew) program.units[startIndex].hebrew else program.units[startIndex].english),
                         fontWeight = FontWeight.Bold,
                     )
-                    if (startIndex != program.currentIndex) {
+                    if (program.id != MONTHLY_TEHILLIM_ID && startIndex != program.currentIndex) {
                         Text(
                             if (hebrew) "נקבע במקור ל־${WebPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}"
                             else "Originally scheduled for ${WebPresetCatalog.scheduledDate(program, startIndex, catalogPositionDate)}",
@@ -2623,7 +2654,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                             fontSize = 13.sp,
                         )
                     }
-                    OutlinedTextField(
+                    if (program.id != MONTHLY_TEHILLIM_ID) OutlinedTextField(
                         value = positionQuery,
                         onValueChange = { positionQuery = it },
                         label = { Text(if (hebrew) "חפש מיקום מוקדם יותר" else "Find an earlier position") },
@@ -2631,7 +2662,7 @@ private fun CreateScheduleDialog(hebrew: Boolean, today: String, onDismiss: () -
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    positionMatches.forEach { indexed ->
+                    if (program.id != MONTHLY_TEHILLIM_ID) positionMatches.forEach { indexed ->
                         TextButton(
                             onClick = { startIndex = indexed.index; positionQuery = "" },
                             modifier = Modifier.fillMaxWidth(),

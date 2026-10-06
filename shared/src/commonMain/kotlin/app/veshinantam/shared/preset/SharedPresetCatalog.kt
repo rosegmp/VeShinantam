@@ -20,8 +20,8 @@ data class SharedPresetProgram(
 
 /** Platform-neutral, reference-only catalog shared by Android and the web app. */
 object SharedPresetCatalog {
-    const val VERSION = "2026.09.22-10"
-    const val SEQUENCE = 10L
+    const val VERSION = "2026.10.05-11"
+    const val SEQUENCE = 11L
     val positionAsOf = IsoDate(2026, 9, 10)
 
     private val everyDay = (0..6).toSet()

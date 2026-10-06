@@ -7,7 +7,7 @@ import kotlin.test.assertFailsWith
 
 class RemotePresetCatalogTest {
     private fun update(vararg patches: RemotePresetPatch, positions: Map<String, String> = emptyMap()) =
-        RemotePresetCatalog(2, "2026.09.23-11", 11, "2026-09-23", positions, patches.toList())
+        RemotePresetCatalog(2, "2026.10.06-12", SharedPresetCatalog.SEQUENCE + 1, "2026-10-06", positions, patches.toList())
 
     @Test
     fun addsACompleteProgramAndUpdatesBundledMetadata() {
