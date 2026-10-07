@@ -366,6 +366,9 @@
     <string name="today_display_options">Today display options</string>
     <string name="group_by_schedule">Schedule</string>
     <string name="group_by_learning_status">Learning status</string>
+    <string name="group_by_completed_status">Completed status</string>
+    <string name="not_completed">Not completed</string>
+    <string name="completed">Completed</string>
     <string name="auto_collapse_completed_schedules">Auto collapse completed schedules</string>
     <string name="sort_scheduled_first">Scheduled order</string>
     <string name="sort_newest_due_first">Newest due first</string>

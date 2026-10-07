@@ -373,6 +373,9 @@
     <string name="today_display_options">אפשרויות תצוגה להיום</string>
     <string name="group_by_schedule">תוכנית</string>
     <string name="group_by_learning_status">מצב הלימוד</string>
+    <string name="group_by_completed_status">מצב ההשלמה</string>
+    <string name="not_completed">לא הושלם</string>
+    <string name="completed">הושלם</string>
     <string name="auto_collapse_completed_schedules">כיווץ אוטומטי של תוכניות שהושלמו</string>
     <string name="sort_scheduled_first">סדר התוכנית</string>
     <string name="sort_newest_due_first">החדשים תחילה</string>

@@ -217,6 +217,7 @@ import app.veshinantam.ui.today.TodayUiState
 import app.veshinantam.ui.today.TodayViewModel
 import app.veshinantam.ui.today.TodayDisplaySettings
 import app.veshinantam.ui.today.TodayGroupBy
+import app.veshinantam.ui.today.groupTodaySchedulesByCompletion
 import app.veshinantam.ui.today.isTodayScheduleExpanded
 import app.veshinantam.ui.today.TodaySortOrder
 import app.veshinantam.ui.today.sortTodayTasks
@@ -3632,7 +3633,11 @@ private fun TodayScreen(
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
-                        listOf(R.string.group_by_schedule, R.string.group_by_learning_status)
+                        listOf(
+                            R.string.group_by_schedule,
+                            R.string.group_by_learning_status,
+                            R.string.group_by_completed_status,
+                        )
                             .forEachIndexed { index, label ->
                                 DropdownMenuItem(
                                     text = { Text(stringResource(label)) },
@@ -3680,7 +3685,7 @@ private fun TodayScreen(
                             val sectionKey = "${schedule.id}-$section"
                             val expanded = expandedSections[sectionKey] ?: true
                             item(key = "section-$sectionKey") {
-                                SectionHeader(section, tasks.size, expanded) {
+                                SectionHeader(section.stringResource, tasks.size, expanded) {
                                     expandedSections[sectionKey] = !expanded
                                     displaySettings.saveSectionExpanded(sectionKey, !expanded)
                                 }
@@ -3695,22 +3700,39 @@ private fun TodayScreen(
                 }
             }
         } else {
-            TodaySection.entries.forEach { section ->
-                val schedules = state.schedules.mapNotNull { schedule ->
-                    schedule.copy(tasks = schedule.tasks.filter { it.section == section })
-                        .takeIf { it.tasks.isNotEmpty() }
+            val groups = when (groupBy) {
+                TodayGroupBy.LEARNING_STATUS -> TodaySection.entries.map { section ->
+                    TodayTaskGroup(
+                        key = "status-$section",
+                        titleResource = section.stringResource,
+                        schedules = state.schedules.mapNotNull { schedule ->
+                            schedule.copy(tasks = schedule.tasks.filter { it.section == section })
+                                .takeIf { it.tasks.isNotEmpty() }
+                        },
+                    )
                 }
+                TodayGroupBy.COMPLETED_STATUS -> listOf(false, true).map { completed ->
+                    TodayTaskGroup(
+                        key = "completion-$completed",
+                        titleResource = if (completed) R.string.completed else R.string.not_completed,
+                        schedules = groupTodaySchedulesByCompletion(state.schedules, completed),
+                    )
+                }
+                TodayGroupBy.SCHEDULE -> emptyList()
+            }
+            groups.forEach { group ->
+                val schedules = group.schedules
                 if (schedules.isNotEmpty()) {
-                    val sectionKey = "status-$section"
+                    val sectionKey = group.key
                     val expanded = expandedSections[sectionKey] ?: true
                     item(key = "section-$sectionKey") {
-                        SectionHeader(section, schedules.sumOf { it.tasks.size }, expanded) {
+                        SectionHeader(group.titleResource, schedules.sumOf { it.tasks.size }, expanded) {
                             expandedSections[sectionKey] = !expanded
                             displaySettings.saveSectionExpanded(sectionKey, !expanded)
                         }
                     }
                     if (expanded) schedules.forEach { schedule ->
-                        val scheduleKey = "status-$section-${schedule.id}"
+                        val scheduleKey = "$sectionKey-${schedule.id}"
                         val fullSchedule = state.schedules.first { it.id == schedule.id }
                         val scheduleExpanded = isTodayScheduleExpanded(
                             expandedSchedules[scheduleKey], fullSchedule, autoCollapseCompleted,
@@ -3737,6 +3759,12 @@ private fun TodayScreen(
         SefariaTextDialog(task = task, locale = locale, onDismiss = { readerTask = null })
     }
 }
+
+private data class TodayTaskGroup(
+    val key: String,
+    val titleResource: Int,
+    val schedules: List<TodayScheduleUi>,
+)
 
 @Composable
 private fun ScheduleHeader(
@@ -3774,7 +3802,7 @@ private fun ScheduleHeader(
 }
 
 @Composable
-private fun SectionHeader(section: TodaySection, taskCount: Int, expanded: Boolean, onToggle: () -> Unit) {
+private fun SectionHeader(@StringRes titleResource: Int, taskCount: Int, expanded: Boolean, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -3785,7 +3813,7 @@ private fun SectionHeader(section: TodaySection, taskCount: Int, expanded: Boole
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "${stringResource(section.stringResource)} ($taskCount)",
+            text = "${stringResource(titleResource)} ($taskCount)",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,

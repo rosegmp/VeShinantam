@@ -54,6 +54,14 @@ internal fun isTodayScheduleExpanded(
     autoCollapseCompleted: Boolean,
 ): Boolean = manualOverride ?: !(autoCollapseCompleted && schedule.tasks.isNotEmpty() && schedule.completedCount == schedule.tasks.size)
 
+internal fun groupTodaySchedulesByCompletion(
+    schedules: List<TodayScheduleUi>,
+    completed: Boolean,
+): List<TodayScheduleUi> = schedules.mapNotNull { schedule ->
+    schedule.copy(tasks = schedule.tasks.filter { it.isCompleted == completed })
+        .takeIf { it.tasks.isNotEmpty() }
+}
+
 sealed interface TodayUiState {
     data object Loading : TodayUiState
     data class Ready(val today: LocalDate, val schedules: List<TodayScheduleUi>) : TodayUiState

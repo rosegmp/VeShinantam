@@ -25,6 +25,30 @@ class TodayViewModelTest {
     }
 
     @Test
+    fun `completion grouping includes tasks from every learning section exactly once`() {
+        val schedules = listOf(
+            TodayScheduleUi(
+                "first", "First", "", listOf(
+                    task("pending", "Pending", "", today),
+                    task("done", "Done", "", today).copy(isCompleted = true, section = TodaySection.NEW_LEARNING),
+                ),
+            ),
+            TodayScheduleUi("second", "Second", "", listOf(task("also-done", "Also done", "", today).copy(
+                isCompleted = true,
+                section = TodaySection.COMPLETED_TODAY,
+            ))),
+        )
+
+        val pending = groupTodaySchedulesByCompletion(schedules, completed = false)
+        val completed = groupTodaySchedulesByCompletion(schedules, completed = true)
+
+        assertEquals(listOf("first"), pending.map { it.id })
+        assertEquals(listOf("pending"), pending.single().tasks.map { it.id })
+        assertEquals(listOf("first", "second"), completed.map { it.id })
+        assertEquals(listOf("done", "also-done"), completed.flatMap { it.tasks }.map { it.id })
+    }
+
+    @Test
     fun `maps sections in required order and overdue tasks oldest first`() {
         val rows = listOf(
             row("new", TaskType.LEARNING, today),

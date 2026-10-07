@@ -9,7 +9,7 @@ enum class TodaySortOrder {
     REFERENCE_DESCENDING,
 }
 
-enum class TodayGroupBy { SCHEDULE, LEARNING_STATUS }
+enum class TodayGroupBy { SCHEDULE, LEARNING_STATUS, COMPLETED_STATUS }
 
 class TodayDisplaySettings(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
