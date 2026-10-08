@@ -306,6 +306,17 @@
     <string name="preset_update_network_error">לא ניתן היה להוריד את העדכון. הלוח הנוכחי לא השתנה.</string>
     <string name="preset_update_invalid_signature">חתימת העדכון אינה תקפה. הקובץ נדחה.</string>
     <string name="preset_update_invalid_catalog">העדכון אינו תקף או אינו תואם. הלוח הנוכחי לא השתנה.</string>
+    <string name="app_updates">עדכוני האפליקציה</string>
+    <string name="installed_app_version">הגרסה המותקנת: %1$s</string>
+    <string name="app_updates_explanation">בדיקת גרסה חדשה ב־GitHub. מערכת Android תבקש אישור להתקנה.</string>
+    <string name="check_for_app_updates">בדיקת עדכוני אפליקציה</string>
+    <string name="app_is_up_to_date">האפליקציה מעודכנת.</string>
+    <string name="app_update_available">גרסה %1$s זמינה.</string>
+    <string name="app_update_download">הורדה והתקנה</string>
+    <string name="app_update_downloading">מוריד ומאמת…</string>
+    <string name="app_update_install">המשך ההתקנה</string>
+    <string name="app_update_install_permission">יש לאפשר עדכונים מ־VeShinantam בהגדרות Android, ואז ללחוץ על המשך ההתקנה.</string>
+    <string name="app_update_failed">לא ניתן לבדוק או לאמת את העדכון. יש לנסות שוב.</string>
     <string name="widget_title">ושיננתם היום</string>
     <string name="widget_description">הלימוד והחזרות שנותרו להיום</string>
     <string name="widget_content_description">פתיחת מסך היום בושיננתם</string>

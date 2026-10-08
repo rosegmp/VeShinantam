@@ -149,6 +149,8 @@ import app.veshinantam.data.preset.PresetCatalogUpdateClient
 import app.veshinantam.data.preset.PresetCatalogUpdateScheduler
 import app.veshinantam.data.preset.PresetUpdateResult
 import app.veshinantam.data.preset.PresetUpdateSettings
+import app.veshinantam.data.update.AppUpdateCheck
+import app.veshinantam.data.update.AppUpdateClient
 import app.veshinantam.data.local.ScheduleEntity
 import app.veshinantam.data.local.ScheduleExclusionEntity
 import app.veshinantam.data.local.TaskEntity
@@ -712,7 +714,7 @@ private fun FirstLaunchWelcome(
     }
 }
 
-private enum class SettingsPage { HOME, DISPLAY, LEARNING, REMINDERS, BACKUP, PRINT, PRESETS }
+private enum class SettingsPage { HOME, DISPLAY, LEARNING, REMINDERS, BACKUP, PRINT, PRESETS, APP_UPDATES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -765,6 +767,7 @@ private fun SettingsDialog(
         SettingsPage.BACKUP -> R.string.backup_and_restore
         SettingsPage.PRINT -> R.string.printable_schedule
         SettingsPage.PRESETS -> R.string.preset_catalog_updates
+        SettingsPage.APP_UPDATES -> R.string.app_updates
     }
 
     if (choosingTime) {
@@ -837,6 +840,7 @@ private fun SettingsDialog(
                             SettingsPage.BACKUP to R.string.backup_and_restore,
                             SettingsPage.PRINT to R.string.printable_schedule,
                             SettingsPage.PRESETS to R.string.preset_catalog_updates,
+                            SettingsPage.APP_UPDATES to R.string.app_updates,
                         ).forEach { (destination, title) ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable { page = destination }.heightIn(min = 48.dp),
@@ -1084,6 +1088,7 @@ private fun SettingsDialog(
                             }
                         }
                     }
+                    SettingsPage.APP_UPDATES -> AppUpdatesSettingsPage()
                 }
             }
         },
@@ -1110,6 +1115,114 @@ private fun SettingsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun AppUpdatesSettingsPage() {
+    val context = LocalContext.current
+    val client = remember(context) { AppUpdateClient(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    var check by remember { mutableStateOf<AppUpdateCheck?>(null) }
+    var downloadedFile by remember { mutableStateOf<java.io.File?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var permissionNeeded by remember { mutableStateOf(false) }
+
+    fun continueInstallation(file: java.io.File) {
+        try {
+            if (client.canInstallPackages()) {
+                permissionNeeded = false
+                client.openInstaller(file)
+            } else {
+                permissionNeeded = true
+                client.openInstallPermission()
+            }
+        } catch (_: Exception) {
+            failed = true
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.installed_app_version, BuildConfig.VERSION_NAME),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            stringResource(R.string.app_updates_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = {
+                checking = true
+                failed = false
+                permissionNeeded = false
+                check = null
+                downloadedFile = null
+                scope.launch {
+                    try {
+                        check = client.checkForUpdate()
+                    } catch (_: Exception) {
+                        failed = true
+                    } finally {
+                        checking = false
+                    }
+                }
+            },
+            enabled = !checking && !downloading,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(if (checking) R.string.checking_for_updates else R.string.check_for_app_updates))
+        }
+        when (val result = check) {
+            AppUpdateCheck.UpToDate -> Text(stringResource(R.string.app_is_up_to_date))
+            is AppUpdateCheck.Available -> {
+                Text(stringResource(R.string.app_update_available, result.release.versionName))
+                OutlinedButton(
+                    onClick = {
+                        failed = false
+                        val file = downloadedFile
+                        if (file != null) {
+                            continueInstallation(file)
+                        } else {
+                            downloading = true
+                            scope.launch {
+                                try {
+                                    val verifiedFile = client.downloadVerified(result.release)
+                                    downloadedFile = verifiedFile
+                                    continueInstallation(verifiedFile)
+                                } catch (_: Exception) {
+                                    failed = true
+                                } finally {
+                                    downloading = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !downloading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(when {
+                        downloading -> R.string.app_update_downloading
+                        downloadedFile != null -> R.string.app_update_install
+                        else -> R.string.app_update_download
+                    }))
+                }
+            }
+            null -> Unit
+        }
+        if (permissionNeeded) Text(
+            stringResource(R.string.app_update_install_permission),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (failed) Text(
+            stringResource(R.string.app_update_failed),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
 }
 
 @Composable

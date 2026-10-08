@@ -32,8 +32,8 @@ android {
         applicationId = "app.veshinantam"
         minSdk = 24
         targetSdk = 36
-        versionCode = 24
-        versionName = "1.0.7"
+        versionCode = 25
+        versionName = "1.0.8"
         val presetCatalogUpdateUrl = providers.gradleProperty("presetCatalogUpdateUrl")
             .orElse("https://rosegmp.github.io/VeShinantam/preset-catalog.json").get()
         val presetCatalogPublicKey = providers.gradleProperty("presetCatalogPublicKey").orElse(

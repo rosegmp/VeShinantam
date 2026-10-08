@@ -29,6 +29,8 @@ The build fails early if only some signing properties are supplied. With none su
 
 Before distributing an update, increase `versionCode` in `app/build.gradle.kts`. Also update the user-facing `versionName`.
 
+The in-app updater expects the GitHub release tag `v<versionName>` and the two release assets `VeShinantam-<versionName>-<versionCode>-release.apk` and the same name with `.sha256` appended. Publish the signed APK and checksum together; users can then find the release through Settings → App updates.
+
 ```powershell
 .\gradlew.bat clean testDebugUnitTest
 .\scripts\run-device-smoke-tests.ps1

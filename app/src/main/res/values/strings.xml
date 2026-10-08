@@ -303,6 +303,17 @@
     <string name="preset_update_network_error">The update could not be downloaded. The current catalog is unchanged.</string>
     <string name="preset_update_invalid_signature">The update signature is invalid. The file was rejected.</string>
     <string name="preset_update_invalid_catalog">The update is invalid or incompatible. The current catalog is unchanged.</string>
+    <string name="app_updates">App updates</string>
+    <string name="installed_app_version">Installed version: %1$s</string>
+    <string name="app_updates_explanation">Check GitHub for a new app version. Android will ask you to confirm the installation.</string>
+    <string name="check_for_app_updates">Check for app updates</string>
+    <string name="app_is_up_to_date">The app is up to date.</string>
+    <string name="app_update_available">Version %1$s is available.</string>
+    <string name="app_update_download">Download and install</string>
+    <string name="app_update_downloading">Downloading and verifying…</string>
+    <string name="app_update_install">Continue installation</string>
+    <string name="app_update_install_permission">Allow updates from VeShinantam in Android settings, then tap Continue installation.</string>
+    <string name="app_update_failed">The update could not be checked or verified. Please try again.</string>
     <string name="widget_title">VeShinantam Today</string>
     <string name="widget_description">Today’s remaining Torah learning and chazarah</string>
     <string name="widget_content_description">Open VeShinantam Today</string>
