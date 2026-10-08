@@ -1445,6 +1445,23 @@ private fun WebSefariaTextDialog(
             }
         }.getOrElse { WebTextState.Error(it.message ?: if (hebrew) "לא ניתן לטעון את הטקסט." else "The text could not be loaded.") }
     }
+    val bartenuraRequest = remember(request.cacheKey) { SefariaReferenceMapper.bartenuraForMishnah(request) }
+    var bartenuraState by remember(bartenuraRequest?.cacheKey) { mutableStateOf<WebTextState>(WebTextState.Loading) }
+    LaunchedEffect(bartenuraRequest?.cacheKey) {
+        bartenuraRequest?.let { commentaryRequest ->
+            bartenuraState = runCatching {
+                val cached = store.readCachedText(commentaryRequest.cacheKey)
+                if (cached != null) {
+                    WebTextState.Ready(SefariaTextParser.parse(cached), fromCache = true)
+                } else {
+                    val raw = store.fetchSefariaText(commentaryRequest)
+                    val content = SefariaTextParser.parse(raw)
+                    if (content.mayCache) store.cacheText(commentaryRequest.cacheKey, raw)
+                    WebTextState.Ready(content, fromCache = false)
+                }
+            }.getOrElse { WebTextState.Error(it.message ?: "Bartenura could not be loaded.") }
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
@@ -1487,6 +1504,31 @@ private fun WebSefariaTextDialog(
                             Text(content.reference.ifBlank { task.referenceEnglish }, fontWeight = FontWeight.Bold, color = DeepBlue)
                             Text(version.segments.joinToString("\n\n"), fontSize = 16.sp)
                             Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
+                        }
+                        if (bartenuraRequest != null) {
+                            HorizontalDivider()
+                            Text(if (hebrew) "ברטנורא" else "Bartenura", fontWeight = FontWeight.Bold, color = DeepBlue)
+                            when (val commentary = bartenuraState) {
+                                WebTextState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                                is WebTextState.Error -> Text(
+                                    if (hebrew) "לא ניתן לטעון את פירוש ברטנורא." else "Bartenura could not be loaded.",
+                                    fontSize = 13.sp,
+                                    color = MutedInk,
+                                )
+                                is WebTextState.Ready -> {
+                                    val bartenura = commentary.content
+                                    bartenura.hebrew?.let { version ->
+                                        Text(
+                                            version.segments.joinToString("\n\n"),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                                            textAlign = TextAlign.Right,
+                                            fontSize = 17.sp,
+                                        )
+                                        Text("${version.title} · ${version.license}", fontSize = 12.sp, color = MutedInk)
+                                    }
+                                }
+                            }
                         }
                         Text(
                             if (value.fromCache) {

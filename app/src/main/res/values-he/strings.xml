@@ -398,6 +398,8 @@
     <string name="previous_text">הקודם</string>
     <string name="next_text">הבא</string>
     <string name="text_unavailable">הטקסט אינו זמין</string>
+    <string name="bartenura">ברטנורא</string>
+    <string name="bartenura_unavailable">לא ניתן לטעון את פירוש ברטנורא.</string>
     <string name="loading_text">הטקסט נטען…</string>
     <string name="text_load_failed">לא ניתן לטעון את הטקסט. יש לבדוק את החיבור ולנסות שוב.</string>
     <string name="text_provided_by_sefaria">הטקסט באדיבות ספריא. רק מראה מקום זה נשלח. פרטי המהדורה והרישיון מוצגים לעיל; קטעים מתאימים נשמרים לקריאה ללא חיבור.</string>

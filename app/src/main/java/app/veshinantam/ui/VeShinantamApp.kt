@@ -4052,6 +4052,11 @@ private fun SeferTextDialogContent(
     val repository = remember(context) { SefariaTextRepository(context.applicationContext) }
     var result by remember(request.cacheKey) { mutableStateOf<SefariaTextResult?>(null) }
     LaunchedEffect(request.cacheKey) { result = repository.load(request) }
+    val bartenuraRequest = remember(request.cacheKey) { SefariaReferenceMapper.bartenuraForMishnah(request) }
+    var bartenuraResult by remember(bartenuraRequest?.cacheKey) { mutableStateOf<SefariaTextResult?>(null) }
+    LaunchedEffect(bartenuraRequest?.cacheKey) {
+        bartenuraRequest?.let { bartenuraResult = repository.load(it) }
+    }
     val sefarimLanguage = LocalSefarimLanguage.current
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4097,6 +4102,32 @@ private fun SeferTextDialogContent(
                                 Text(segment, style = MaterialTheme.typography.bodyLarge)
                             }
                             Text("${version.title} · ${version.license}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (bartenuraRequest != null) {
+                            HorizontalDivider()
+                            Text(stringResource(R.string.bartenura), fontWeight = FontWeight.Bold)
+                            when (val commentary = bartenuraResult) {
+                                null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                                is SefariaTextResult.Error -> Text(
+                                    stringResource(R.string.bartenura_unavailable),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                is SefariaTextResult.Ready -> {
+                                    val bartenura = commentary.content
+                                    bartenura.hebrew?.let { version ->
+                                        version.segments.forEach { segment ->
+                                            Text(
+                                                segment,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
+                                                textAlign = TextAlign.Right,
+                                            )
+                                        }
+                                        Text("${version.title} · ${version.license}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
                         }
                         Text(
                             stringResource(if (value.fromCache) R.string.text_cached_offline else R.string.text_provided_by_sefaria),

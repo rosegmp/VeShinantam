@@ -391,6 +391,8 @@
     <string name="previous_text">Previous</string>
     <string name="next_text">Next</string>
     <string name="text_unavailable">Text unavailable</string>
+    <string name="bartenura">Bartenura</string>
+    <string name="bartenura_unavailable">Bartenura could not be loaded.</string>
     <string name="loading_text">Loading text…</string>
     <string name="text_load_failed">The text could not be loaded. Check your connection and try again.</string>
     <string name="text_provided_by_sefaria">Text provided by Sefaria. Only this reference was sent. Licensed edition details are shown above; eligible passages are cached for offline reading.</string>

@@ -66,6 +66,23 @@ class SefariaTextTest {
     }
 
     @Test
+    fun mapsMishnahReaderReferencesToBartenuraOnly() {
+        val mishnah = assertIs<SefariaTextLookup.Available>(
+            SefariaReferenceMapper.lookup("Ohalos 1:1", "MISHNAH", "mishnah-yomis"),
+        ).request
+        assertEquals("Bartenura on Mishnah Oholot 1:1", SefariaReferenceMapper.bartenuraForMishnah(mishnah)?.reference)
+        assertEquals(listOf("source"), SefariaReferenceMapper.bartenuraForMishnah(mishnah)?.versions)
+        assertEquals(
+            "Bartenura on Mishnah Berakhot 1",
+            SefariaReferenceMapper.bartenuraForMishnah(
+                assertIs<SefariaTextLookup.Available>(SefariaReferenceMapper.lookup("Berachos 1", "PEREK", null)).request,
+            )?.reference,
+        )
+        assertEquals(null, SefariaReferenceMapper.bartenuraForMishnah(SefariaTextRequest("Mishnah Berurah 1")))
+        assertEquals(null, SefariaReferenceMapper.bartenuraForMishnah(SefariaTextRequest("Psalms 1")))
+    }
+
+    @Test
     fun decodesEntitiesInTehillimVerses() {
         val content = SefariaTextParser.parse(
             """{"ref":"Psalms 141:4","versions":[{"language":"he","versionTitle":"Miqra","license":"Public Domain","text":["אַל־תַּט־לִבִּי לְדָבָר&thinsp;׀&thinsp;רָע&nbsp;וּבַל־אֶלְחָם", "&#x5D0;&#1489; &amp; &#39;quote&#39;"]}]}""",

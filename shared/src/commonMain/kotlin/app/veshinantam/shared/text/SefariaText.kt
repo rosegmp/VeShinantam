@@ -149,6 +149,10 @@ object SefariaReferenceMapper {
         return SefariaTextLookup.Available(SefariaTextRequest(mapped, versions))
     }
 
+    fun bartenuraForMishnah(request: SefariaTextRequest): SefariaTextRequest? =
+        request.reference.takeIf { it.startsWith("Mishnah ") && !it.startsWith("Mishnah Berurah ") }
+            ?.let { SefariaTextRequest("Bartenura on $it", versions = listOf("source")) }
+
     private fun unavailable(english: String, hebrew: String) = SefariaTextLookup.Unavailable(english, hebrew)
 }
 
