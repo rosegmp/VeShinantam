@@ -15,6 +15,7 @@ data class Masechta(
 data class UnitReference(val english: String, val hebrew: String)
 
 object MaterialCatalog {
+    fun combineRanges(ranges: List<List<UnitReference>>): List<UnitReference> = ranges.flatten().distinct()
     val sectionedChoices = setOf(SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM)
 
     private val finalDafEndsOnAmudA = setOf(

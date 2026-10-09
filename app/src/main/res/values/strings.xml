@@ -140,6 +140,10 @@
     <string name="kitzur">Kitzur</string>
     <string name="other">Other</string>
     <string name="choose_range">Choose from and to</string>
+    <string name="add_range">Add range</string>
+    <string name="selected_ranges">Added ranges</string>
+    <string name="current_range_included">The range currently selected above will also be included.</string>
+    <string name="units_selected">%1$d units selected</string>
     <string name="from_sefer">From masechta</string>
     <string name="to_sefer">To masechta</string>
     <string name="from_unit">From unit</string>

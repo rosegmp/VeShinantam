@@ -143,6 +143,10 @@
     <string name="kitzur">קיצור שולחן ערוך</string>
     <string name="other">אחר</string>
     <string name="choose_range">בחירת התחלה וסיום</string>
+    <string name="add_range">הוסף טווח</string>
+    <string name="selected_ranges">טווחים שנוספו</string>
+    <string name="current_range_included">גם הטווח שנבחר למעלה ייכלל.</string>
+    <string name="units_selected">נבחרו %1$d יחידות</string>
     <string name="from_sefer">ממסכת</string>
     <string name="to_sefer">עד מסכת</string>
     <string name="from_unit">מיחידה</string>

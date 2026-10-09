@@ -36,4 +36,29 @@ class MaterialCatalogTest {
 
         assertEquals(listOf("Berachos 1:3", "Berachos 1:4", "Berachos 1:5"), selected.map { it.english })
     }
+
+    @Test
+    fun multipleRangesPreserveChosenOrderWithoutRepeatingOverlaps() {
+        val berachos = MaterialCatalog.mishnah.first()
+        val options = MaterialCatalog.unitOptions(SeferChoice.MISHNAH, berachos)
+        val first = MaterialCatalog.selectedUnits(
+            SeferChoice.MISHNAH, 0, 0,
+            options.first { it.english == "Berachos 1:3" },
+            options.first { it.english == "Berachos 1:4" },
+        )
+        val second = MaterialCatalog.selectedUnits(
+            SeferChoice.MISHNAH, 0, 0,
+            options.first { it.english == "Berachos 1:4" },
+            options.first { it.english == "Berachos 1:5" },
+        )
+
+        assertEquals(
+            listOf("Berachos 1:3", "Berachos 1:4", "Berachos 1:5"),
+            MaterialCatalog.combineRanges(listOf(first, second)).map { it.english },
+        )
+        assertEquals(
+            listOf("Berachos 1:4", "Berachos 1:5", "Berachos 1:3"),
+            MaterialCatalog.combineRanges(listOf(second, first)).map { it.english },
+        )
+    }
 }

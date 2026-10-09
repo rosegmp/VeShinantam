@@ -2536,6 +2536,8 @@ private fun CreateScheduleDialog(
     var selectedChelek by remember { mutableStateOf(1) }
     var customUnitText by remember { mutableStateOf("") }
     var customUnits by remember { mutableStateOf(emptyList<UnitReference>()) }
+    var addedRanges by remember { mutableStateOf(emptyList<List<UnitReference>>()) }
+    var currentRangeIncluded by remember { mutableStateOf(true) }
     var customStartDate by remember(today) { mutableStateOf(today) }
     var finishBy by remember { mutableStateOf(false) }
     var targetDate by remember(today) { mutableStateOf(catalogPositionDate.plusDays(30).toString()) }
@@ -2571,9 +2573,7 @@ private fun CreateScheduleDialog(
     val sameSection = seferChoice !in MaterialCatalog.sectionedChoices || fromSectionIndex == toSectionIndex
     val endOptions = rawEndOptions.drop(if (sameSection) boundedStartIndex else 0)
     val boundedEndIndex = endUnitIndex.coerceIn(0, (endOptions.size - 1).coerceAtLeast(0))
-    val structuredUnits = if (seferChoice == SeferChoice.OTHER) {
-        customUnits
-    } else {
+    val currentRange = if (seferChoice == SeferChoice.OTHER) emptyList() else {
         runCatching {
             MaterialCatalog.selectedUnits(
                 choice = seferChoice,
@@ -2588,6 +2588,9 @@ private fun CreateScheduleDialog(
             )
         }.getOrDefault(emptyList())
     }
+    val structuredUnits = if (seferChoice == SeferChoice.OTHER) customUnits else MaterialCatalog.combineRanges(
+        addedRanges + if (currentRangeIncluded || addedRanges.isEmpty()) listOf(currentRange) else emptyList(),
+    )
 
     fun buildCustomDraft(): ScheduleDraft? {
         val start = IsoDate.parse(customStartDate) ?: return null
@@ -2759,6 +2762,8 @@ private fun CreateScheduleDialog(
                                 selected = seferChoice == choice,
                                 onClick = {
                                     seferChoice = choice
+                                    addedRanges = emptyList()
+                                    currentRangeIncluded = true
                                     fromSectionIndex = 0
                                     toSectionIndex = 0
                                     startUnitIndex = 0
@@ -2775,6 +2780,7 @@ private fun CreateScheduleDialog(
                             selectedIndex = fromSectionIndex,
                             onSelected = { index ->
                                 fromSectionIndex = index
+                                currentRangeIncluded = true
                                 if (toSectionIndex < index) toSectionIndex = index
                                 startUnitIndex = 0
                                 endUnitIndex = Int.MAX_VALUE
@@ -2784,7 +2790,7 @@ private fun CreateScheduleDialog(
                             label = if (hebrew) "מספר/חלק אחרון" else "To section",
                             options = sections.drop(fromSectionIndex).map { if (hebrew) it.hebrew else it.english },
                             selectedIndex = (toSectionIndex - fromSectionIndex).coerceAtLeast(0),
-                            onSelected = { relative -> toSectionIndex = fromSectionIndex + relative; endUnitIndex = Int.MAX_VALUE },
+                            onSelected = { relative -> toSectionIndex = fromSectionIndex + relative; endUnitIndex = Int.MAX_VALUE; currentRangeIncluded = true },
                         )
                     }
                     if (seferChoice == SeferChoice.GEMARA) {
@@ -2792,7 +2798,7 @@ private fun CreateScheduleDialog(
                             GemaraUnit.entries.forEach { unit ->
                                 FilterChip(
                                     selected = gemaraUnit == unit,
-                                    onClick = { gemaraUnit = unit; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
+                                    onClick = { gemaraUnit = unit; addedRanges = emptyList(); currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
                                     label = { Text(if (unit == GemaraUnit.DAF) { if (hebrew) "דף" else "Daf" } else { if (hebrew) "עמוד" else "Amud" }) },
                                 )
                             }
@@ -2803,7 +2809,7 @@ private fun CreateScheduleDialog(
                             MishnahUnit.entries.forEach { unit ->
                                 FilterChip(
                                     selected = mishnahUnit == unit,
-                                    onClick = { mishnahUnit = unit; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
+                                    onClick = { mishnahUnit = unit; addedRanges = emptyList(); currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
                                     label = { Text(if (unit == MishnahUnit.MISHNAH) { if (hebrew) "משנה" else "Mishnah" } else { if (hebrew) "פרק" else "Perek" }) },
                                 )
                             }
@@ -2815,7 +2821,7 @@ private fun CreateScheduleDialog(
                             (1..6).forEach { chelek ->
                                 FilterChip(
                                     selected = selectedChelek == chelek,
-                                    onClick = { selectedChelek = chelek; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
+                                    onClick = { selectedChelek = chelek; currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
                                     label = { Text(chelek.toString()) },
                                 )
                             }
@@ -2824,7 +2830,7 @@ private fun CreateScheduleDialog(
                             MishnahBerurahUnit.entries.forEach { unit ->
                                 FilterChip(
                                     selected = mishnahBerurahUnit == unit,
-                                    onClick = { mishnahBerurahUnit = unit; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
+                                    onClick = { mishnahBerurahUnit = unit; addedRanges = emptyList(); currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = Int.MAX_VALUE },
                                     label = { Text(unit.name.lowercase().replaceFirstChar(Char::uppercase)) },
                                 )
                             }
@@ -2860,15 +2866,34 @@ private fun CreateScheduleDialog(
                             options = startOptions,
                             selectedIndex = boundedStartIndex,
                             hebrew = hebrew,
-                            onSelected = { startUnitIndex = it; endUnitIndex = Int.MAX_VALUE },
+                            onSelected = { startUnitIndex = it; endUnitIndex = Int.MAX_VALUE; currentRangeIncluded = true },
                         )
                         ReferenceSearchPicker(
                             label = if (hebrew) "עד יחידה" else "To unit",
                             options = endOptions,
                             selectedIndex = boundedEndIndex,
                             hebrew = hebrew,
-                            onSelected = { endUnitIndex = it },
+                            onSelected = { endUnitIndex = it; currentRangeIncluded = true },
                         )
+                        OutlinedButton(
+                            onClick = { addedRanges = addedRanges + listOf(currentRange); currentRangeIncluded = false; customPreview = null },
+                            enabled = currentRange.isNotEmpty() && currentRange.any { it !in addedRanges.flatten() },
+                        ) { Text(if (hebrew) "הוסף טווח" else "Add range") }
+                        if (addedRanges.isNotEmpty()) {
+                            Text(if (hebrew) "טווחים שנוספו" else "Added ranges", fontWeight = FontWeight.Bold)
+                            addedRanges.forEachIndexed { index, range ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "${if (hebrew) range.first().hebrew else range.first().english} – ${if (hebrew) range.last().hebrew else range.last().english}",
+                                        Modifier.weight(1f),
+                                    )
+                                    TextButton(onClick = { addedRanges = addedRanges.filterIndexed { itemIndex, _ -> itemIndex != index }; customPreview = null }) {
+                                        Text(if (hebrew) "הסר" else "Remove")
+                                    }
+                                }
+                            }
+                            if (currentRangeIncluded) Text(if (hebrew) "גם הטווח שנבחר למעלה ייכלל." else "The range currently selected above will also be included.", color = MutedInk)
+                        }
                         Text(
                             if (hebrew) "${structuredUnits.size} יחידות נבחרו" else "${structuredUnits.size} units selected",
                             color = MutedInk,

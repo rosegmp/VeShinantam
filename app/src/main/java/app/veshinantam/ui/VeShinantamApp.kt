@@ -3075,6 +3075,8 @@ private fun CustomScheduleCreator(
     var choosingTargetDate by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf(false) }
     val units = remember { mutableStateListOf<String>() }
+    val addedRanges = remember { mutableStateListOf<List<UnitReference>>() }
+    var currentRangeIncluded by remember { mutableStateOf(true) }
     var fromMasechtaIndex by remember { mutableStateOf(0) }
     var toMasechtaIndex by remember { mutableStateOf(0) }
     var startUnitIndex by remember { mutableStateOf(0) }
@@ -3103,22 +3105,25 @@ private fun CustomScheduleCreator(
     val boundedEndIndex = endUnitIndex.coerceIn(0, (endUnitOptions.size - 1).coerceAtLeast(0))
     val selectedStartUnit = startUnitOptions.getOrNull(boundedStartIndex)
     val selectedEndUnit = endUnitOptions.getOrNull(boundedEndIndex)
+    val currentRange = if (seferChoice == SeferChoice.OTHER) emptyList() else runCatching {
+        selectedUnitReferences(
+            seferChoice, fromMasechtaIndex, toMasechtaIndex, selectedStartUnit, selectedEndUnit,
+            gemaraUnit, mishnahUnit, selectedChelek, mishnahBerurahUnit,
+        )
+    }.getOrDefault(emptyList())
+    val structuredUnits = MaterialCatalog.combineRanges(
+        addedRanges.toList() + if (currentRangeIncluded || addedRanges.isEmpty()) listOf(currentRange) else emptyList(),
+    )
     var guidedStep by remember { mutableStateOf(3) }
 
     fun generatePreview(): Boolean {
         val offsets = ChazarahDefaults.parse(offsetsText)
         val validOffsets = !chazarahEnabled || offsets != null
         val validDates = planningMode != PlanningMode.FINISH_BY || !targetDate.isBefore(startDate)
-        val structuredUnits = runCatching {
-            selectedUnitReferences(
-                seferChoice, fromMasechtaIndex, toMasechtaIndex, selectedStartUnit, selectedEndUnit,
-                gemaraUnit, mishnahUnit, selectedChelek, mishnahBerurahUnit,
-            )
-        }.getOrNull()
         val unitInputs = if (seferChoice == SeferChoice.OTHER) {
             units.map(::ScheduleUnitInput)
         } else {
-            structuredUnits?.map { ScheduleUnitInput(it.english, it.hebrew) }.orEmpty()
+            structuredUnits.map { ScheduleUnitInput(it.english, it.hebrew) }
         }
         preview = if (validOffsets && validDates && unitInputs.isNotEmpty()) runCatching {
             previewPlan(
@@ -3225,6 +3230,8 @@ private fun CustomScheduleCreator(
                         selected = seferChoice == choice,
                         onClick = {
                             seferChoice = choice
+                            addedRanges.clear()
+                            currentRangeIncluded = true
                             fromMasechtaIndex = 0
                             toMasechtaIndex = 0
                             startUnitIndex = 0
@@ -3246,6 +3253,7 @@ private fun CustomScheduleCreator(
                         selectedIndex = fromMasechtaIndex,
                         onSelected = { index ->
                             fromMasechtaIndex = index
+                            currentRangeIncluded = true
                             if (toMasechtaIndex < index) toMasechtaIndex = index
                             startUnitIndex = 0
                             endUnitIndex = 0
@@ -3260,6 +3268,7 @@ private fun CustomScheduleCreator(
                         selectedIndex = (toMasechtaIndex - fromMasechtaIndex).coerceAtLeast(0),
                         onSelected = { relativeIndex ->
                             toMasechtaIndex = fromMasechtaIndex + relativeIndex
+                            currentRangeIncluded = true
                             val chosen = masechtaCatalog[toMasechtaIndex]
                             endUnitIndex = materialUnitOptions(
                                 seferChoice, chosen, gemaraUnit, mishnahUnit, selectedChelek, mishnahBerurahUnit,
@@ -3280,6 +3289,7 @@ private fun CustomScheduleCreator(
                             selected = selectedChelek == chelek,
                             onClick = {
                                 selectedChelek = chelek
+                                currentRangeIncluded = true
                                 startUnitIndex = 0
                                 endUnitIndex = materialUnitOptions(
                                     SeferChoice.MISHNAH_BERURAH, null, gemaraUnit, mishnahUnit, chelek, mishnahBerurahUnit,
@@ -3301,6 +3311,8 @@ private fun CustomScheduleCreator(
                             selected = mishnahBerurahUnit == unit,
                             onClick = {
                                 mishnahBerurahUnit = unit
+                                addedRanges.clear()
+                                currentRangeIncluded = true
                                 startUnitIndex = 0
                                 endUnitIndex = materialUnitOptions(
                                     SeferChoice.MISHNAH_BERURAH, null, gemaraUnit, mishnahUnit, selectedChelek, unit,
@@ -3325,7 +3337,7 @@ private fun CustomScheduleCreator(
                     GemaraUnit.entries.forEach { unit ->
                         FilterChip(
                             selected = gemaraUnit == unit,
-                            onClick = { gemaraUnit = unit; startUnitIndex = 0; endUnitIndex = 0; preview = null },
+                            onClick = { gemaraUnit = unit; addedRanges.clear(); currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = 0; preview = null },
                             label = { Text(stringResource(if (unit == GemaraUnit.DAF) R.string.daf else R.string.amud)) },
                         )
                     }
@@ -3339,7 +3351,7 @@ private fun CustomScheduleCreator(
                     MishnahUnit.entries.forEach { unit ->
                         FilterChip(
                             selected = mishnahUnit == unit,
-                            onClick = { mishnahUnit = unit; startUnitIndex = 0; endUnitIndex = 0; preview = null },
+                            onClick = { mishnahUnit = unit; addedRanges.clear(); currentRangeIncluded = true; startUnitIndex = 0; endUnitIndex = 0; preview = null },
                             label = { Text(stringResource(if (unit == MishnahUnit.MISHNAH) R.string.mishnah_unit else R.string.perek)) },
                         )
                     }
@@ -3353,18 +3365,45 @@ private fun CustomScheduleCreator(
                         label = stringResource(R.string.from_unit),
                         options = startUnitOptions.map { referenceLabel(it.english, it.hebrew, locale) },
                         selectedIndex = boundedStartIndex,
-                        onSelected = { startUnitIndex = it; endUnitIndex = 0; preview = null },
+                        onSelected = { startUnitIndex = it; endUnitIndex = 0; currentRangeIncluded = true; preview = null },
                         modifier = Modifier.weight(1f),
                     )
                     SelectionDropdown(
                         label = stringResource(R.string.to_unit),
                         options = endUnitOptions.map { referenceLabel(it.english, it.hebrew, locale) },
                         selectedIndex = boundedEndIndex,
-                        onSelected = { endUnitIndex = it; preview = null },
+                        onSelected = { endUnitIndex = it; currentRangeIncluded = true; preview = null },
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
+            item {
+                OutlinedButton(
+                    onClick = {
+                        addedRanges.add(currentRange)
+                        currentRangeIncluded = false
+                        preview = null
+                    },
+                    enabled = currentRange.isNotEmpty() && currentRange.any { it !in addedRanges.flatten() },
+                ) { Text(stringResource(R.string.add_range)) }
+            }
+            if (addedRanges.isNotEmpty()) {
+                item { Text(stringResource(R.string.selected_ranges), style = MaterialTheme.typography.titleSmall) }
+                items(addedRanges.size) { index ->
+                    val range = addedRanges[index]
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "${referenceLabel(range.first().english, range.first().hebrew, locale)} – ${referenceLabel(range.last().english, range.last().hebrew, locale)}",
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { addedRanges.removeAt(index); preview = null }) {
+                            Text(stringResource(R.string.remove))
+                        }
+                    }
+                }
+                if (currentRangeIncluded) item { Text(stringResource(R.string.current_range_included)) }
+            }
+            item { Text(stringResource(R.string.units_selected, structuredUnits.size)) }
         } else if (!guided || guidedStep == 3) {
             item { Text(stringResource(R.string.add_units_individually), style = MaterialTheme.typography.titleMedium) }
             item {
