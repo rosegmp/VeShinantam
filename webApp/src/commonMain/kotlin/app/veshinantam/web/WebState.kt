@@ -57,6 +57,14 @@ data class StoredSchedule(
     fun domain() = LearningSchedule(id, name, material, pace.coerceAtLeast(1), weekdays, chazarahOffsets, active, archived)
 }
 
+fun renameStoredSchedule(state: WebAppState, scheduleId: String, name: String, updatedAt: String): WebAppState {
+    val trimmed = name.trim()
+    require(trimmed.isNotEmpty())
+    return state.copy(schedules = state.schedules.map { schedule ->
+        if (schedule.id == scheduleId) schedule.copy(name = trimmed, nameHebrew = trimmed, updatedAt = updatedAt) else schedule
+    })
+}
+
 @Serializable
 data class StoredTask(
     val id: String,

@@ -147,6 +147,66 @@ async function readyClient(state) {
   return client;
 }
 
+test('default-omitted exclusion and goal IDs produce valid upload mutations', async () => {
+  const state = blankState();
+  state.exclusions = [
+    { scheduleId: 'schedule-1', date: '2026-10-16' },
+    { scheduleId: 'schedule-1', date: '2026-10-17' },
+  ];
+  state.goals = [{ kind: 'DAILY_TASKS', target: 3 }];
+  const client = await readyClient(state);
+  await client.window.veshinantamEnsureEntitySeed(state);
+  const mutations = await client.window.veshinantamReadOutbox();
+  assert.deepEqual(
+    mutations.filter(value => value.entityType === 'EXCLUSION').map(value => value.entityId).sort(),
+    ['schedule-1:2026-10-16', 'schedule-1:2026-10-17']
+  );
+  assert.equal(mutations.find(value => value.entityType === 'GOAL').entityId, 'DAILY_TASKS');
+  assert.equal(mutations.every(value => value.entityId && value.mutationId && value.entityType), true);
+});
+
+test('malformed queued changes are rebuilt from current exclusion and goal state', async () => {
+  const state = blankState();
+  state.exclusions = [
+    { scheduleId: 'schedule-1', date: '2026-10-16' },
+    { scheduleId: 'schedule-1', date: '2026-10-17' },
+  ];
+  state.goals = [{ kind: 'DAILY_TASKS', target: 3 }];
+  const client = await readyClient(state);
+  client.stores.get('sync_outbox').set('EXCLUSION:undefined', {
+    mutationId: 'old-exclusion', entityType: 'EXCLUSION', payload: { scheduleId: 'schedule-1', date: '2026-10-17' }, deleted: false,
+  });
+  client.stores.get('sync_outbox').set('GOAL:undefined', {
+    mutationId: 'old-goal', entityType: 'GOAL', payload: { kind: 'DAILY_TASKS', target: 3 }, deleted: false,
+  });
+  const mutations = await client.window.veshinantamReadOutbox();
+  assert.equal(mutations.length, 3);
+  assert.equal(mutations.some(value => !value.entityId), false);
+  assert.equal(client.stores.get('sync_outbox').has('EXCLUSION:undefined'), false);
+  assert.equal(client.stores.get('sync_outbox').has('GOAL:undefined'), false);
+});
+
+test('renamed schedule reaches another device without changing its preset or tasks', async () => {
+  const server = new SyntheticEntityServer();
+  const first = await readyClient(baseState());
+  const second = await readyClient(blankState());
+  await synchronize(first, server);
+  await synchronize(second, server);
+
+  const renamed = readState(first);
+  renamed.schedules[0].name = 'My Mishnah Plan';
+  renamed.schedules[0].nameHebrew = 'My Mishnah Plan';
+  writeState(first, renamed);
+  await synchronize(first, server);
+  await synchronize(second, server);
+
+  const received = readState(second);
+  assert.equal(received.schedules[0].name, 'My Mishnah Plan');
+  assert.equal(received.schedules[0].presetId, 'mishnah-yomis');
+  assert.equal(received.tasks.length, 1);
+  assert.equal(received.tasks[0].scheduleId, 'schedule-1');
+});
+
 test('two offline devices converge through edit conflicts and tombstones without silent loss', async () => {
   const server = new SyntheticEntityServer();
   const first = await readyClient(baseState());

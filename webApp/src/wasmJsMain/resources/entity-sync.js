@@ -138,9 +138,11 @@
     if (!database || suppressDiff) return;
     const now = new Date().toISOString();
     const compareCollection = async (type, before, after, convert) => {
-      const beforeMap = new Map((before || []).map(value => [value.id, value]));
-      const afterMap = new Map((after || []).map(value => [value.id, value]));
+      const idOf = value => globalThis.VeShinantamEntitySyncPolicy.entityId(type, value);
+      const beforeMap = new Map((before || []).map(value => [idOf(value), value]));
+      const afterMap = new Map((after || []).map(value => [idOf(value), value]));
       for (const [id, value] of afterMap) {
+        if (!id) throw new Error(`Cannot synchronize ${type.toLowerCase()} without an ID.`);
         const old = beforeMap.get(id);
         const payload = convert(value, next, now);
         const oldPayload = old ? convert(old, previous, now) : null;
@@ -152,6 +154,7 @@
         }
       }
       for (const [id, value] of beforeMap) {
+        if (!id) throw new Error(`Cannot synchronize ${type.toLowerCase()} without an ID.`);
         if (!afterMap.has(id)) await queueMutation({
           mutationId: newMutationId(), entityType: type, entityId: id,
           baseRevision: Number(value.revision || 0), payload: null, deleted: true, createdAt: now
@@ -216,7 +219,33 @@
     await window.veshinantamStorageReady;
     await pendingDiff;
     if (!database) return [];
-    return requestResult(database.transaction(OUTBOX, 'readonly').objectStore(OUTBOX).getAll());
+    const read = () => requestResult(database.transaction(OUTBOX, 'readonly').objectStore(OUTBOX).getAll());
+    const mutations = await read();
+    const malformed = mutations.filter(mutation => !mutation.entityId);
+    if (!malformed.length) return mutations;
+    const state = JSON.parse(readBrowserState() || '{}');
+    for (const mutation of malformed) {
+      if (mutation.deleted || !['EXCLUSION', 'GOAL'].includes(mutation.entityType)) {
+        throw new Error('An older queued change has no ID and needs recovery before syncing. Device data was kept.');
+      }
+      const type = mutation.entityType;
+      const collection = type === 'EXCLUSION' ? state.exclusions || [] : state.goals || [];
+      const now = new Date().toISOString();
+      for (const value of collection) {
+        const entityId = globalThis.VeShinantamEntitySyncPolicy.entityId(type, value);
+        if (!entityId) throw new Error(`Cannot recover ${type.toLowerCase()} without an ID.`);
+        await queueMutation({
+          mutationId: newMutationId(), entityType: type, entityId,
+          baseRevision: Number(value.revision || 0),
+          payload: type === 'EXCLUSION' ? exclusionPayload(value, now) : goalPayload(value, now),
+          deleted: false, createdAt: now
+        });
+      }
+      const transaction = database.transaction(OUTBOX, 'readwrite');
+      transaction.objectStore(OUTBOX).delete(`${type}:${mutation.entityId}`);
+      await transactionDone(transaction);
+    }
+    return read();
   };
 
   window.veshinantamSettleOutbox = async (entityType, entityId, mutationId, serverRevision) => {

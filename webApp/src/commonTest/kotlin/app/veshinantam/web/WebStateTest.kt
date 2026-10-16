@@ -12,6 +12,26 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun renamedSchedulePersistsWithoutChangingTasksOrPreset() {
+        val original = StoredSchedule("preset", "Daf Yomi", "GEMARA", 1, nameHebrew = "דף יומי", presetId = "daf-yomi-bavli")
+        val state = WebAppState(
+            schedules = listOf(original),
+            tasks = listOf(StoredTask("task", "preset", "Chullin 133", "חולין דף קלג.", today, "LEARNING")),
+        )
+
+        val renamed = renameStoredSchedule(state, "preset", "  Morning learning  ", now)
+        val restored = kotlinx.serialization.json.Json.decodeFromString<WebAppState>(
+            kotlinx.serialization.json.Json.encodeToString(renamed),
+        )
+
+        assertEquals("Morning learning", restored.schedules.single().name)
+        assertEquals("Morning learning", restored.schedules.single().nameHebrew)
+        assertEquals(original.copy(name = "Morning learning", nameHebrew = "Morning learning", updatedAt = now), restored.schedules.single())
+        assertEquals(state.tasks, restored.tasks)
+        kotlin.test.assertFailsWith<IllegalArgumentException> { renameStoredSchedule(state, "preset", "   ", now) }
+    }
+
+    @Test
     fun appBadgeMatchesAndroidActiveIncompleteDueCount() {
         val state = WebAppState(
             schedules = listOf(

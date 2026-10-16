@@ -48,6 +48,7 @@ data class ScheduleUnitInput(val primary: String, val secondary: String = "")
 
 data class PresetScheduleDraft(
     val program: PresetProgram,
+    val name: String = program.nameEnglish,
     val startIndex: Int = program.currentIndex,
     val startDate: LocalDate,
     val chazarahPattern: ChazarahPattern = ChazarahPattern(),
@@ -205,6 +206,7 @@ class ScheduleRepository(
 
     fun buildPresetPlan(draft: PresetScheduleDraft): PendingSchedulePlan {
         require(draft.startIndex in 0..draft.program.currentIndex)
+        require(draft.name.isNotBlank())
         val scheduleId = UUID.randomUUID().toString()
         val rules = ScheduleRules(draft.program.selectedWeekdays, draft.program.excludedDates)
         val isMonthlyTehillim = draft.program.id == MonthlyTehillim.PRESET_ID
@@ -233,8 +235,8 @@ class ScheduleRepository(
         }
         val schedule = ScheduleEntity(
             id = scheduleId,
-            nameEnglish = draft.program.nameEnglish,
-            nameHebrew = draft.program.nameHebrew,
+            nameEnglish = draft.name.trim(),
+            nameHebrew = if (draft.name.trim() == draft.program.nameEnglish) draft.program.nameHebrew else draft.name.trim(),
             kind = ScheduleKind.PRESET,
             sourceType = "PRESET:${PresetCatalog.VERSION}" + (if (isMonthlyTehillim) MonthlyTehillim.SOURCE_MARKER else ""),
             materialType = draft.program.materialType,
@@ -280,6 +282,14 @@ class ScheduleRepository(
 
     suspend fun setScheduleState(scheduleId: String, state: ScheduleState) {
         dao.updateScheduleState(scheduleId, state)
+        onDataChanged()
+    }
+
+    suspend fun renameSchedule(scheduleId: String, name: String) {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty())
+        val schedule = requireNotNull(dao.getSchedule(scheduleId))
+        dao.updateSchedule(schedule.copy(nameEnglish = trimmed, nameHebrew = trimmed))
         onDataChanged()
     }
 

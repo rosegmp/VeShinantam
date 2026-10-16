@@ -1821,6 +1821,7 @@ private fun SchedulesRoute(modifier: Modifier = Modifier, openWizardRequest: Int
             onCreatePreset = { creatorMode = ScheduleCreatorMode.PRESET },
             onCreateCustom = { creatorMode = ScheduleCreatorMode.CUSTOM },
             onStateChange = schedulesViewModel::setState,
+            onRename = schedulesViewModel::rename,
             onEditFuture = schedulesViewModel::editFuture,
             onCompletePastLearning = schedulesViewModel::completePastLearning,
             onCompletePastChazarah = schedulesViewModel::completePastChazarah,
@@ -1843,6 +1844,7 @@ private fun ScheduleList(
     onCreatePreset: () -> Unit,
     onCreateCustom: () -> Unit,
     onStateChange: (String, ScheduleState) -> Unit,
+    onRename: (String, String) -> Unit,
     onEditFuture: (String, FutureScheduleEditDraft) -> Unit,
     onCompletePastLearning: (String) -> Unit,
     onCompletePastChazarah: (String) -> Unit,
@@ -1860,6 +1862,7 @@ private fun ScheduleList(
     var pendingCompletePast by remember { mutableStateOf<Pair<ScheduleEntity, PastCompletionKind>?>(null) }
     var selectedDetails by remember { mutableStateOf<ScheduleEntity?>(null) }
     var selectedEditing by remember { mutableStateOf<ScheduleEntity?>(null) }
+    var selectedRenaming by remember { mutableStateOf<ScheduleEntity?>(null) }
     var selectedLearningId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedLearning = schedules.firstOrNull { it.id == selectedLearningId }
     LaunchedEffect(selectedLearningId) { onSelectLearningSchedule(selectedLearningId) }
@@ -1871,6 +1874,34 @@ private fun ScheduleList(
                 selectedEditing = null
             },
             onDismiss = { selectedEditing = null },
+        )
+    }
+    selectedRenaming?.let { schedule ->
+        var name by remember(schedule.id) { mutableStateOf(localizedName(schedule.nameEnglish, schedule.nameHebrew, locale)) }
+        AlertDialog(
+            onDismissRequest = { selectedRenaming = null },
+            title = { Text(stringResource(R.string.rename_schedule)) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.schedule_name)) },
+                    isError = name.isBlank(),
+                    supportingText = if (name.isBlank()) ({ Text(stringResource(R.string.schedule_name_required)) }) else null,
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (name.trim() != localizedName(schedule.nameEnglish, schedule.nameHebrew, locale)) {
+                        onRename(schedule.id, name)
+                    }
+                    selectedRenaming = null
+                }, enabled = name.isNotBlank()) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = { TextButton(onClick = { selectedRenaming = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     selectedDetails?.let { schedule ->
@@ -1997,6 +2028,9 @@ private fun ScheduleList(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { selectedRenaming = schedule }) {
+                            Text(stringResource(R.string.rename_schedule))
+                        }
                         OutlinedButton(onClick = { selectedLearningId = schedule.id }) {
                             Text(stringResource(R.string.view_schedule_learning))
                         }
@@ -2670,6 +2704,7 @@ private fun PresetScheduleCreator(
     val catalogPositionDate = remember { LocalDate.now() }
     val baseProgram = programs[programIndex]
     val program = remember(baseProgram, catalogPositionDate) { PresetCatalog.programAtDate(baseProgram, catalogPositionDate) }
+    var scheduleName by remember(programIndex) { mutableStateOf(program.nameEnglish) }
     var startIndex by remember(programIndex) { mutableStateOf(program.currentIndex) }
     var startDate by remember { mutableStateOf(catalogPositionDate) }
     val currentMasechtaStartIndex = remember(program.id, program.currentIndex) { PresetCatalog.currentMasechtaStartIndex(program) }
@@ -2688,7 +2723,7 @@ private fun PresetScheduleCreator(
     }
     var annualReviews by remember { mutableStateOf(true) }
     var validationError by remember { mutableStateOf(false) }
-    var preview by remember(programIndex, startIndex, startDate, weekendChazarah, chazarahEnabled, offsetsText, annualReviews) {
+    var preview by remember(programIndex, scheduleName, startIndex, startDate, weekendChazarah, chazarahEnabled, offsetsText, annualReviews) {
         mutableStateOf<PendingSchedulePlan?>(null)
     }
     var guidedStep by remember { mutableStateOf(3) }
@@ -2696,10 +2731,11 @@ private fun PresetScheduleCreator(
     fun generatePreview(): Boolean {
         val offsets = ChazarahDefaults.parse(offsetsText)
         val validOffsets = !chazarahEnabled || offsets != null
-        preview = if (validOffsets) runCatching {
+        preview = if (validOffsets && scheduleName.isNotBlank()) runCatching {
             previewPlan(
                 PresetScheduleDraft(
                     program = program,
+                    name = scheduleName.trim(),
                     startIndex = startIndex,
                     startDate = startDate,
                     chazarahPattern = if (chazarahEnabled) {
@@ -2767,6 +2803,17 @@ private fun PresetScheduleCreator(
                 options = programs.map { localizedName(it.nameEnglish, it.nameHebrew, locale) },
                 selectedIndex = programIndex,
                 onSelected = { programIndex = it; startDate = LocalDate.now() },
+            )
+        }
+        if (!guided || guidedStep == 3) item {
+            OutlinedTextField(
+                value = scheduleName,
+                onValueChange = { scheduleName = it; validationError = false },
+                label = { Text(stringResource(R.string.schedule_name)) },
+                isError = scheduleName.isBlank(),
+                supportingText = if (scheduleName.isBlank()) ({ Text(stringResource(R.string.schedule_name_required)) }) else null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         if (!guided || guidedStep == 3) item {

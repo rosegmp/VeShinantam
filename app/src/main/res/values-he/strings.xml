@@ -134,6 +134,8 @@
     <string name="custom_schedule">תוכנית אישית</string>
     <string name="custom_schedule_explanation">יש להזין כל שם ויחידה באנגלית או בעברית, לפי בחירתך.</string>
     <string name="schedule_name">שם התוכנית</string>
+    <string name="schedule_name_required">יש להזין שם לתוכנית.</string>
+    <string name="rename_schedule">שינוי שם התוכנית</string>
     <string name="choose_sefer">בחירת ספר</string>
     <string name="gemara">גמרא</string>
     <string name="mishnah">משנה</string>

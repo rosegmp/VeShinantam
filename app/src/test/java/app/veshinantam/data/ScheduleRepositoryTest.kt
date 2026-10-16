@@ -22,6 +22,58 @@ import kotlinx.coroutines.runBlocking
 
 class ScheduleRepositoryTest {
     @Test
+    fun `renaming updates only names and preserves the saved schedule`() = runBlocking {
+        val original = scheduleEntity()
+        var saved: ScheduleEntity? = null
+        var changes = 0
+        val dao = Proxy.newProxyInstance(
+            ScheduleDao::class.java.classLoader,
+            arrayOf(ScheduleDao::class.java),
+        ) { _, method, arguments ->
+            when (method.name) {
+                "getSchedule" -> original
+                "updateSchedule" -> { saved = arguments!![0] as ScheduleEntity; Unit }
+                else -> error("Unexpected DAO method ${method.name}")
+            }
+        } as ScheduleDao
+        val repository = ScheduleRepository(dao, onDataChanged = { changes++ })
+
+        repository.renameSchedule(original.id, "  My study plan  ")
+
+        assertEquals(original.copy(nameEnglish = "My study plan", nameHebrew = "My study plan"), saved)
+        assertEquals(1, changes)
+        assertEquals("My study plan", saved?.nameEnglish)
+        assertEquals("My study plan", saved?.nameHebrew)
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.renameSchedule(original.id, "   ") }
+        }
+        assertEquals(1, changes)
+    }
+
+    @Test
+    fun `preset custom name leaves catalog and tasks unchanged`() {
+        val unusedDao = Proxy.newProxyInstance(
+            ScheduleDao::class.java.classLoader,
+            arrayOf(ScheduleDao::class.java),
+        ) { _, method, _ -> error("DAO method ${method.name} should not be called while previewing") } as ScheduleDao
+        val repository = ScheduleRepository(unusedDao)
+        val source = PresetCatalog.programs.first()
+        val program = source.copy(units = source.units.subList(source.currentIndex, source.currentIndex + 2), currentIndex = 0)
+        val draft = PresetScheduleDraft(program = program, name = "  Morning learning  ", startDate = LocalDate.of(2026, 9, 8))
+
+        val plan = repository.buildPresetPlan(draft)
+
+        assertEquals("Morning learning", plan.schedule.nameEnglish)
+        assertEquals("Morning learning", plan.schedule.nameHebrew)
+        assertEquals(program.id, plan.schedule.presetId)
+        assertEquals(source.nameEnglish, PresetCatalog.programs.first().nameEnglish)
+        assertEquals(program.units.first().english, plan.tasks.first().labelEnglish)
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            repository.buildPresetPlan(draft.copy(name = "  "))
+        }
+    }
+
+    @Test
     fun `bulk completion sends learning and chazarah as distinct atomic DAO updates`() = runBlocking {
         val capturedCalls = mutableListOf<List<Any?>>()
         val dao = Proxy.newProxyInstance(

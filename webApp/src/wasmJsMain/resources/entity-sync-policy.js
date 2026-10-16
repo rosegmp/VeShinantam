@@ -6,6 +6,12 @@
     return { allowed: false, bind: null, reason: 'different-account' };
   };
 
+  const entityId = (type, value) => {
+    if (type === 'EXCLUSION') return value?.id || (value?.scheduleId && value?.date ? `${value.scheduleId}:${value.date}` : null);
+    if (type === 'GOAL') return value?.id || value?.kind || null;
+    return value?.id || null;
+  };
+
   const settleMutation = (currentMutation, acknowledgedMutationId, serverRevision) => {
     if (!currentMutation) return { matched: false, nextMutation: null };
     if (currentMutation.mutationId === acknowledgedMutationId) {
@@ -37,6 +43,7 @@
 
   const policy = Object.freeze({
     accountBinding,
+    entityId,
     settleMutation,
     receiveRemote,
     isRetryableStatus,

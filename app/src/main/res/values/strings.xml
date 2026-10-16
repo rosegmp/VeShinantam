@@ -131,6 +131,8 @@
     <string name="custom_schedule">Custom schedule</string>
     <string name="custom_schedule_explanation">Enter each name and unit in either English or Hebrew—whichever you prefer.</string>
     <string name="schedule_name">Schedule name</string>
+    <string name="schedule_name_required">Enter a schedule name.</string>
+    <string name="rename_schedule">Rename schedule</string>
     <string name="choose_sefer">Choose a sefer</string>
     <string name="gemara">Gemara</string>
     <string name="mishnah">Mishnah</string>

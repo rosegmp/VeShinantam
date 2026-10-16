@@ -270,6 +270,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var showCreate by remember { mutableStateOf(false) }
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
     var schedulePendingEdit by remember { mutableStateOf<StoredSchedule?>(null) }
+    var schedulePendingRename by remember { mutableStateOf<StoredSchedule?>(null) }
     var bulkCompletionRequest by remember { mutableStateOf<BulkCompletionRequest?>(null) }
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
@@ -401,6 +402,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestRename = { scheduleId -> schedulePendingRename = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -459,6 +461,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 },
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestRename = { scheduleId -> schedulePendingRename = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -584,6 +587,32 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                 update { state -> editFutureSchedule(state, schedule.id, todayIso, edit, store.currentInstant()) }
                 schedulePendingEdit = null
             },
+        )
+    }
+
+    schedulePendingRename?.let { schedule ->
+        var name by remember(schedule.id) { mutableStateOf(schedule.name) }
+        AlertDialog(
+            onDismissRequest = { schedulePendingRename = null },
+            title = { Text(if (hebrew) "שינוי שם התוכנית" else "Rename schedule") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(if (hebrew) "שם התוכנית" else "Schedule name") },
+                    isError = name.isBlank(),
+                    supportingText = if (name.isBlank()) ({ Text(if (hebrew) "יש להזין שם לתוכנית." else "Enter a schedule name.") }) else null,
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val trimmed = name.trim()
+                    update { state -> renameStoredSchedule(state, schedule.id, trimmed, store.currentInstant()) }
+                    schedulePendingRename = null
+                }, enabled = name.isNotBlank()) { Text(if (hebrew) "שמור" else "Save") }
+            },
+            dismissButton = { TextButton(onClick = { schedulePendingRename = null }) { Text(if (hebrew) "ביטול" else "Cancel") } },
         )
     }
 
@@ -777,6 +806,7 @@ private fun AppContent(
     onRestoreSchedule: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
     onRequestEdit: (String) -> Unit,
+    onRequestRename: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
@@ -880,7 +910,7 @@ private fun AppContent(
             )
             Destination.SCHEDULES -> SchedulesScreen(
                 state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit,
-                onRequestBulkCompletion, onToggle, onRead,
+                onRequestRename, onRequestBulkCompletion, onToggle, onRead,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew, onSaveGoals)
         }
@@ -1901,6 +1931,7 @@ private fun SchedulesScreen(
     onRestore: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
     onRequestEdit: (String) -> Unit,
+    onRequestRename: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onToggle: (String) -> Unit,
     onRead: (StoredTask, String?) -> Unit,
@@ -1984,6 +2015,11 @@ private fun SchedulesScreen(
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             FlowRow(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onRequestRename(schedule.id) }) {
+                                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (hebrew) "שנה שם" else "Rename")
+                                }
                                 TextButton(onClick = { selectedLearningScheduleId = schedule.id }) {
                                     Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -2009,6 +2045,9 @@ private fun SchedulesScreen(
                             Spacer(Modifier.height(14.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onRequestRename(schedule.id) }) {
+                                    Text(if (hebrew) "שנה שם" else "Rename")
+                                }
                                 TextButton(onClick = { selectedLearningScheduleId = schedule.id }) {
                                     Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -2521,6 +2560,7 @@ private fun CreateScheduleDialog(
         }
     }
     val custom = program == null
+    var presetName by remember(selectedProgramIndex) { mutableStateOf(program?.nameEnglish.orEmpty()) }
     var programMenuExpanded by remember { mutableStateOf(false) }
     var startIndex by remember(selectedProgramIndex) { mutableStateOf(program?.currentIndex ?: 0) }
     var positionQuery by remember(selectedProgramIndex) { mutableStateOf("") }
@@ -2682,6 +2722,16 @@ private fun CreateScheduleDialog(
                             onClick = { selectedProgramIndex = programs.size; programMenuExpanded = false },
                         )
                     }
+                }
+                if (program != null) {
+                    OutlinedTextField(
+                        value = presetName,
+                        onValueChange = { presetName = it },
+                        label = { Text(if (hebrew) "שם התוכנית" else "Schedule name") },
+                        isError = presetName.isBlank(),
+                        supportingText = if (presetName.isBlank()) ({ Text(if (hebrew) "יש להזין שם לתוכנית." else "Enter a schedule name.") }) else null,
+                        singleLine = true,
+                    )
                 }
                 if (program != null) {
                     Card(colors = CardDefaults.cardColors(containerColor = DeepBlueContainer), shape = RoundedCornerShape(14.dp)) {
@@ -3014,8 +3064,8 @@ private fun CreateScheduleDialog(
                         if (preview == null) generateCustomPreview() else onCreate(preview.draft)
                     } else onCreate(
                         ScheduleDraft(
-                            name = selected.nameEnglish,
-                            nameHebrew = selected.nameHebrew,
+                            name = presetName.trim(),
+                            nameHebrew = if (presetName.trim() == selected.nameEnglish) selected.nameHebrew else presetName.trim(),
                             material = selected.materialType.name,
                             materialType = selected.materialType.name,
                             preset = selected,
@@ -3034,7 +3084,7 @@ private fun CreateScheduleDialog(
                         ),
                     )
                 },
-                enabled = !custom || customDraft != null,
+                enabled = if (custom) customDraft != null else presetName.isNotBlank(),
             ) {
                 Text(
                     if (custom && visiblePreview == null) {

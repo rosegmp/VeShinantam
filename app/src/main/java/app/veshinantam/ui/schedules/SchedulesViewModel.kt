@@ -53,6 +53,10 @@ class SchedulesViewModel(private val repository: ScheduleRepository) : ViewModel
         viewModelScope.launch { repository.setScheduleState(scheduleId, state) }
     }
 
+    fun rename(scheduleId: String, name: String) {
+        viewModelScope.launch { repository.renameSchedule(scheduleId, name) }
+    }
+
     fun editFuture(scheduleId: String, draft: FutureScheduleEditDraft) {
         viewModelScope.launch { repository.editFutureSchedule(scheduleId, draft) }
     }
