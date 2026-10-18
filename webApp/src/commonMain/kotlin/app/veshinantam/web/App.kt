@@ -386,6 +386,9 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
+                                onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
+                                onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
@@ -445,6 +448,9 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
+                                onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
+                                onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
@@ -796,6 +802,9 @@ private fun AppContent(
     onSefarimLanguage: (String) -> Unit,
     onPrimaryCalendar: (String) -> Unit,
     onTodaySortOrder: (String) -> Unit,
+    onTodayAutoCollapseCompleted: () -> Unit,
+    onTodayScheduleExpanded: (String, Boolean) -> Unit,
+    onTodaySectionExpanded: (String, Boolean) -> Unit,
     onSaveGoals: (Double?, Double?, Double?) -> Unit,
     onSavePreferences: (WebPreferencesEdit) -> Unit,
     onToggle: (String) -> Unit,
@@ -897,7 +906,10 @@ private fun AppContent(
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         when (destination) {
-            Destination.TODAY -> TodayScreen(state, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder)
+            Destination.TODAY -> TodayScreen(
+                state, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder,
+                onTodayAutoCollapseCompleted, onTodayScheduleExpanded, onTodaySectionExpanded,
+            )
             Destination.CALENDAR -> CalendarScreen(
                 state = state,
                 today = todayIso,
@@ -1214,6 +1226,9 @@ private fun TodayScreen(
     onRead: (StoredTask, String?) -> Unit,
     onCreate: () -> Unit,
     onSortOrder: (String) -> Unit,
+    onAutoCollapseCompleted: () -> Unit,
+    onScheduleExpanded: (String, Boolean) -> Unit,
+    onSectionExpanded: (String, Boolean) -> Unit,
 ) {
     val activeScheduleIds = state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
     val sectionedTasks = todayTasks(
@@ -1224,7 +1239,6 @@ private fun TodayScreen(
     )
     val tasks = sectionedTasks.map { it.task.domain() }
     val progress = LearningPlanner.progress(tasks)
-    var collapsedSections by remember { mutableStateOf(emptySet<String>()) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
@@ -1256,6 +1270,12 @@ private fun TodayScreen(
                             onClick = { onSortOrder(order.name); sortMenuExpanded = false },
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(if (hebrew) "כיווץ אוטומטי של תוכניות שהושלמו" else "Auto-collapse completed schedules") },
+                        trailingIcon = { Switch(checked = state.todayAutoCollapseCompleted, onCheckedChange = null) },
+                        onClick = { onAutoCollapseCompleted(); sortMenuExpanded = false },
+                    )
                 }
             }
         }
@@ -1283,15 +1303,21 @@ private fun TodayScreen(
             state.schedules.filter { it.active && !it.archived }.forEach { schedule ->
                 val scheduleTasks = sectionedTasks.filter { it.task.scheduleId == schedule.id }
                 if (scheduleTasks.isNotEmpty()) {
-                    item {
-                        Text(schedule.name, color = DeepBlue, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp).semantics { heading() })
+                    val scheduleKey = "schedule-${schedule.id}"
+                    val scheduleExpanded = isWebTodayScheduleExpanded(
+                        state.todayExpandedSchedules[scheduleKey], scheduleTasks.map { it.task }, state.todayAutoCollapseCompleted,
+                    )
+                    item(key = "header-$scheduleKey") {
+                        TodayScheduleHeader(schedule.name, scheduleTasks.map { it.task }, hebrew, scheduleExpanded) {
+                            onScheduleExpanded(scheduleKey, !scheduleExpanded)
+                        }
                     }
-                    WebTodaySection.entries.forEach { section ->
+                    if (scheduleExpanded) WebTodaySection.entries.forEach { section ->
                         val sectionTasks = scheduleTasks.filter { it.section == section }.map { it.task }
                         if (sectionTasks.isNotEmpty()) {
                             val sectionKey = "${schedule.id}-${section.name}"
-                            val expanded = sectionKey !in collapsedSections
-                            item {
+                            val expanded = state.todayExpandedSections[sectionKey] ?: true
+                            item(key = "section-$sectionKey") {
                                 TaskGroup(
                                     title = todaySectionLabel(section, hebrew),
                                     tasks = sectionTasks,
@@ -1300,13 +1326,7 @@ private fun TodayScreen(
                                     onToggle = onToggle,
                                     onRead = { task -> onRead(task, schedule.presetId) },
                                     expanded = expanded,
-                                    onExpandToggle = {
-                                        if (expanded) {
-                                            collapsedSections = collapsedSections + sectionKey
-                                        } else {
-                                            collapsedSections = collapsedSections - sectionKey
-                                        }
-                                    },
+                                    onExpandToggle = { onSectionExpanded(sectionKey, !expanded) },
                                     showDueDate = section == WebTodaySection.OVERDUE_LEARNING || section == WebTodaySection.OVERDUE_CHAZARAH,
                                 )
                             }
@@ -1320,6 +1340,48 @@ private fun TodayScreen(
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomEnd) {
         FloatingActionButton(onClick = onCreate, containerColor = WarmGold, contentColor = MaterialTheme.colorScheme.onSecondary) {
             Icon(Icons.Default.Add, if (hebrew) "הוסף תוכנית" else "Add schedule")
+        }
+    }
+}
+
+@Composable
+private fun TodayScheduleHeader(
+    name: String,
+    tasks: List<StoredTask>,
+    hebrew: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onToggle)
+                .padding(18.dp)
+                .semantics {
+                    heading()
+                    stateDescription = if (expanded) {
+                        if (hebrew) "מורחב" else "Expanded"
+                    } else {
+                        if (hebrew) "מכווץ" else "Collapsed"
+                    }
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.width(12.dp))
+            Text(name, modifier = Modifier.weight(1f), color = DeepBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("${tasks.count { it.completed }}/${tasks.size}", color = DeepBlue, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                if (expanded) { if (hebrew) "כווץ תוכנית" else "Collapse schedule" }
+                else { if (hebrew) "הרחב תוכנית" else "Expand schedule" },
+                tint = DeepBlue,
+            )
         }
     }
 }

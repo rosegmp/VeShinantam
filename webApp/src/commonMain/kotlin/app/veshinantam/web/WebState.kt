@@ -124,6 +124,9 @@ data class WebAppState(
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
     val todaySortOrder: String = "SCHEDULED_FIRST",
+    val todayAutoCollapseCompleted: Boolean = false,
+    val todayExpandedSchedules: Map<String, Boolean> = emptyMap(),
+    val todayExpandedSections: Map<String, Boolean> = emptyMap(),
     val automaticPresetUpdates: Boolean = false,
     val preferencesRevision: Long = 0,
 ) {
@@ -572,6 +575,9 @@ fun WebAppState.toCanonical(now: String, today: String): CanonicalDataSet {
         ),
     )
 }
+
+fun isWebTodayScheduleExpanded(manualOverride: Boolean?, tasks: List<StoredTask>, autoCollapseCompleted: Boolean): Boolean =
+    manualOverride ?: !(autoCollapseCompleted && tasks.isNotEmpty() && tasks.all { it.completed })
 
 enum class WebTodaySection { NEW_LEARNING, CHAZARAH_TODAY, OVERDUE_LEARNING, OVERDUE_CHAZARAH, COMPLETED_TODAY }
 

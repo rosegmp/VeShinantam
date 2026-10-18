@@ -12,6 +12,35 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun todayExpansionChoicesPersistAndKeepScheduleAndSectionIndependent() {
+        val state = WebAppState.sample(today).copy(
+            todayAutoCollapseCompleted = true,
+            todayExpandedSchedules = mapOf("schedule-daf-yomi" to false),
+            todayExpandedSections = mapOf("daf-yomi-NEW_LEARNING" to false),
+        )
+        val restored = kotlinx.serialization.json.Json.decodeFromString<WebAppState>(
+            kotlinx.serialization.json.Json.encodeToString(state),
+        )
+
+        assertEquals(state.todayExpandedSchedules, restored.todayExpandedSchedules)
+        assertEquals(state.todayExpandedSections, restored.todayExpandedSections)
+        assertTrue(restored.todayAutoCollapseCompleted)
+        assertEquals(true, restored.todayExpandedSections["mishnah-NEW_LEARNING"] ?: true)
+    }
+
+    @Test
+    fun completedScheduleAutoCollapseCanBeOverridden() {
+        val completed = listOf(StoredTask("done", "schedule", "A", "א", today, "LEARNING", completed = true))
+        val mixed = completed + StoredTask("open", "schedule", "B", "ב", today, "CHAZARAH")
+
+        assertEquals(false, isWebTodayScheduleExpanded(null, completed, true))
+        assertEquals(true, isWebTodayScheduleExpanded(null, mixed, true))
+        assertEquals(true, isWebTodayScheduleExpanded(null, completed, false))
+        assertEquals(true, isWebTodayScheduleExpanded(true, completed, true))
+        assertEquals(false, isWebTodayScheduleExpanded(false, mixed, false))
+    }
+
+    @Test
     fun renamedSchedulePersistsWithoutChangingTasksOrPreset() {
         val original = StoredSchedule("preset", "Daf Yomi", "GEMARA", 1, nameHebrew = "דף יומי", presetId = "daf-yomi-bavli")
         val state = WebAppState(
