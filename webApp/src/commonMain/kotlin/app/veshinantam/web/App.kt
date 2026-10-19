@@ -137,6 +137,7 @@ import app.veshinantam.shared.preset.UnitReference
 import app.veshinantam.shared.text.SefariaReferenceMapper
 import app.veshinantam.shared.text.SefariaTextContent
 import app.veshinantam.shared.text.SefariaTextLookup
+import app.veshinantam.shared.text.MishnahBerurahPageReference
 import app.veshinantam.shared.text.SefariaTextParser
 import app.veshinantam.shared.text.PeleYoetzReference
 import app.veshinantam.web.generated.resources.NotoSansHebrew
@@ -386,6 +387,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onTodayGroupBy = { value -> update { it.copy(todayGroupBy = value) } },
                                 onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
                                 onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
                                 onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
@@ -448,6 +450,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onSefarimLanguage = { value -> update { it.copy(sefarimLanguage = value) } },
                                 onPrimaryCalendar = { value -> update { it.copy(primaryCalendar = value) } },
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
+                                onTodayGroupBy = { value -> update { it.copy(todayGroupBy = value) } },
                                 onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
                                 onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
                                 onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
@@ -802,6 +805,7 @@ private fun AppContent(
     onSefarimLanguage: (String) -> Unit,
     onPrimaryCalendar: (String) -> Unit,
     onTodaySortOrder: (String) -> Unit,
+    onTodayGroupBy: (String) -> Unit,
     onTodayAutoCollapseCompleted: () -> Unit,
     onTodayScheduleExpanded: (String, Boolean) -> Unit,
     onTodaySectionExpanded: (String, Boolean) -> Unit,
@@ -908,7 +912,7 @@ private fun AppContent(
         when (destination) {
             Destination.TODAY -> TodayScreen(
                 state, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder,
-                onTodayAutoCollapseCompleted, onTodayScheduleExpanded, onTodaySectionExpanded,
+                onTodayGroupBy, onTodayAutoCollapseCompleted, onTodayScheduleExpanded, onTodaySectionExpanded,
             )
             Destination.CALENDAR -> CalendarScreen(
                 state = state,
@@ -1045,8 +1049,8 @@ private fun WebSettingsDialog(
                     Column(Modifier.weight(1f)) {
                         Text(if (hebrew) "תזכורת יומית" else "Daily reminder", fontWeight = FontWeight.Bold)
                         Text(
-                            if (hebrew) "כאשר האתר פתוח, הדפדפן יתריע בשעה שנבחרה. התראות כשהאתר סגור דורשות Web Push ואינן זמינות עדיין."
-                            else "While the site is open, the browser will notify at this time. Closed-app reminders require Web Push and are not available yet.",
+                            if (hebrew) "עם חשבון ואישור התראות, תזכורות יכולות להגיע גם כשהאתר סגור. יש לסנכרן לאחר שינויים כדי שהתזכורת תהיה עדכנית. ללא חשבון, יש להשאיר את האתר פתוח."
+                            else "With an account and notification permission, reminders can arrive while the site is closed. Sync after changes to keep them current. Without an account, keep the site open.",
                             color = MutedInk, fontSize = 12.sp,
                         )
                     }
@@ -1226,6 +1230,7 @@ private fun TodayScreen(
     onRead: (StoredTask, String?) -> Unit,
     onCreate: () -> Unit,
     onSortOrder: (String) -> Unit,
+    onGroupBy: (String) -> Unit,
     onAutoCollapseCompleted: () -> Unit,
     onScheduleExpanded: (String, Boolean) -> Unit,
     onSectionExpanded: (String, Boolean) -> Unit,
@@ -1239,6 +1244,7 @@ private fun TodayScreen(
     )
     val tasks = sectionedTasks.map { it.task.domain() }
     val progress = LearningPlanner.progress(tasks)
+    val groupBy = WebTodayGroupBy.entries.firstOrNull { it.name == state.todayGroupBy } ?: WebTodayGroupBy.SCHEDULE
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
@@ -1271,6 +1277,18 @@ private fun TodayScreen(
                         )
                     }
                     HorizontalDivider()
+                    Text(
+                        if (hebrew) "קיבוץ פריטי היום לפי" else "Group today by",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    WebTodayGroupBy.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text((if (groupBy == option) "✓  " else "    ") + todayGroupByLabel(option, hebrew)) },
+                            onClick = { onGroupBy(option.name); sortMenuExpanded = false },
+                        )
+                    }
+                    HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text(if (hebrew) "כיווץ אוטומטי של תוכניות שהושלמו" else "Auto-collapse completed schedules") },
                         trailingIcon = { Switch(checked = state.todayAutoCollapseCompleted, onCheckedChange = null) },
@@ -1299,7 +1317,7 @@ private fun TodayScreen(
         }
         if (tasks.isEmpty()) {
             item { EmptyToday(hebrew, onCreate) }
-        } else {
+        } else if (groupBy == WebTodayGroupBy.SCHEDULE) {
             state.schedules.filter { it.active && !it.archived }.forEach { schedule ->
                 val scheduleTasks = sectionedTasks.filter { it.task.scheduleId == schedule.id }
                 if (scheduleTasks.isNotEmpty()) {
@@ -1308,7 +1326,7 @@ private fun TodayScreen(
                         state.todayExpandedSchedules[scheduleKey], scheduleTasks.map { it.task }, state.todayAutoCollapseCompleted,
                     )
                     item(key = "header-$scheduleKey") {
-                        TodayScheduleHeader(schedule.name, scheduleTasks.map { it.task }, hebrew, scheduleExpanded) {
+                        TodayScheduleHeader(todayScheduleName(schedule, hebrew), scheduleTasks.map { it.task }, hebrew, scheduleExpanded) {
                             onScheduleExpanded(scheduleKey, !scheduleExpanded)
                         }
                     }
@@ -1334,6 +1352,43 @@ private fun TodayScreen(
                     }
                 }
             }
+        } else {
+            val activeSchedules = state.schedules.filter { it.active && !it.archived }
+            groupWebTodayTasks(sectionedTasks, groupBy).forEach { group ->
+                val groupExpanded = state.todayExpandedSections[group.key] ?: true
+                item(key = "section-${group.key}") {
+                    TodayGroupHeader(todayGroupLabel(group, hebrew), group.tasks.size, hebrew, groupExpanded) {
+                        onSectionExpanded(group.key, !groupExpanded)
+                    }
+                }
+                if (groupExpanded) activeSchedules.forEach { schedule ->
+                    val scheduleTasks = group.tasks.filter { it.task.scheduleId == schedule.id }.map { it.task }
+                    if (scheduleTasks.isNotEmpty()) {
+                        val scheduleKey = "${group.key}-${schedule.id}"
+                        val fullScheduleTasks = sectionedTasks.filter { it.task.scheduleId == schedule.id }.map { it.task }
+                        val scheduleExpanded = isWebTodayScheduleExpanded(
+                            state.todayExpandedSchedules[scheduleKey], fullScheduleTasks, state.todayAutoCollapseCompleted,
+                        )
+                        item(key = "header-$scheduleKey") {
+                            TodayScheduleHeader(todayScheduleName(schedule, hebrew), scheduleTasks, hebrew, scheduleExpanded) {
+                                onScheduleExpanded(scheduleKey, !scheduleExpanded)
+                            }
+                        }
+                        if (scheduleExpanded) item(key = "tasks-$scheduleKey") {
+                            TaskGroup(
+                                title = "",
+                                tasks = scheduleTasks,
+                                hebrew = hebrew,
+                                sefarimLanguage = state.sefarimLanguage,
+                                onToggle = onToggle,
+                                onRead = { task -> onRead(task, schedule.presetId) },
+                                showHeader = false,
+                                today = today,
+                            )
+                        }
+                    }
+                }
+            }
         }
         item { Spacer(Modifier.height(72.dp)) }
     }
@@ -1341,6 +1396,45 @@ private fun TodayScreen(
         FloatingActionButton(onClick = onCreate, containerColor = WarmGold, contentColor = MaterialTheme.colorScheme.onSecondary) {
             Icon(Icons.Default.Add, if (hebrew) "הוסף תוכנית" else "Add schedule")
         }
+    }
+}
+
+private fun todayScheduleName(schedule: StoredSchedule, hebrew: Boolean): String =
+    if (hebrew) schedule.nameHebrew.takeIf { it.isNotBlank() } ?: schedule.name else schedule.name
+
+private fun todayGroupByLabel(groupBy: WebTodayGroupBy, hebrew: Boolean): String = when (groupBy) {
+    WebTodayGroupBy.SCHEDULE -> if (hebrew) "תוכנית" else "Schedule"
+    WebTodayGroupBy.LEARNING_STATUS -> if (hebrew) "מצב הלימוד" else "Learning status"
+    WebTodayGroupBy.COMPLETED_STATUS -> if (hebrew) "מצב ההשלמה" else "Completed status"
+}
+
+private fun todayGroupLabel(group: WebTodayGroup, hebrew: Boolean): String = when {
+    group.section != null -> todaySectionLabel(group.section, hebrew)
+    group.completed == true -> if (hebrew) "הושלם" else "Completed"
+    else -> if (hebrew) "לא הושלם" else "Not completed"
+}
+
+@Composable
+private fun TodayGroupHeader(title: String, taskCount: Int, hebrew: Boolean, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onToggle)
+            .heightIn(min = 48.dp)
+            .padding(vertical = 8.dp)
+            .semantics {
+                heading()
+                stateDescription = if (expanded) { if (hebrew) "מורחב" else "Expanded" }
+                else { if (hebrew) "מכווץ" else "Collapsed" }
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("$title ($taskCount)", modifier = Modifier.weight(1f), color = DeepBlue, fontWeight = FontWeight.Bold)
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            if (expanded) { if (hebrew) "כווץ קבוצה" else "Collapse group" }
+            else { if (hebrew) "הרחב קבוצה" else "Expand group" },
+            tint = DeepBlue,
+        )
     }
 }
 
@@ -1397,11 +1491,13 @@ private fun TaskGroup(
     expanded: Boolean = true,
     onExpandToggle: (() -> Unit)? = null,
     showDueDate: Boolean = false,
+    showHeader: Boolean = true,
+    today: String? = null,
 ) {
     if (tasks.isEmpty()) return
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column {
-            Row(
+            if (showHeader) Row(
                 modifier = Modifier.fillMaxWidth()
                     .then(if (onExpandToggle != null) Modifier.clickable(role = Role.Button, onClick = onExpandToggle) else Modifier)
                     .padding(horizontal = 18.dp, vertical = 14.dp)
@@ -1419,7 +1515,7 @@ private fun TaskGroup(
                 if (onExpandToggle != null) Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = DeepBlue)
             }
             if (!expanded) return@Column
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            if (showHeader) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             tasks.forEachIndexed { index, task ->
                 val hebrewReference = normalizedHebrewReference(task.referenceEnglish, task.referenceHebrew)
                 val primary = when (sefarimLanguage) {
@@ -1473,7 +1569,7 @@ private fun TaskGroup(
                                 color = MutedInk,
                             )
                         }
-                        if (showDueDate) Text(
+                        if (showDueDate || today != null && task.dueDate != today) Text(
                             if (hebrew) "לתאריך ${friendlyDate(task.dueDate, true)}" else "Due ${friendlyDate(task.dueDate, false)}",
                             color = MaterialTheme.colorScheme.error,
                             fontSize = 13.sp,
@@ -1491,6 +1587,94 @@ private fun TaskGroup(
 }
 
 @Composable
+private fun WebMishnahBerurahScanDialog(
+    task: StoredTask,
+    reference: MishnahBerurahPageReference,
+    store: BrowserStore,
+    hebrew: Boolean,
+    previous: StoredTask?,
+    next: StoredTask?,
+    onNavigate: (StoredTask) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var scan by remember(reference.chelek) { mutableStateOf(store.readMishnahBerurahScan(reference.chelek)) }
+    LaunchedEffect(reference.chelek) {
+        while (true) {
+            delay(500)
+            val updated = store.readMishnahBerurahScan(reference.chelek)
+            if (updated != scan) scan = updated
+        }
+    }
+    var pageText by remember(reference, scan) {
+        mutableStateOf(((scan?.resolvedPage(reference.ordinal) ?: 0) + 1).toString())
+    }
+    val selectedPage = pageText.toIntOrNull()?.takeIf { it > 0 }?.minus(1)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+        title = { Text(if (hebrew) task.referenceHebrew.ifBlank { task.referenceEnglish } else task.referenceEnglish) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    if (hebrew) "אפשר לקרוא סריקה מקומית של משנה ברורה. ה־PDF נשמר רק בדפדפן זה."
+                    else "Read a local Mishnah Berurah scan. The PDF stays only in this browser.",
+                )
+                scan?.let { saved ->
+                    Text(saved.fileName, color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = pageText,
+                        onValueChange = { pageText = it.filter(Char::isDigit).take(5) },
+                        label = { Text(if (hebrew) "עמוד ב־PDF" else "PDF page") },
+                        supportingText = {
+                            Text(if (hebrew) "מספור העמודים מתחיל ב־1" else "Page numbers start at 1")
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = { selectedPage?.let { store.openMishnahBerurahScan(reference.chelek, it) } },
+                        enabled = selectedPage != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (hebrew) "פתח עמוד ב־PDF" else "Open PDF at this page") }
+                    OutlinedButton(
+                        onClick = {
+                            selectedPage?.let { page ->
+                                store.alignMishnahBerurahScan(reference.chelek, reference.ordinal, page)
+                                scan = saved.copy(anchorOrdinal = reference.ordinal, anchorPdfPage = page, calibrated = true)
+                            }
+                        },
+                        enabled = selectedPage != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (hebrew) "השתמש בעמוד הזה למטלה" else "Use this page for the assignment") }
+                    if (!saved.calibrated) Text(
+                        if (hebrew) "פתח את ה־PDF, מצא את העמוד המתאים, ואז שמור את ההתאמה."
+                        else "Find the matching page in the PDF, then save its page number here.",
+                        color = MutedInk,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                OutlinedButton(
+                    onClick = { store.chooseMishnahBerurahScan(reference.chelek, reference.ordinal) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (scan == null) {
+                    if (hebrew) "בחר PDF של משנה ברורה" else "Choose Mishnah Berurah PDF"
+                } else {
+                    if (hebrew) "החלף PDF" else "Replace PDF"
+                }) }
+                Text(
+                    if (hebrew) "יש להשתמש רק בעותק שהורדת כדין. הקובץ אינו מועלה או מסונכרן."
+                    else "Use a copy you obtained lawfully. The file is never uploaded or synced.",
+                    color = MutedInk,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (hebrew) "סגירה" else "Close") } },
+        dismissButton = { WebReaderNavigationButtons(previous, next, hebrew, onNavigate) },
+    )
+}
+
+@Composable
 private fun WebSefariaTextDialog(
     selection: TextReaderSelection,
     store: BrowserStore,
@@ -1502,6 +1686,11 @@ private fun WebSefariaTextDialog(
     onDismiss: () -> Unit,
 ) {
     val task = selection.task
+    val mishnahBerurahPage = remember(task.referenceEnglish) { MishnahBerurahPageReference.parse(task.referenceEnglish) }
+    if (mishnahBerurahPage != null) {
+        WebMishnahBerurahScanDialog(task, mishnahBerurahPage, store, hebrew, previous, next, onNavigate, onDismiss)
+        return
+    }
     val peleYoetz = remember(task.referenceEnglish) { PeleYoetzReference.parse(task.referenceEnglish) }
     if (peleYoetz != null) {
         WebPeleYoetzTextDialog(task, peleYoetz, hebrew, previous, next, onNavigate, onDismiss)

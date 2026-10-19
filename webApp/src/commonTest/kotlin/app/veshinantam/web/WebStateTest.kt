@@ -12,8 +12,22 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun mishnahBerurahScanAlignmentFollowsAndroidPageOrdinals() {
+        val first = app.veshinantam.shared.text.MishnahBerurahPageReference.parse("Mishnah Berurah, chelek 1 page 4a")
+        val next = app.veshinantam.shared.text.MishnahBerurahPageReference.parse("Mishnah Berurah, chelek 1 page 5b")
+        assertNotNull(first)
+        assertNotNull(next)
+        val scan = LocalPdfScan("chelek-1.pdf", first.ordinal, anchorPdfPage = 12, calibrated = true)
+
+        assertEquals(12, scan.resolvedPage(first.ordinal))
+        assertEquals(15, scan.resolvedPage(next.ordinal))
+        assertEquals(0, scan.resolvedPage(-20))
+    }
+
+    @Test
     fun todayExpansionChoicesPersistAndKeepScheduleAndSectionIndependent() {
         val state = WebAppState.sample(today).copy(
+            todayGroupBy = WebTodayGroupBy.LEARNING_STATUS.name,
             todayAutoCollapseCompleted = true,
             todayExpandedSchedules = mapOf("schedule-daf-yomi" to false),
             todayExpandedSections = mapOf("daf-yomi-NEW_LEARNING" to false),
@@ -24,8 +38,27 @@ class WebStateTest {
 
         assertEquals(state.todayExpandedSchedules, restored.todayExpandedSchedules)
         assertEquals(state.todayExpandedSections, restored.todayExpandedSections)
+        assertEquals(WebTodayGroupBy.LEARNING_STATUS.name, restored.todayGroupBy)
         assertTrue(restored.todayAutoCollapseCompleted)
         assertEquals(true, restored.todayExpandedSections["mishnah-NEW_LEARNING"] ?: true)
+    }
+
+    @Test
+    fun todayGroupingKeepsTasksInTheirStatusAndCompletionGroups() {
+        val tasks = listOf(
+            WebTodayTask(StoredTask("learning", "one", "A", "א", today, "LEARNING"), WebTodaySection.NEW_LEARNING),
+            WebTodayTask(StoredTask("review", "two", "B", "ב", today, "CHAZARAH", completed = true), WebTodaySection.CHAZARAH_TODAY),
+            WebTodayTask(StoredTask("old", "one", "C", "ג", "2026-09-13", "CHAZARAH"), WebTodaySection.OVERDUE_CHAZARAH),
+        )
+
+        val learningGroups = groupWebTodayTasks(tasks, WebTodayGroupBy.LEARNING_STATUS)
+        assertEquals(listOf("status-NEW_LEARNING", "status-CHAZARAH_TODAY", "status-OVERDUE_CHAZARAH"), learningGroups.map { it.key })
+        assertEquals(listOf("learning", "review", "old"), learningGroups.flatMap { it.tasks }.map { it.task.id })
+
+        val completionGroups = groupWebTodayTasks(tasks, WebTodayGroupBy.COMPLETED_STATUS)
+        assertEquals(listOf("completion-false", "completion-true"), completionGroups.map { it.key })
+        assertEquals(listOf("learning", "old"), completionGroups.first().tasks.map { it.task.id })
+        assertEquals(listOf("review"), completionGroups.last().tasks.map { it.task.id })
     }
 
     @Test

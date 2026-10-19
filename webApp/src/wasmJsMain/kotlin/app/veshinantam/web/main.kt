@@ -100,6 +100,7 @@ private class LocalBrowserStore : BrowserStore {
     }
 
     override fun updateBrowserReminder(state: WebAppState, today: String) {
+        updateWebPushSubscription(state.reminderEnabled)
         scheduleBrowserReminder(
             enabled = state.reminderEnabled,
             hour = state.reminderHour,
@@ -114,6 +115,20 @@ private class LocalBrowserStore : BrowserStore {
     override fun readCachedText(cacheKey: String): String? = readSefariaCache(cacheKey)
 
     override fun cacheText(cacheKey: String, raw: String) = writeSefariaCache(cacheKey, raw)
+
+    override fun readMishnahBerurahScan(chelek: Int): LocalPdfScan? =
+        readLocalPdfScanMetadata("mishnah-berurah-$chelek")?.let { raw ->
+            runCatching { json.decodeFromString<LocalPdfScan>(raw) }.getOrNull()
+        }
+
+    override fun chooseMishnahBerurahScan(chelek: Int, ordinal: Int) =
+        chooseLocalPdfScan("mishnah-berurah-$chelek", ordinal)
+
+    override fun alignMishnahBerurahScan(chelek: Int, ordinal: Int, pdfPage: Int) =
+        alignLocalPdfScan("mishnah-berurah-$chelek", ordinal, pdfPage)
+
+    override fun openMishnahBerurahScan(chelek: Int, pdfPage: Int) =
+        openLocalPdfScan("mishnah-berurah-$chelek", pdfPage)
 
     override suspend fun fetchSefariaText(request: SefariaTextRequest): String {
         beginSefariaRequest(request.cacheKey, request.reference, request.versions.joinToString("\n"))
@@ -199,6 +214,22 @@ private external fun readSefariaCache(key: String): String?
 private external fun writeSefariaCache(key: String, raw: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key) => window.veshinantamLocalScans.readMetadata(key)")
+private external fun readLocalPdfScanMetadata(key: String): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key, ordinal) => window.veshinantamLocalScans.choose(key, ordinal)")
+private external fun chooseLocalPdfScan(key: String, ordinal: Int)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key, ordinal, page) => window.veshinantamLocalScans.align(key, ordinal, page)")
+private external fun alignLocalPdfScan(key: String, ordinal: Int, page: Int)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(key, page) => window.veshinantamLocalScans.open(key, page)")
+private external fun openLocalPdfScan(key: String, page: Int)
+
+@OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(key, reference, versions) => window.veshinantamBeginSefariaRequest(key, reference, versions)")
 private external fun beginSefariaRequest(key: String, reference: String, versions: String)
 
@@ -278,11 +309,19 @@ private external fun setApplicationBadge(count: Int)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""() => {
+    if (window.veshinantamPush) {
+        window.veshinantamPush.requestPermission();
+        return;
+    }
     if ('Notification' in window && Notification.permission === 'default') {
         Promise.resolve(Notification.requestPermission()).catch(() => {});
     }
 }""")
 private external fun requestNotificationPermission()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(enabled) => window.veshinantamPush?.update(enabled)")
+private external fun updateWebPushSubscription(enabled: Boolean)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(enabled, hour, minute, dueCount, hebrew) => {
@@ -303,7 +342,7 @@ private external fun requestNotificationPermission()
                 const body = hebrew
                     ? dueCount + ' משימות לימוד וחזרה ממתינות לך.'
                     : dueCount + ' learning and chazarah ' + (dueCount === 1 ? 'task is' : 'tasks are') + ' waiting.';
-                const options = { body, icon: './icon.svg', badge: './icon.svg', tag: 'veshinantam-daily-reminder', renotify: true, data: { url: './?view=today' } };
+                const options = { body, icon: './icon.svg', badge: './icon.svg', tag: 'veshinantam-daily-reminder', renotify: false, data: { url: './?view=today' } };
                 try {
                     if ('serviceWorker' in navigator) {
                         const registration = await navigator.serviceWorker.ready;

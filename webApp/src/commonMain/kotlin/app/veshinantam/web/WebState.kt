@@ -124,6 +124,7 @@ data class WebAppState(
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
     val todaySortOrder: String = "SCHEDULED_FIRST",
+    val todayGroupBy: String = "SCHEDULE",
     val todayAutoCollapseCompleted: Boolean = false,
     val todayExpandedSchedules: Map<String, Boolean> = emptyMap(),
     val todayExpandedSections: Map<String, Boolean> = emptyMap(),
@@ -581,6 +582,20 @@ fun isWebTodayScheduleExpanded(manualOverride: Boolean?, tasks: List<StoredTask>
 
 enum class WebTodaySection { NEW_LEARNING, CHAZARAH_TODAY, OVERDUE_LEARNING, OVERDUE_CHAZARAH, COMPLETED_TODAY }
 
+enum class WebTodayGroupBy { SCHEDULE, LEARNING_STATUS, COMPLETED_STATUS }
+
+data class WebTodayGroup(val key: String, val section: WebTodaySection?, val completed: Boolean?, val tasks: List<WebTodayTask>)
+
+fun groupWebTodayTasks(tasks: List<WebTodayTask>, groupBy: WebTodayGroupBy): List<WebTodayGroup> = when (groupBy) {
+    WebTodayGroupBy.SCHEDULE -> emptyList()
+    WebTodayGroupBy.LEARNING_STATUS -> WebTodaySection.entries.map { section ->
+        WebTodayGroup("status-$section", section, null, tasks.filter { it.section == section })
+    }.filter { it.tasks.isNotEmpty() }
+    WebTodayGroupBy.COMPLETED_STATUS -> listOf(false, true).map { completed ->
+        WebTodayGroup("completion-$completed", null, completed, tasks.filter { it.task.completed == completed })
+    }.filter { it.tasks.isNotEmpty() }
+}
+
 enum class WebTodaySortOrder { SCHEDULED_FIRST, NEWEST_DUE_FIRST, REFERENCE_ASCENDING, REFERENCE_DESCENDING }
 
 enum class WebCalendarDayStatus { NONE, INCOMPLETE, PARTIAL, COMPLETE }
@@ -919,6 +934,20 @@ interface BrowserStore {
     fun readCachedText(cacheKey: String): String?
     fun cacheText(cacheKey: String, raw: String)
     suspend fun fetchSefariaText(request: SefariaTextRequest): String
+    fun readMishnahBerurahScan(chelek: Int): LocalPdfScan? = null
+    fun chooseMishnahBerurahScan(chelek: Int, ordinal: Int) = Unit
+    fun alignMishnahBerurahScan(chelek: Int, ordinal: Int, pdfPage: Int) = Unit
+    fun openMishnahBerurahScan(chelek: Int, pdfPage: Int) = Unit
+}
+
+@Serializable
+data class LocalPdfScan(
+    val fileName: String,
+    val anchorOrdinal: Int,
+    val anchorPdfPage: Int = 0,
+    val calibrated: Boolean = false,
+) {
+    fun resolvedPage(ordinal: Int): Int = (anchorPdfPage + ordinal - anchorOrdinal).coerceAtLeast(0)
 }
 
 @Serializable

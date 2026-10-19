@@ -48,6 +48,8 @@ jobs:
           node --test --test-isolation=none scripts/account-session.test.cjs
           node --test --test-isolation=none scripts/entity-sync-policy.test.cjs
           node --test --test-isolation=none scripts/indexeddb-recovery.test.cjs
+          node --test --test-isolation=none scripts/local-scans.test.cjs
+          node --test --test-isolation=none scripts/push-reminders.test.cjs
           node --test --test-isolation=none scripts/service-worker-recovery.test.cjs
           node --test --test-isolation=none scripts/two-device-sync.test.cjs
           ./gradlew kotlinWasmUpgradePackageLock --rerun-tasks

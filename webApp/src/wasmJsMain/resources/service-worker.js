@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'veshinantam-web-';
-const CACHE = 'veshinantam-web-v43';
+const CACHE = 'veshinantam-web-v45';
 const PRECACHE = [
   './',
   './index.html',
@@ -8,6 +8,8 @@ const PRECACHE = [
   './account-session.js',
   './entity-sync.js',
   './preset-updates.js',
+  './local-scans.js',
+  './push-reminders.js',
   './supabase-config.js',
   './manifest.webmanifest',
   './icon.svg',
@@ -68,4 +70,17 @@ self.addEventListener('notificationclick', event => {
       return self.clients.openWindow(target);
     })
   );
+});
+
+self.addEventListener('push', event => {
+  let message = {};
+  try { message = event.data?.json() || {}; } catch (_) { /* An empty payload still needs a visible notification. */ }
+  event.waitUntil(self.registration.showNotification(message.title || 'VeShinantam', {
+    body: message.body || 'Your learning is ready.',
+    icon: './icon.svg',
+    badge: './icon.svg',
+    tag: 'veshinantam-daily-reminder',
+    renotify: false,
+    data: { url: message.url || './?view=today' },
+  }));
 });

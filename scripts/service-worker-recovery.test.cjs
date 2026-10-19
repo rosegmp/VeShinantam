@@ -74,8 +74,9 @@ test('interrupted precache rejects installation and leaves the prior cache untou
 });
 
 test('activation removes only superseded app caches', async () => {
+  const currentCache = source.match(/const CACHE = '([^']+)'/)[1];
   const worker = workerHarness({
-    cacheKeys: ['veshinantam-web-v41', 'veshinantam-web-v42', 'veshinantam-web-v43', 'another-app-v1'],
+    cacheKeys: ['veshinantam-web-v41', 'veshinantam-web-v42', currentCache, 'another-app-v1'],
   });
   await worker.dispatch('activate');
   assert.deepEqual(worker.deleted.sort(), ['veshinantam-web-v41', 'veshinantam-web-v42']);

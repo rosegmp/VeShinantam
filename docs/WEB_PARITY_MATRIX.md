@@ -4,7 +4,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 
 | Capability | Android | Web | Target / acceptance note |
 | --- | --- | --- | --- |
-| Today navigation and task completion | Complete | Complete | Five-section grouping, completed-today history, completion metadata/undo, collapsible sections, synchronized ordering, and browser-local day/time-zone re-evaluation |
+| Today navigation and task completion | Complete | Complete | Five learning-status sections, completed-status and schedule grouping, completed-today history, completion metadata/undo, independently collapsible groups and schedules, synchronized ordering, and browser-local day/time-zone re-evaluation. Group and expansion choices remain local to each device. |
 | Calendar | Complete | Complete | Gregorian/Hebrew month navigation, filter-aware statuses/counts, bilingual labels/details, schedule/type filters, and individual completion/undo |
 | Schedule list and archive | Complete | Complete | Pause/resume, archive/restore, confirmed deletion, separately confirmed past-learning/past-chazarah completion, and future-only editing/regeneration preserve history and completed work |
 | Preset creation | Complete | Complete | All 12 Android presets share exact bilingual units, positions, dates, cadence/exclusions, earlier-position search, and generated output |
@@ -18,10 +18,11 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 | Hebrew references/numerals | Complete | Complete | One shared JVM/Wasm formatter normalizes Hebrew numerals and legacy Daf wording across Android, web task views, readers, and printable schedules; cross-platform reference snapshots gate regressions |
 | Offline persistence | Room | IndexedDB + installable offline shell | IndexedDB authoritative store with migrations/outbox; atomic service-worker upgrades pre-cache both Wasm runtimes and preserve the last working shell after interrupted updates |
 | Optional account | Complete | Complete | Keep magic-link flow and local use without an account |
-| Cross-device sync | Incremental client enabled | Incremental client enabled | Both use the current entity API and protect account binding and pending local mutations; CI covers two independent browser stores converging through offline edits, tombstones, remote-wins conflicts, interrupted acknowledgements, idempotent replay, and late-ack replacement rebasing. Web session tests cover refresh boundaries, rotating-token persistence, concurrent refresh coalescing, malformed responses, and retry after failure. Live authenticated Android/web verification remains in milestone 7 |
+| Cross-device sync | Incremental client enabled | Incremental client enabled | Both use the current entity API and protect account binding and pending local mutations; CI covers two independent browser stores converging through offline edits, tombstones, remote-wins conflicts, interrupted acknowledgements, idempotent replay, and late-ack replacement rebasing. Web session tests cover refresh boundaries, rotating-token persistence, concurrent refresh coalescing, malformed responses, and retry after failure. The user confirmed a live Android-to-web account test on 2026-10-16. |
 | Backup and restore | Complete | Complete | New exports use one validated canonical format; Android and web import canonical files plus their legacy Android/web formats before confirmed replacement |
 | Printable schedule | Complete | Complete | Matching 7/14/30/60/90-day content rules with localized browser print/PDF, bilingual references, active learning/chazarah tasks, checked completion state, RTL, and A4 pagination |
-| Reminders | Complete | Active-tab notification | Preference/time synchronize; permission is requested from a user action and the open web app schedules service-worker notifications. Closed-app delivery still requires Web Push |
+| Mishnah Berurah scan reader | Local PDF | Local PDF | Each device selects its own scan, aligns a PDF page to an assignment, and opens later assignments at the corresponding page. The PDF is stored locally and is excluded from account sync and backups. |
+| Reminders | Complete | Web Push + active-tab fallback | Preference/time synchronize. Signed-in browsers with permission subscribe to server-scheduled Web Push, with due counts computed from the latest synced active schedules and incomplete tasks in each browser time zone. Users must sync after changes to keep closed-app reminders current. A browser without an account uses an active-tab notification. Delivery remains subject to browser/OS notification policy. |
 | Home-screen presence | Android widget | Installable PWA + due badge | Manifest Today shortcut and active incomplete due-count app badge where the browser/OS supports it |
 | Signed preset updates | Complete | Complete | Same HTTPS envelope/key ID, pinned P-256 signature verification, strict reference validation, atomic browser cache replacement, and bundled fallback |
 | Light/dark mode | Complete | Complete | Both clients follow the system preference with matching accessible blue/gold schemes and semantic surface/status colors |
@@ -30,7 +31,7 @@ This matrix is the acceptance inventory for `WEB_PARITY_ROADMAP.md`. â€œPartialâ
 
 ## Platform exceptions
 
-- A dormant browser cannot provide Android-equivalent local scheduled execution. Closed-app reminders require opt-in Web Push and remain subject to browser/OS policy.
+- Closed-app reminders use opt-in Web Push and require an account, notification permission, and a browser/OS that supports Push API delivery.
 - Browsers do not expose an Android-style home-screen widget. The supported web equivalent is an installable PWA, app badge where available, and a direct Today launch.
 - Browser download/upload replaces Androidâ€™s system file-picker integration.
 

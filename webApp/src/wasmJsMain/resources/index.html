@@ -26,6 +26,8 @@
   <script src="account-session.js"></script>
   <script src="entity-sync.js"></script>
   <script src="preset-updates.js"></script>
+  <script src="local-scans.js"></script>
+  <script src="push-reminders.js"></script>
   <script>
     (() => {
       const STATE_KEY = 'veshinantam.web.v1';
@@ -331,7 +333,14 @@
         } catch (_) { setStatus('Error resolving the sync choice. No data was replaced.'); }
         reload();
       };
-      window.veshinantamSignOut = () => {
+      window.veshinantamSignOut = async () => {
+        try {
+          await Promise.race([
+            window.veshinantamPush?.signOut(),
+            new Promise(resolve => setTimeout(resolve, 3000)),
+          ]);
+        }
+        catch (_) { /* Local sign-out must still proceed if the network is unavailable. */ }
         localStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(REVISION_KEY);
         localStorage.removeItem(CONFLICT_KEY);
