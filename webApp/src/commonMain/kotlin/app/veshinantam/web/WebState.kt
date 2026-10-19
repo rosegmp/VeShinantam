@@ -111,6 +111,19 @@ data class StoredGoal(
 )
 
 @Serializable
+data class WebTodayExpansionState(
+    val schedules: Map<String, Boolean> = emptyMap(),
+    val sections: Map<String, Boolean> = emptyMap(),
+) {
+    companion object {
+        fun fromLegacy(state: WebAppState) = WebTodayExpansionState(
+            schedules = state.todayExpandedSchedules,
+            sections = state.todayExpandedSections,
+        )
+    }
+}
+
+@Serializable
 data class WebAppState(
     val schedules: List<StoredSchedule> = emptyList(),
     val tasks: List<StoredTask> = emptyList(),
@@ -917,6 +930,8 @@ private fun canonicalMaterialType(value: String): CanonicalMaterialType = when (
 interface BrowserStore {
     fun load(): WebAppState
     fun save(state: WebAppState)
+    fun loadTodayExpansion(fallback: WebTodayExpansionState): WebTodayExpansionState
+    fun saveTodayExpansion(state: WebTodayExpansionState)
     fun currentLocalDate(): String
     fun hebrewDateLabel(date: String, hebrewUi: Boolean): String
     fun hebrewDayLabel(date: String, hebrewUi: Boolean): String

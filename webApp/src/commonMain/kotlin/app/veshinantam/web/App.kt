@@ -265,7 +265,11 @@ private sealed interface WebTextState {
 @Composable
 fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     val initialImportResult = remember { store.consumeBackupImport() }
-    var appState by remember { mutableStateOf(store.load()) }
+    val initialState = remember { store.load() }
+    var appState by remember { mutableStateOf(initialState) }
+    var todayExpansion by remember {
+        mutableStateOf(store.loadTodayExpansion(WebTodayExpansionState.fromLegacy(initialState)))
+    }
     var todayIso by remember { mutableStateOf(store.currentLocalDate()) }
     var destination by remember { mutableStateOf(Destination.TODAY) }
     var showCreate by remember { mutableStateOf(false) }
@@ -313,6 +317,11 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     fun update(transform: (WebAppState) -> WebAppState) {
         appState = transform(appState)
         store.save(appState)
+    }
+
+    fun updateTodayExpansion(transform: (WebTodayExpansionState) -> WebTodayExpansionState) {
+        todayExpansion = transform(todayExpansion)
+        store.saveTodayExpansion(todayExpansion)
     }
 
     fun toggleTask(state: WebAppState, taskId: String): WebAppState {
@@ -381,6 +390,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 modifier = Modifier.weight(1f),
                                 destination = destination,
                                 state = appState,
+                                todayExpansion = todayExpansion,
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
@@ -389,8 +399,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onTodayGroupBy = { value -> update { it.copy(todayGroupBy = value) } },
                                 onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
-                                onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
-                                onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
+                                onTodayScheduleExpanded = { key, expanded -> updateTodayExpansion { it.copy(schedules = it.schedules + (key to expanded)) } },
+                                onTodaySectionExpanded = { key, expanded -> updateTodayExpansion { it.copy(sections = it.sections + (key to expanded)) } },
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
@@ -444,6 +454,7 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 modifier = Modifier.padding(padding),
                                 destination = destination,
                                 state = appState,
+                                todayExpansion = todayExpansion,
                                 todayIso = todayIso,
                                 hebrew = hebrew,
                                 onLanguage = { update { it.copy(language = if (hebrew) "en" else "he") } },
@@ -452,8 +463,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onTodaySortOrder = { value -> update { it.copy(todaySortOrder = value) } },
                                 onTodayGroupBy = { value -> update { it.copy(todayGroupBy = value) } },
                                 onTodayAutoCollapseCompleted = { update { it.copy(todayAutoCollapseCompleted = !it.todayAutoCollapseCompleted) } },
-                                onTodayScheduleExpanded = { key, expanded -> update { it.copy(todayExpandedSchedules = it.todayExpandedSchedules + (key to expanded)) } },
-                                onTodaySectionExpanded = { key, expanded -> update { it.copy(todayExpandedSections = it.todayExpandedSections + (key to expanded)) } },
+                                onTodayScheduleExpanded = { key, expanded -> updateTodayExpansion { it.copy(schedules = it.schedules + (key to expanded)) } },
+                                onTodaySectionExpanded = { key, expanded -> updateTodayExpansion { it.copy(sections = it.sections + (key to expanded)) } },
                                 onSaveGoals = ::saveGoals,
                                 onSavePreferences = ::savePreferences,
                                 onToggle = { taskId -> update { state -> toggleTask(state, taskId) } },
@@ -799,6 +810,7 @@ private fun AppContent(
     modifier: Modifier,
     destination: Destination,
     state: WebAppState,
+    todayExpansion: WebTodayExpansionState,
     todayIso: String,
     hebrew: Boolean,
     onLanguage: () -> Unit,
@@ -911,7 +923,7 @@ private fun AppContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         when (destination) {
             Destination.TODAY -> TodayScreen(
-                state, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder,
+                state, todayExpansion, todayIso, hebrew, onToggle, onRead, onCreate, onTodaySortOrder,
                 onTodayGroupBy, onTodayAutoCollapseCompleted, onTodayScheduleExpanded, onTodaySectionExpanded,
             )
             Destination.CALENDAR -> CalendarScreen(
@@ -1224,6 +1236,7 @@ private fun AccountDialog(
 @Composable
 private fun TodayScreen(
     state: WebAppState,
+    todayExpansion: WebTodayExpansionState,
     today: String,
     hebrew: Boolean,
     onToggle: (String) -> Unit,
@@ -1235,15 +1248,20 @@ private fun TodayScreen(
     onScheduleExpanded: (String, Boolean) -> Unit,
     onSectionExpanded: (String, Boolean) -> Unit,
 ) {
-    val activeScheduleIds = state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
-    val sectionedTasks = todayTasks(
-        tasks = state.tasks.filter { it.scheduleId in activeScheduleIds },
-        today = today,
-        sortOrder = state.todaySortOrder,
-        preferHebrew = state.sefarimLanguage == "HEBREW" || state.sefarimLanguage == "BOTH" && hebrew,
-    )
-    val tasks = sectionedTasks.map { it.task.domain() }
-    val progress = LearningPlanner.progress(tasks)
+    val activeScheduleIds = remember(state.schedules) {
+        state.schedules.filter { it.active && !it.archived }.map { it.id }.toSet()
+    }
+    val sectionedTasks = remember(state.tasks, activeScheduleIds, today, state.todaySortOrder, state.sefarimLanguage, hebrew) {
+        todayTasks(
+            tasks = state.tasks.filter { it.scheduleId in activeScheduleIds },
+            today = today,
+            sortOrder = state.todaySortOrder,
+            preferHebrew = state.sefarimLanguage == "HEBREW" || state.sefarimLanguage == "BOTH" && hebrew,
+        )
+    }
+    val progress = remember(sectionedTasks) {
+        LearningPlanner.progress(sectionedTasks.map { it.task.domain() })
+    }
     val groupBy = WebTodayGroupBy.entries.firstOrNull { it.name == state.todayGroupBy } ?: WebTodayGroupBy.SCHEDULE
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1315,7 +1333,7 @@ private fun TodayScreen(
                 }
             }
         }
-        if (tasks.isEmpty()) {
+        if (sectionedTasks.isEmpty()) {
             item { EmptyToday(hebrew, onCreate) }
         } else if (groupBy == WebTodayGroupBy.SCHEDULE) {
             state.schedules.filter { it.active && !it.archived }.forEach { schedule ->
@@ -1323,7 +1341,7 @@ private fun TodayScreen(
                 if (scheduleTasks.isNotEmpty()) {
                     val scheduleKey = "schedule-${schedule.id}"
                     val scheduleExpanded = isWebTodayScheduleExpanded(
-                        state.todayExpandedSchedules[scheduleKey], scheduleTasks.map { it.task }, state.todayAutoCollapseCompleted,
+                        todayExpansion.schedules[scheduleKey], scheduleTasks.map { it.task }, state.todayAutoCollapseCompleted,
                     )
                     item(key = "header-$scheduleKey") {
                         TodayScheduleHeader(todayScheduleName(schedule, hebrew), scheduleTasks.map { it.task }, hebrew, scheduleExpanded) {
@@ -1334,7 +1352,7 @@ private fun TodayScreen(
                         val sectionTasks = scheduleTasks.filter { it.section == section }.map { it.task }
                         if (sectionTasks.isNotEmpty()) {
                             val sectionKey = "${schedule.id}-${section.name}"
-                            val expanded = state.todayExpandedSections[sectionKey] ?: true
+                            val expanded = todayExpansion.sections[sectionKey] ?: true
                             item(key = "section-$sectionKey") {
                                 TaskGroup(
                                     title = todaySectionLabel(section, hebrew),
@@ -1355,7 +1373,7 @@ private fun TodayScreen(
         } else {
             val activeSchedules = state.schedules.filter { it.active && !it.archived }
             groupWebTodayTasks(sectionedTasks, groupBy).forEach { group ->
-                val groupExpanded = state.todayExpandedSections[group.key] ?: true
+                val groupExpanded = todayExpansion.sections[group.key] ?: true
                 item(key = "section-${group.key}") {
                     TodayGroupHeader(todayGroupLabel(group, hebrew), group.tasks.size, hebrew, groupExpanded) {
                         onSectionExpanded(group.key, !groupExpanded)
@@ -1367,7 +1385,7 @@ private fun TodayScreen(
                         val scheduleKey = "${group.key}-${schedule.id}"
                         val fullScheduleTasks = sectionedTasks.filter { it.task.scheduleId == schedule.id }.map { it.task }
                         val scheduleExpanded = isWebTodayScheduleExpanded(
-                            state.todayExpandedSchedules[scheduleKey], fullScheduleTasks, state.todayAutoCollapseCompleted,
+                            todayExpansion.schedules[scheduleKey], fullScheduleTasks, state.todayAutoCollapseCompleted,
                         )
                         item(key = "header-$scheduleKey") {
                             TodayScheduleHeader(todayScheduleName(schedule, hebrew), scheduleTasks, hebrew, scheduleExpanded) {

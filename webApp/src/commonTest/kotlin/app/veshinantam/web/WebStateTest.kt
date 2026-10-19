@@ -44,6 +44,23 @@ class WebStateTest {
     }
 
     @Test
+    fun todayExpansionMigratesFromLegacyStateAndSavesSeparately() {
+        val legacy = WebAppState.sample(today).copy(
+            todayExpandedSchedules = mapOf("schedule-daf-yomi" to false),
+            todayExpandedSections = mapOf("daf-yomi-NEW_LEARNING" to false),
+        )
+        val migrated = WebTodayExpansionState.fromLegacy(legacy)
+        val updated = migrated.copy(sections = migrated.sections + ("daf-yomi-NEW_LEARNING" to true))
+        val restored = kotlinx.serialization.json.Json.decodeFromString<WebTodayExpansionState>(
+            kotlinx.serialization.json.Json.encodeToString(updated),
+        )
+
+        assertEquals(false, restored.schedules["schedule-daf-yomi"])
+        assertEquals(true, restored.sections["daf-yomi-NEW_LEARNING"])
+        assertEquals(false, legacy.todayExpandedSections["daf-yomi-NEW_LEARNING"])
+    }
+
+    @Test
     fun todayGroupingKeepsTasksInTheirStatusAndCompletionGroups() {
         val tasks = listOf(
             WebTodayTask(StoredTask("learning", "one", "A", "א", today, "LEARNING"), WebTodaySection.NEW_LEARNING),

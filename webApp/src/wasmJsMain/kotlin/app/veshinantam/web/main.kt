@@ -26,6 +26,15 @@ private class LocalBrowserStore : BrowserStore {
         writeBrowserState(json.encodeToString(state))
     }
 
+    override fun loadTodayExpansion(fallback: WebTodayExpansionState): WebTodayExpansionState =
+        readTodayExpansion()?.let { raw ->
+            runCatching { json.decodeFromString<WebTodayExpansionState>(raw) }.getOrNull()
+        } ?: fallback
+
+    override fun saveTodayExpansion(state: WebTodayExpansionState) {
+        writeTodayExpansion(json.encodeToString(state))
+    }
+
     override fun currentLocalDate(): String = currentIsoDate()
     override fun hebrewDateLabel(date: String, hebrewUi: Boolean): String = formatHebrewDate(date, hebrewUi)
     override fun hebrewDayLabel(date: String, hebrewUi: Boolean): String = formatHebrewDay(date, hebrewUi)
@@ -180,6 +189,14 @@ private external fun readBrowserState(): String?
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("(value) => window.veshinantamPersistState(value)")
 private external fun writeBrowserState(value: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => window.veshinantamReadTodayExpansion()")
+private external fun readTodayExpansion(): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("(value) => window.veshinantamWriteTodayExpansion(value)")
+private external fun writeTodayExpansion(value: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("() => window.veshinantamReadPresetCatalog()")

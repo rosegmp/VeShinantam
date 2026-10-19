@@ -1,5 +1,6 @@
 (() => {
   const STATE_KEY = 'veshinantam.web.v1';
+  const TODAY_EXPANSION_KEY = 'veshinantam.web.today-expansion.v1';
   const FALLBACK_PENDING_KEY = 'veshinantam.web.v1.pending';
   const DATABASE_NAME = 'veshinantam';
   const APP_STATE = 'app_state';
@@ -184,6 +185,14 @@
 
   const readBrowserState = () => cachedState ?? localStorage.getItem(STATE_KEY);
   window.veshinantamReadState = readBrowserState;
+  window.veshinantamReadTodayExpansion = () => {
+    try { return localStorage.getItem(TODAY_EXPANSION_KEY); }
+    catch (_) { return null; }
+  };
+  window.veshinantamWriteTodayExpansion = value => {
+    try { localStorage.setItem(TODAY_EXPANSION_KEY, value); }
+    catch (_) { /* The visible expansion state still works for this session. */ }
+  };
 
   const persistLocalFallback = value => {
     try {
