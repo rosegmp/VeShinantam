@@ -13,7 +13,7 @@ class PresetCatalogTest {
                 "yerushalmi-yomi-vilna", "yerushalmi-yomi-schottenstein",
                 "rambam-three-chapters", "chofetz-chaim", "tehillim-monthly",
                 "hachzek-pele-yoetz",
-                "kitzur-yomi",
+                "kitzur-yomi", "nach-yomi",
             ),
             PresetCatalog.programs.map { it.id },
         )
@@ -23,7 +23,7 @@ class PresetCatalogTest {
                 "Yerushalmi Shevuos 15", "Yerushalmi Yevamos 33", "Rambam, Other Sources of Defilement 9",
                 "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134",
                 "Pele Yoetz, Volume 2, Day 357, Ot Tet - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.",
-                "Kitzur Shulchan Aruch 133:1-8",
+                "Kitzur Shulchan Aruch 133:1-8", "Isaiah 64",
             ),
             PresetCatalog.programs.map { it.currentReference.english },
         )

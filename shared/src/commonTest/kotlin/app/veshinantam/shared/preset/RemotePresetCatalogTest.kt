@@ -42,6 +42,6 @@ class RemotePresetCatalogTest {
         assertFailsWith<IllegalArgumentException> {
             RemotePresetCatalogValidator.programs(update(positions = mapOf("missing" to "Something")))
         }
-        assertEquals(12, SharedPresetCatalog.programs.size)
+        assertEquals(13, SharedPresetCatalog.programs.size)
     }
 }

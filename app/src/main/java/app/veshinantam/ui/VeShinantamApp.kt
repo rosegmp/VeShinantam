@@ -2849,7 +2849,7 @@ private fun PresetScheduleCreator(
                             startIndex = currentMasechtaStartIndex
                             startDate = requireNotNull(currentMasechtaStartDate)
                         },
-                        label = { Text(stringResource(R.string.start_current_masechta)) },
+                        label = { Text(stringResource(if (program.id == "nach-yomi") R.string.start_current_book else R.string.start_current_masechta)) },
                     )
                 }
                 FilterChip(
@@ -3139,13 +3139,14 @@ private fun CustomScheduleCreator(
         SeferChoice.YERUSHALMI -> MaterialCatalog.yerushalmi
         SeferChoice.MISHNAH -> MaterialCatalog.mishnah
         SeferChoice.RAMBAM -> MaterialCatalog.rambam
+        SeferChoice.NACH -> MaterialCatalog.nach
         else -> emptyList()
     }
     val fromMasechta = masechtaCatalog.getOrNull(fromMasechtaIndex)
     val toMasechta = masechtaCatalog.getOrNull(toMasechtaIndex)
     val startUnitOptions = materialUnitOptions(seferChoice, fromMasechta, gemaraUnit, mishnahUnit, selectedChelek, mishnahBerurahUnit)
     val rawEndUnitOptions = materialUnitOptions(seferChoice, toMasechta, gemaraUnit, mishnahUnit, selectedChelek, mishnahBerurahUnit)
-    val sectionedSefarim = setOf(SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM)
+    val sectionedSefarim = MaterialCatalog.sectionedChoices
     val sameSection = seferChoice !in sectionedSefarim || fromMasechtaIndex == toMasechtaIndex
     val boundedStartIndex = startUnitIndex.coerceIn(0, (startUnitOptions.size - 1).coerceAtLeast(0))
     val endUnitOptions = rawEndUnitOptions.drop(if (sameSection) boundedStartIndex else 0)
@@ -3198,7 +3199,7 @@ private fun CustomScheduleCreator(
                             MishnahBerurahUnit.SIMAN -> MaterialType.SIMAN
                         }
                         SeferChoice.KITZUR -> MaterialType.SIMAN
-                        SeferChoice.RAMBAM, SeferChoice.TEHILLIM -> MaterialType.PEREK
+                        SeferChoice.RAMBAM, SeferChoice.TEHILLIM, SeferChoice.NACH -> MaterialType.PEREK
                         SeferChoice.CHOFETZ_CHAIM, SeferChoice.OTHER -> MaterialType.CUSTOM_UNIT
                     },
                     sourceType = seferChoice.name,
@@ -4860,6 +4861,7 @@ private val SeferChoice.labelResource: Int
         SeferChoice.RAMBAM -> R.string.rambam
         SeferChoice.CHOFETZ_CHAIM -> R.string.chofetz_chaim
         SeferChoice.TEHILLIM -> R.string.tehillim
+        SeferChoice.NACH -> R.string.nach
         SeferChoice.KITZUR -> R.string.kitzur
         SeferChoice.OTHER -> R.string.other
     }

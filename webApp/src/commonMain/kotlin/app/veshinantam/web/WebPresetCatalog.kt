@@ -90,6 +90,9 @@ object WebPresetCatalog {
             "yerushalmi-yomi-schottenstein" -> MaterialCatalog.yerushalmiSchottenstein
                 .firstOrNull { program.currentReference.english.startsWith("Yerushalmi ${it.english} ") }
                 ?.let { "Yerushalmi ${it.english} " }
+            "nach-yomi" -> MaterialCatalog.nach
+                .firstOrNull { program.currentReference.english.startsWith("${it.english} ") }
+                ?.let { "${it.english} " }
             else -> null
         } ?: return null
         return program.units.indexOfFirst { it.english.startsWith(prefix) }.takeIf { it >= 0 }

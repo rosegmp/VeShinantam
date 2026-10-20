@@ -16,7 +16,7 @@ class SharedPresetCatalogTest {
             listOf(
                 "daf-yomi-bavli", "oraysa", "amud-yomi", "mishnah-yomis", "dirshu-mishnah-berurah",
                 "yerushalmi-yomi-vilna", "yerushalmi-yomi-schottenstein", "rambam-three-chapters",
-                "chofetz-chaim", "tehillim-monthly", "hachzek-pele-yoetz", "kitzur-yomi",
+                "chofetz-chaim", "tehillim-monthly", "hachzek-pele-yoetz", "kitzur-yomi", "nach-yomi",
             ),
             SharedPresetCatalog.programs.map { it.id },
         )
@@ -27,10 +27,19 @@ class SharedPresetCatalogTest {
                 "Yerushalmi Yevamos 33", "Rambam, Other Sources of Defilement 9",
                 "Chofetz Chaim, Tziyurim 8-9", "Tehillim 120-134",
                 "Pele Yoetz, Volume 2, Day 357, Ot Tet - וכן יש לזהר מלגע בנבלה וכל דבר טמא ושלא לילך בין המתים.",
-                "Kitzur Shulchan Aruch 133:1-8",
+                "Kitzur Shulchan Aruch 133:1-8", "Isaiah 64",
             ),
             SharedPresetCatalog.programs.map { it.currentReference.english },
         )
+    }
+
+    @Test
+    fun nachYomiFollowsTheDailyChapterCycle() {
+        val program = SharedPresetCatalog.programs.first { it.id == "nach-yomi" }
+        assertEquals(742, program.units.size)
+        assertEquals("ישעיהו פרק סד", program.currentReference.hebrew)
+        assertEquals("Isaiah 1", program.units[requireNotNull(SharedPresetCatalog.currentMasechtaStartIndex(program))].english)
+        assertEquals("Jeremiah 38", SharedPresetCatalog.programAtDate(program, IsoDate(2026, 10, 20)).currentReference.english)
     }
 
     @Test

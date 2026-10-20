@@ -3035,7 +3035,7 @@ private fun CreateScheduleDialog(
                             FilterChip(
                                 selected = startIndex == currentMasechtaStart,
                                 onClick = { startIndex = currentMasechtaStart; positionQuery = "" },
-                                label = { Text(if (hebrew) "תחילת המסכת הנוכחית" else "Current tractate start") },
+                                label = { Text(if (program.id == "nach-yomi") { if (hebrew) "תחילת הספר הנוכחי" else "Current book start" } else { if (hebrew) "תחילת המסכת הנוכחית" else "Current tractate start" }) },
                             )
                         }
                     }
@@ -3433,6 +3433,7 @@ private fun seferChoiceLabel(choice: SeferChoice, hebrew: Boolean): String = whe
     SeferChoice.RAMBAM -> if (hebrew) "רמב״ם" else "Rambam"
     SeferChoice.CHOFETZ_CHAIM -> if (hebrew) "חפץ חיים" else "Chofetz Chaim"
     SeferChoice.TEHILLIM -> if (hebrew) "תהילים" else "Tehillim"
+    SeferChoice.NACH -> if (hebrew) "נ״ך" else "Nach"
     SeferChoice.KITZUR -> if (hebrew) "קיצור שולחן ערוך" else "Kitzur Shulchan Aruch"
     SeferChoice.OTHER -> if (hebrew) "אחר" else "Other"
 }
@@ -3448,7 +3449,7 @@ private fun customMaterialType(
     SeferChoice.MISHNAH -> if (mishnahUnit == MishnahUnit.MISHNAH) "MISHNAH" else "PEREK"
     SeferChoice.MISHNAH_BERURAH -> mishnahBerurahUnit.name
     SeferChoice.KITZUR -> "SIMAN"
-    SeferChoice.RAMBAM, SeferChoice.TEHILLIM -> "PEREK"
+    SeferChoice.RAMBAM, SeferChoice.TEHILLIM, SeferChoice.NACH -> "PEREK"
     SeferChoice.CHOFETZ_CHAIM, SeferChoice.OTHER -> "CUSTOM_UNIT"
 }
 

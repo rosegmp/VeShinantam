@@ -5,6 +5,19 @@ import kotlin.test.assertEquals
 
 class MaterialCatalogTest {
     @Test
+    fun nachCanSpanBooksByChapter() {
+        val units = MaterialCatalog.selectedUnits(
+            SeferChoice.NACH, 0, 1,
+            MaterialCatalog.nachUnits(MaterialCatalog.nach[0]).last(),
+            MaterialCatalog.nachUnits(MaterialCatalog.nach[1]).first(),
+        )
+        assertEquals(listOf("Joshua 24", "Judges 1"), units.map { it.english })
+        assertEquals(listOf("יהושע פרק כד", "שופטים פרק א"), units.map { it.hebrew })
+        assertEquals(742, MaterialCatalog.nachYomiUnits.size)
+        assertEquals("II Chronicles 36", MaterialCatalog.nachYomiUnits.last().english)
+    }
+
+    @Test
     fun selectedGemaraRangeCanCrossMasechtos() {
         val berachos = MaterialCatalog.gemara.first()
         val shabbos = MaterialCatalog.gemara[1]

@@ -114,6 +114,7 @@
     <string name="catalog_position_as_of">המיקום העולמי נכון ל־%1$s</string>
     <string name="join_current_position">הצטרפות למיקום הנוכחי</string>
     <string name="start_current_masechta">התחלה מתחילת המסכת הנוכחית ומתאריך תחילתה</string>
+    <string name="start_current_book">התחלה מתחילת הספר הנוכחי ומתאריך תחילתו</string>
     <string name="choose_earlier_position">בחירת מיקום מוקדם יותר</string>
     <string name="starting_position">מיקום התחלה</string>
     <string name="originally_scheduled">נקבע במקור לתאריך: %1$s</string>
@@ -358,6 +359,7 @@
     <string name="rambam">רמב״ם</string>
     <string name="chofetz_chaim">חפץ חיים</string>
     <string name="tehillim">תהילים</string>
+    <string name="nach">נ״ך</string>
     <string name="from_section">מהלכה</string>
     <string name="to_section">עד הלכה</string>
     <string name="preset_unit_chapters">פרקים</string>

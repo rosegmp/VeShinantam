@@ -1,5 +1,6 @@
 package app.veshinantam.shared.text
 
+import app.veshinantam.shared.preset.MaterialCatalog
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -114,6 +115,10 @@ object SefariaReferenceMapper {
             }
             referenceEnglish.startsWith("Rambam, ") -> referenceEnglish.replaceFirst("Rambam, ", "Mishneh Torah, ")
             referenceEnglish.startsWith("Tehillim ") -> referenceEnglish.replaceFirst("Tehillim ", "Psalms ")
+            (materialType == "PEREK" || presetId == "nach-yomi") && MaterialCatalog.nach.any { book ->
+                referenceEnglish.startsWith("${book.english} ") &&
+                    (referenceEnglish.removePrefix("${book.english} ").toIntOrNull()?.let { it in 1..book.lastLocation } == true)
+            } -> referenceEnglish.replaceFirst("Nachum ", "Nahum ")
             referenceEnglish.startsWith("Kitzur Shulchan Aruch ") ->
                 referenceEnglish.replaceFirst("Kitzur Shulchan Aruch ", "Kitzur Shulchan Arukh ")
             referenceEnglish.startsWith("Pele Yoetz, Day ") ->

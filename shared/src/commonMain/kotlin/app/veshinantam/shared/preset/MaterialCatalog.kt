@@ -1,6 +1,6 @@
 package app.veshinantam.shared.preset
 
-enum class SeferChoice { GEMARA, YERUSHALMI, MISHNAH, MISHNAH_BERURAH, RAMBAM, CHOFETZ_CHAIM, TEHILLIM, KITZUR, OTHER }
+enum class SeferChoice { GEMARA, YERUSHALMI, MISHNAH, MISHNAH_BERURAH, RAMBAM, CHOFETZ_CHAIM, TEHILLIM, KITZUR, NACH, OTHER }
 enum class GemaraUnit { DAF, AMUD }
 enum class MishnahUnit { MISHNAH, PEREK }
 enum class MishnahBerurahUnit { PAGE, SEIF, SIMAN }
@@ -16,7 +16,7 @@ data class UnitReference(val english: String, val hebrew: String)
 
 object MaterialCatalog {
     fun combineRanges(ranges: List<List<UnitReference>>): List<UnitReference> = ranges.flatten().distinct()
-    val sectionedChoices = setOf(SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM)
+    val sectionedChoices = setOf(SeferChoice.GEMARA, SeferChoice.YERUSHALMI, SeferChoice.MISHNAH, SeferChoice.RAMBAM, SeferChoice.NACH)
 
     private val finalDafEndsOnAmudA = setOf(
         "Berachos", "Eruvin", "Yoma", "Rosh Hashanah", "Taanis", "Megillah", "Moed Katan",
@@ -59,6 +59,17 @@ object MaterialCatalog {
     val tehillimUnits: List<UnitReference> = (1..150).map { chapter ->
         UnitReference("Tehillim $chapter", "תהילים פרק ${PresetHebrewNumerals.format(chapter)}")
     }
+
+    /** Nevi'im and Ketuvim in the 742-chapter Nach Yomi cycle order. */
+    val nach = parse("""
+        Joshua|יהושע|24;Judges|שופטים|21;I Samuel|שמואל א|31;II Samuel|שמואל ב|24;I Kings|מלכים א|22;II Kings|מלכים ב|25;Isaiah|ישעיהו|66;Jeremiah|ירמיהו|52;Ezekiel|יחזקאל|48;Hosea|הושע|14;Joel|יואל|4;Amos|עמוס|9;Obadiah|עובדיה|1;Jonah|יונה|4;Micah|מיכה|7;Nachum|נחום|3;Habakkuk|חבקוק|3;Zephaniah|צפניה|3;Haggai|חגי|2;Zechariah|זכריה|14;Malachi|מלאכי|3;Psalms|תהילים|150;Proverbs|משלי|31;Job|איוב|42;Song of Songs|שיר השירים|8;Ruth|רות|4;Lamentations|איכה|5;Ecclesiastes|קהלת|12;Esther|אסתר|10;Daniel|דניאל|12;Ezra|עזרא|10;Nehemiah|נחמיה|13;I Chronicles|דברי הימים א|29;II Chronicles|דברי הימים ב|36
+    """)
+
+    fun nachUnits(book: Masechta): List<UnitReference> = (1..book.lastLocation).map { chapter ->
+        UnitReference("${book.english} $chapter", "${book.hebrew} פרק ${PresetHebrewNumerals.format(chapter)}")
+    }
+
+    val nachYomiUnits: List<UnitReference> by lazy { nach.flatMap(::nachUnits) }
 
     val monthlyTehillimUnits: List<UnitReference> = listOf(
         "1-9", "10-17", "18-22", "23-28", "29-34", "35-38", "39-43", "44-48", "49-54", "55-59",
@@ -172,6 +183,7 @@ object MaterialCatalog {
         SeferChoice.YERUSHALMI -> yerushalmi
         SeferChoice.MISHNAH -> mishnah
         SeferChoice.RAMBAM -> rambam
+        SeferChoice.NACH -> nach
         else -> emptyList()
     }
 
@@ -188,6 +200,7 @@ object MaterialCatalog {
         SeferChoice.MISHNAH -> mishnahUnits(requireNotNull(section), mishnahUnit)
         SeferChoice.MISHNAH_BERURAH -> mishnahBerurahUnitOptions(chelek, mishnahBerurahUnit)
         SeferChoice.RAMBAM -> rambamUnits(requireNotNull(section))
+        SeferChoice.NACH -> nachUnits(requireNotNull(section))
         SeferChoice.CHOFETZ_CHAIM -> chofetzChaimUnits
         SeferChoice.TEHILLIM -> tehillimUnits
         SeferChoice.KITZUR -> simanim("Kitzur Shulchan Aruch", "קיצור שולחן ערוך", 1, 221)

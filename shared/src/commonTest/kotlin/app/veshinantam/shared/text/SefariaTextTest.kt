@@ -18,6 +18,8 @@ class SefariaTextTest {
         assertEquals("Mishnah Kelim 30:2", request("Kelim 30:2", "MISHNAH", "mishnah-yomis").reference)
         assertEquals("Mishneh Torah, Other Sources of Defilement 9", request("Rambam, Other Sources of Defilement 9", "PEREK").reference)
         assertEquals("Psalms 120-134", request("Tehillim 120-134", "PEREK").reference)
+        assertEquals("Jeremiah 38", request("Jeremiah 38", "PEREK", "nach-yomi").reference)
+        assertEquals("Nahum 1", request("Nachum 1", "PEREK").reference)
         assertEquals("Pele Yoetz 103", request("Pele Yoetz, Day 103", "CUSTOM_UNIT").reference)
         assertEquals("Kitzur Shulchan Arukh 133:1-8", request("Kitzur Shulchan Aruch 133:1-8", "CUSTOM_UNIT").reference)
         assertEquals("Mishnah Berurah 1", request("Mishnah Berurah, chelek 1 siman 1", "SIMAN").reference)

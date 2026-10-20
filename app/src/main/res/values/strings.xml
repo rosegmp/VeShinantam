@@ -111,6 +111,7 @@
     <string name="catalog_position_as_of">Worldwide position as of %1$s</string>
     <string name="join_current_position">Join current position</string>
     <string name="start_current_masechta">Start from the current masechta’s beginning and date</string>
+    <string name="start_current_book">Start from the current book’s beginning and date</string>
     <string name="choose_earlier_position">Choose an earlier position</string>
     <string name="starting_position">Starting position</string>
     <string name="originally_scheduled">Originally scheduled: %1$s</string>
@@ -351,6 +352,7 @@
     <string name="rambam">Rambam</string>
     <string name="chofetz_chaim">Chofetz Chaim</string>
     <string name="tehillim">Tehillim</string>
+    <string name="nach">Nach</string>
     <string name="from_section">From section</string>
     <string name="to_section">To section</string>
     <string name="preset_unit_chapters">chapters</string>

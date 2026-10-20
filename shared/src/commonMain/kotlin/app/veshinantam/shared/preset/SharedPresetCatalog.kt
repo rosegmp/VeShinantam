@@ -135,6 +135,10 @@ object SharedPresetCatalog {
                 "kitzur-yomi", "Kitzur Shulchan Aruch Yomi", "קיצור שולחן ערוך יומי", CanonicalMaterialType.CUSTOM_UNIT, 1,
                 everyDay, MaterialCatalog.kitzurYomiUnits, "Kitzur Shulchan Aruch 133:1-8",
             ),
+            program(
+                "nach-yomi", "Nach Yomi", "נ״ך יומי", CanonicalMaterialType.PEREK, 1,
+                everyDay, MaterialCatalog.nachYomiUnits, "Isaiah 64",
+            ),
         )
     }
 
@@ -186,6 +190,9 @@ object SharedPresetCatalog {
             "yerushalmi-yomi-schottenstein" -> MaterialCatalog.yerushalmiSchottenstein
                 .firstOrNull { program.currentReference.english.startsWith("Yerushalmi ${it.english} ") }
                 ?.let { "Yerushalmi ${it.english} " }
+            "nach-yomi" -> MaterialCatalog.nach
+                .firstOrNull { program.currentReference.english.startsWith("${it.english} ") }
+                ?.let { "${it.english} " }
             else -> null
         } ?: return null
         return program.units.indexOfFirst { it.english.startsWith(prefix) }.takeIf { it >= 0 }
