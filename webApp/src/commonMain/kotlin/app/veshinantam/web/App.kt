@@ -276,6 +276,8 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
     var schedulePendingDelete by remember { mutableStateOf<StoredSchedule?>(null) }
     var schedulePendingEdit by remember { mutableStateOf<StoredSchedule?>(null) }
     var schedulePendingRename by remember { mutableStateOf<StoredSchedule?>(null) }
+    var pendingCatalogRefresh by remember { mutableStateOf<WebPresetCatalogRefresh?>(null) }
+    var catalogRefreshError by remember { mutableStateOf<String?>(null) }
     var bulkCompletionRequest by remember { mutableStateOf<BulkCompletionRequest?>(null) }
     var pendingRestore by remember { mutableStateOf((initialImportResult as? BackupImportResult.Ready)?.state) }
     var showInvalidBackup by remember { mutableStateOf(initialImportResult == BackupImportResult.Invalid) }
@@ -418,6 +420,12 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestRename = { scheduleId -> schedulePendingRename = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestCatalogRefresh = { scheduleId ->
+                                    catalogRefreshError = null
+                                    pendingCatalogRefresh = runCatching {
+                                        previewPresetCatalogRefresh(appState, scheduleId, todayIso, store.currentInstant())
+                                    }.getOrElse { catalogRefreshError = it.message; null }
+                                },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -482,6 +490,12 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                                 onRequestDelete = { scheduleId -> schedulePendingDelete = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestEdit = { scheduleId -> schedulePendingEdit = appState.schedules.firstOrNull { it.id == scheduleId } },
                                 onRequestRename = { scheduleId -> schedulePendingRename = appState.schedules.firstOrNull { it.id == scheduleId } },
+                                onRequestCatalogRefresh = { scheduleId ->
+                                    catalogRefreshError = null
+                                    pendingCatalogRefresh = runCatching {
+                                        previewPresetCatalogRefresh(appState, scheduleId, todayIso, store.currentInstant())
+                                    }.getOrElse { catalogRefreshError = it.message; null }
+                                },
                                 onRequestBulkCompletion = { scheduleId, taskType ->
                                     val count = appState.tasks.count {
                                         it.scheduleId == scheduleId && it.type == taskType.name && it.dueDate < todayIso && !it.completed
@@ -607,6 +621,45 @@ fun WebApp(store: BrowserStore, cloudAccount: CloudAccount) {
                 update { state -> editFutureSchedule(state, schedule.id, todayIso, edit, store.currentInstant()) }
                 schedulePendingEdit = null
             },
+        )
+    }
+
+    pendingCatalogRefresh?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { pendingCatalogRefresh = null },
+            title = { Text(if (hebrew) "עדכון תוכנית מהקטלוג" else "Update schedule from catalog") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (hebrew)
+                        "${preview.learningCount} יחידות לימוד ו־${preview.reviewCount} חזרות עתידיות יוחלפו. משימות עבר ומשימות שהושלמו יישמרו."
+                    else "Replace ${preview.learningCount} future learning units and ${preview.reviewCount} reviews. Past and completed tasks are kept.")
+                    preview.firstChangedDate?.let { date ->
+                        Text(if (hebrew) "השינוי הראשון: $date · ${preview.previousReference.orEmpty()} ← ${preview.updatedReference.orEmpty()}"
+                        else "First change: $date · ${preview.previousReference.orEmpty()} → ${preview.updatedReference.orEmpty()}")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val result = runCatching {
+                        require(WebPresetCatalog.version == preview.catalogVersion)
+                        val current = requireNotNull(appState.schedules.firstOrNull { it.id == preview.scheduleId })
+                        require(current.generationRevision == preview.previousRevision)
+                        previewPresetCatalogRefresh(appState, preview.scheduleId, todayIso, store.currentInstant()).state
+                    }
+                    result.onSuccess { updated -> update { updated }; pendingCatalogRefresh = null }
+                        .onFailure { catalogRefreshError = it.message; pendingCatalogRefresh = null }
+                }) { Text(if (hebrew) "עדכן תוכנית" else "Update schedule") }
+            },
+            dismissButton = { TextButton(onClick = { pendingCatalogRefresh = null }) { Text(if (hebrew) "ביטול" else "Cancel") } },
+        )
+    }
+    catalogRefreshError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { catalogRefreshError = null },
+            title = { Text(if (hebrew) "לא ניתן לעדכן" else "Could not update schedule") },
+            text = { Text(error) },
+            confirmButton = { TextButton(onClick = { catalogRefreshError = null }) { Text(if (hebrew) "אישור" else "OK") } },
         )
     }
 
@@ -832,6 +885,7 @@ private fun AppContent(
     onRequestDelete: (String) -> Unit,
     onRequestEdit: (String) -> Unit,
     onRequestRename: (String) -> Unit,
+    onRequestCatalogRefresh: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
@@ -938,7 +992,7 @@ private fun AppContent(
             )
             Destination.SCHEDULES -> SchedulesScreen(
                 state, todayIso, hebrew, onCreate, onSetScheduleActive, onArchiveSchedule, onRestoreSchedule, onRequestDelete, onRequestEdit,
-                onRequestRename, onRequestBulkCompletion, onToggle, onRead,
+                onRequestRename, onRequestCatalogRefresh, onRequestBulkCompletion, onToggle, onRead,
             )
             Destination.PROGRESS -> ProgressScreen(state, todayIso, hebrew, onSaveGoals)
         }
@@ -2201,6 +2255,7 @@ private fun SchedulesScreen(
     onRequestDelete: (String) -> Unit,
     onRequestEdit: (String) -> Unit,
     onRequestRename: (String) -> Unit,
+    onRequestCatalogRefresh: (String) -> Unit,
     onRequestBulkCompletion: (String, LearningTaskType) -> Unit,
     onToggle: (String) -> Unit,
     onRead: (StoredTask, String?) -> Unit,
@@ -2298,6 +2353,14 @@ private fun SchedulesScreen(
                                     Icon(Icons.Default.Edit, null, modifier = Modifier.size(19.dp))
                                     Spacer(Modifier.width(6.dp))
                                     Text(if (hebrew) "ערוך עתיד" else "Edit future")
+                                }
+                                val savedSequence = schedule.sourceType.removePrefix("PRESET:").substringAfterLast('-').toLongOrNull()
+                                val latestSequence = WebPresetCatalog.version.substringAfterLast('-').toLongOrNull()
+                                if (schedule.presetId != null && savedSequence != null && latestSequence != null &&
+                                    latestSequence > savedSequence && schedule.presetId != MONTHLY_TEHILLIM_ID) {
+                                    TextButton(onClick = { onRequestCatalogRefresh(schedule.id) }) {
+                                        Text(if (hebrew) "עדכן מהקטלוג" else "Update from catalog")
+                                    }
                                 }
                                 TextButton(onClick = { onSetActive(schedule.id, !schedule.active) }) {
                                     Icon(if (schedule.active) Icons.Default.Pause else Icons.Default.PlayArrow, null, modifier = Modifier.size(19.dp))

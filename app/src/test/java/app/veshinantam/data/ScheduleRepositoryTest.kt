@@ -10,6 +10,7 @@ import app.veshinantam.domain.model.ScheduleKind
 import app.veshinantam.domain.model.ScheduleState
 import app.veshinantam.domain.model.TaskType
 import app.veshinantam.domain.material.PresetCatalog
+import app.veshinantam.domain.material.UnitReference
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.lang.reflect.Proxy
@@ -21,6 +22,49 @@ import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 
 class ScheduleRepositoryTest {
+    @Test
+    fun `catalog refresh preserves history and replaces future Oraysa sequence and reviews`() {
+        val unusedDao = Proxy.newProxyInstance(ScheduleDao::class.java.classLoader,
+            arrayOf(ScheduleDao::class.java)) { _, method, _ -> error("Unexpected ${method.name}") } as ScheduleDao
+        val repository = ScheduleRepository(unusedDao)
+        val today = LocalDate.of(2026, 10, 21)
+        val program = PresetCatalog.programs.first { it.id == "oraysa" }.copy(
+            units = listOf("Yevamot 119a", "Yevamot 119b", "Yevamot 120a", "Kiddushin 2a", "Kiddushin 2b", "Ketubot 2a")
+                .map { UnitReference(it, it) }, currentIndex = 1,
+        )
+        val schedule = scheduleEntity().copy(kind = ScheduleKind.PRESET, presetId = "oraysa",
+            sourceType = "PRESET:2026.09.24-14", materialType = MaterialType.AMUD,
+            dailyQuantity = 1, chazarahDayOffsets = "", officialOraysaChazarah = true)
+        val history = task("history", "learning:history", TaskType.LEARNING, today.minusDays(1))
+            .copy(labelEnglish = "Yevamos 119a")
+        val future = listOf(
+            task("one", "learning:one", TaskType.LEARNING, today).copy(labelEnglish = "Yevamos 119b"),
+            task("two", "learning:two", TaskType.LEARNING, today.plusDays(1)).copy(labelEnglish = "Yevamos 120a"),
+            task("three", "learning:three", TaskType.LEARNING, today.plusDays(4)).copy(labelEnglish = "Kesubos 2a"),
+        )
+        val oldReview = task("old-review", "review:learning:history:day:1", TaskType.CHAZARAH, today)
+            .copy(originalLearningDate = today.minusDays(1))
+        val futureReview = task("new-review", "review:learning:one:day:1", TaskType.CHAZARAH, today.plusDays(1))
+            .copy(originalLearningDate = today)
+        val refresh = repository.buildPresetCatalogRefresh(schedule, listOf(history) + future + oldReview + futureReview,
+            emptySet(), program, today, "2026.10.21-15")
+
+        assertEquals(setOf("one", "two", "three", "new-review"), refresh.edit.taskIdsToDelete.toSet())
+        assertEquals(LocalDate.of(2026, 10, 25), refresh.firstChangedDate)
+        assertEquals("Kesubos 2a", refresh.previousReference)
+        assertEquals("Kiddushin 2a", refresh.updatedReference)
+        assertEquals("PRESET:2026.10.21-15", refresh.edit.schedule.sourceType)
+        assertEquals(listOf("Yevamot 119b", "Yevamot 120a", "Kiddushin 2a", "Kiddushin 2b", "Ketubot 2a"),
+            refresh.edit.replacementTasks.filter { it.type == TaskType.LEARNING }.map { it.labelEnglish })
+        assertEquals(true, refresh.edit.replacementTasks.any { it.type == TaskType.CHAZARAH &&
+            it.reviewIdentity == "weekend:weekly:shabbos" && it.labelEnglish.contains("Yevamos 119a") })
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            repository.buildPresetCatalogRefresh(schedule, listOf(history) + future.mapIndexed { index, task ->
+                if (index == 0) task.copy(completedAt = Instant.parse("2026-10-21T10:00:00Z")) else task
+            }, emptySet(), program, today, "2026.10.21-15")
+        }
+    }
+
     @Test
     fun `renaming updates only names and preserves the saved schedule`() = runBlocking {
         val original = scheduleEntity()

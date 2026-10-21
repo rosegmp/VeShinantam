@@ -12,6 +12,7 @@ import app.veshinantam.domain.model.BilingualLabel
 import app.veshinantam.domain.model.ChazarahPattern
 import app.veshinantam.domain.model.MaterialType
 import app.veshinantam.domain.model.MaterialUnit
+import app.veshinantam.domain.model.PlannedTask
 import app.veshinantam.domain.model.MissedWorkBehavior
 import app.veshinantam.domain.model.ScheduleKind
 import app.veshinantam.domain.model.ScheduleRules
@@ -23,6 +24,8 @@ import app.veshinantam.domain.material.MonthlyTehillim
 import app.veshinantam.domain.scheduling.ScheduleEngine
 import app.veshinantam.domain.scheduling.LearningPlacement
 import app.veshinantam.domain.scheduling.LearningRollover
+import app.veshinantam.shared.text.SefariaReferenceMapper
+import app.veshinantam.shared.text.SefariaTextLookup
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.time.DayOfWeek
@@ -80,6 +83,18 @@ data class PendingFutureScheduleEdit(
 ) {
     val learningCount: Int get() = replacementTasks.count { it.type == TaskType.LEARNING }
     val reviewCount: Int get() = replacementTasks.count { it.type == TaskType.CHAZARAH }
+}
+
+data class PendingPresetCatalogRefresh(
+    val edit: PendingFutureScheduleEdit,
+    val catalogVersion: String,
+    val previousVersion: String,
+    val firstChangedDate: LocalDate?,
+    val previousReference: String?,
+    val updatedReference: String?,
+) {
+    val learningCount: Int get() = edit.learningCount
+    val reviewCount: Int get() = edit.reviewCount
 }
 
 class ScheduleRepository(
@@ -311,6 +326,143 @@ class ScheduleRepository(
         )
         dao.replaceFuturePlan(edit.schedule, edit.taskIdsToDelete, edit.replacementTasks)
         onDataChanged()
+    }
+
+    suspend fun previewPresetCatalogRefresh(scheduleId: String): PendingPresetCatalogRefresh {
+        val schedule = requireNotNull(dao.getSchedule(scheduleId))
+        val tasks = dao.getTasks(scheduleId)
+        val exclusions = dao.getExclusions(scheduleId).mapTo(mutableSetOf()) { it.date }
+        val program = requireNotNull(PresetCatalog.programs.firstOrNull { it.id == schedule.presetId }) {
+            "This schedule has no available preset"
+        }
+        return buildPresetCatalogRefresh(schedule, tasks, exclusions + program.excludedDates, program,
+            LocalDate.now(clock.withZone(zoneProvider())), PresetCatalog.VERSION)
+    }
+
+    suspend fun applyPresetCatalogRefresh(scheduleId: String, expectedRevision: Int, expectedVersion: String) {
+        require(PresetCatalog.VERSION == expectedVersion) { "The catalog changed; preview the update again" }
+        val plan = previewPresetCatalogRefresh(scheduleId)
+        require(plan.edit.schedule.generationRevision == expectedRevision + 1) {
+            "The schedule changed; preview the update again"
+        }
+        dao.replaceFuturePlan(plan.edit.schedule, plan.edit.taskIdsToDelete, plan.edit.replacementTasks)
+        onDataChanged()
+    }
+
+    internal fun buildPresetCatalogRefresh(
+        schedule: ScheduleEntity,
+        tasks: List<TaskEntity>,
+        excludedDates: Set<LocalDate>,
+        program: PresetProgram,
+        today: LocalDate,
+        catalogVersion: String,
+    ): PendingPresetCatalogRefresh {
+        require(schedule.kind == ScheduleKind.PRESET && schedule.presetId == program.id && schedule.state != ScheduleState.ARCHIVED)
+        val savedSequence = schedule.sourceType.removePrefix("PRESET:").substringAfterLast('-').toLongOrNull()
+        val latestSequence = catalogVersion.substringAfterLast('-').toLongOrNull()
+        require(savedSequence != null && latestSequence != null && latestSequence > savedSequence) {
+            "This schedule has no newer catalog to apply"
+        }
+        require(tasks.none { it.plannedDate >= today && it.completedAt != null }) {
+            "Completed future tasks must be resolved before this schedule can be updated"
+        }
+        val oldLearning = tasks.filter { it.type == TaskType.LEARNING }.sortedWith(compareBy({ it.plannedDate }, { it.stableKey }))
+        val futureLearning = oldLearning.filter { it.plannedDate >= today }
+        require(futureLearning.isNotEmpty()) { "This schedule has no unfinished future learning" }
+        val lastHistorical = oldLearning.lastOrNull { it.plannedDate < today }
+        fun catalogIndex(reference: String): Int {
+            val exact = program.units.indexOfFirst { it.english == reference }
+            if (exact >= 0) return exact
+            val mapped = (SefariaReferenceMapper.lookup(reference, schedule.materialType.name, schedule.presetId)
+                as? SefariaTextLookup.Available)?.request?.reference
+            return program.units.indexOfFirst { it.english == mapped }
+        }
+        val anchorIndex = catalogIndex(lastHistorical?.labelEnglish ?: futureLearning.first().labelEnglish)
+        require(anchorIndex >= 0) { "The saved position cannot be matched to the current catalog" }
+        val startIndex = anchorIndex + if (lastHistorical == null) 0 else 1
+        require(startIndex in program.units.indices) { "The saved position cannot be matched to the current catalog" }
+        val revision = schedule.generationRevision + 1
+        val startDate = futureLearning.first().plannedDate
+        val weekdays = schedule.selectedWeekdays.split(',').mapNotNull { runCatching { DayOfWeek.valueOf(it.trim()) }.getOrNull() }.toSet()
+        val rules = ScheduleRules(weekdays, excludedDates)
+        val material = program.units.subList(startIndex, program.units.size).mapIndexed { index, reference ->
+            MaterialUnit("${schedule.id}-catalog-$revision-unit-$index", index,
+                BilingualLabel(reference.english, reference.hebrew))
+        }
+        val learning = if (schedule.dailyQuantity > 0) {
+            engine.generateByDailyQuantity(material, startDate, schedule.dailyQuantity, rules)
+        } else {
+            val target = requireNotNull(schedule.targetDate) { "This schedule has no completion date" }
+            require(target >= startDate) { "The completion date has passed" }
+            engine.generateByCompletionDate(material, startDate, target, rules)
+        }
+        val pattern = ChazarahPattern(
+            schedule.chazarahDayOffsets.split(',').mapNotNull { it.trim().toIntOrNull() },
+            schedule.repeatsAnnually,
+        )
+        val additional = engine.generateChazarah(learning, pattern, rules, startDate.year + 10)
+        val firstWeek = startDate.minusDays((startDate.dayOfWeek.value % 7).toLong())
+        val historicalInFirstWeek = oldLearning.filter { it.plannedDate < today &&
+            it.plannedDate.minusDays((it.plannedDate.dayOfWeek.value % 7).toLong()) == firstWeek
+        }.mapIndexed { index, task ->
+            PlannedTask(task.stableKey, MaterialUnit(task.stableKey, index,
+                BilingualLabel(task.labelEnglish, task.labelHebrew), task.quantity), TaskType.LEARNING,
+                task.plannedDate, task.originalLearningDate)
+        }
+        val weekend = if (schedule.officialOraysaChazarah) {
+            engine.generateWeekendChazarah(historicalInFirstWeek + learning).filter { it.plannedDate >= today }
+        } else emptyList()
+        val daily = if (schedule.officialOraysaChazarah && schedule.presetId == "oraysa") {
+            engine.generateOfficialOraysaChazarah(learning, rules).filterNot {
+                it.reviewIdentity?.startsWith("weekend:weekly") == true
+            }
+        } else emptyList()
+        val affectedWeeks = futureLearning.mapTo(mutableSetOf()) {
+            it.originalLearningDate.minusDays((it.originalLearningDate.dayOfWeek.value % 7).toLong())
+        }
+        val oldKeys = futureLearning.mapTo(mutableSetOf()) { it.stableKey }
+        val replacedLearning = futureLearning.mapTo(mutableSetOf()) { it.originalLearningDate to it.labelEnglish }
+        val reviewsToReplace = tasks.filter { task ->
+            task.type == TaskType.CHAZARAH && task.completedAt == null && task.plannedDate >= today && (
+                ((task.reviewIdentity?.startsWith("weekend:weekly") == true ||
+                    task.reviewIdentity?.startsWith("oraysa:weekly") == true) &&
+                    task.originalLearningDate.minusDays((task.originalLearningDate.dayOfWeek.value % 7).toLong()) in affectedWeeks) ||
+                    (task.originalLearningDate to task.labelEnglish) in replacedLearning ||
+                    oldKeys.any { task.stableKey.startsWith("review:$it:") }
+                )
+        }
+        val removedIds = (futureLearning + reviewsToReplace).map { it.id }
+        val preservedKeys = tasks.filter { it.id !in removedIds }.mapTo(mutableSetOf()) { it.stableKey }
+        val replacements = (learning + daily + weekend + additional).distinctBy {
+            listOf(it.type, it.originalLearningDate, it.plannedDate, it.material.label.english, it.material.label.hebrew, it.reviewIdentity)
+        }.map { planned ->
+            val key = planned.stableKey.let { if (it in preservedKeys) "$it:revision:$revision" else it }
+            TaskEntity(UUID.randomUUID().toString(), key, schedule.id, planned.type,
+                planned.material.label.english, planned.material.label.hebrew, schedule.materialType,
+                planned.material.quantity, planned.plannedDate, planned.originalLearningDate,
+                planned.reviewIdentity, revision, null, null, null)
+        }
+        val oldByDate = futureLearning.groupBy { it.plannedDate }
+        val newByDate = learning.groupBy { it.plannedDate }
+        fun comparable(reference: String): String =
+            (SefariaReferenceMapper.lookup(reference, schedule.materialType.name, schedule.presetId)
+                as? SefariaTextLookup.Available)?.request?.reference ?: reference
+        val changedDate = (oldByDate.keys + newByDate.keys).sorted().firstOrNull { date ->
+            oldByDate[date].orEmpty().map { comparable(it.labelEnglish) } !=
+                newByDate[date].orEmpty().map { comparable(it.material.label.english) }
+        }
+        val preservedTarget = oldLearning.filter { it.plannedDate < today }.maxOfOrNull { it.plannedDate }
+        val targetDate = listOfNotNull(preservedTarget, learning.maxOfOrNull { it.plannedDate }).maxOrNull()
+        val updatedSchedule = schedule.copy(sourceType = "PRESET:$catalogVersion", targetDate = targetDate,
+            generationRevision = revision)
+        return PendingPresetCatalogRefresh(
+            edit = PendingFutureScheduleEdit(updatedSchedule, removedIds, replacements),
+            catalogVersion = catalogVersion,
+            previousVersion = schedule.sourceType.removePrefix("PRESET:"),
+            firstChangedDate = changedDate,
+            previousReference = changedDate?.let { oldByDate[it]?.firstOrNull()?.labelEnglish },
+            updatedReference = changedDate?.let { newByDate[it]?.firstOrNull()?.material?.label?.english },
+        )
     }
 
     internal fun buildFutureEdit(

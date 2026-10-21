@@ -3,7 +3,11 @@
 Android 0.1.13 and the web app can read the same signed catalog at
 `https://rosegmp.github.io/VeShinantam/preset-catalog.json`. The bundled
 catalog remains available offline. An update changes the presets offered when
-creating a schedule; it does not replace a learner's saved schedules or tasks.
+creating a schedule. A saved preset schedule can be updated from its schedule
+card after a newer catalog is installed. The app previews the first change and
+asks for confirmation, then replaces unfinished future learning and related
+reviews while preserving past and completed tasks. Saved schedules never change
+automatically when a catalog is downloaded.
 
 ## Publish a future update
 

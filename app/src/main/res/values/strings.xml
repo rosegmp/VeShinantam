@@ -300,6 +300,14 @@
     <string name="print_page_number">Page %1$d</string>
     <string name="print_no_tasks">No active learning or chazarah tasks are scheduled in this date range.</string>
     <string name="preset_catalog_updates">Preset catalog updates</string>
+    <string name="catalog_refresh_action">Update from catalog</string>
+    <string name="catalog_refresh_title">Update saved schedule?</string>
+    <string name="catalog_refresh_explanation">This applies the current preset sequence to unfinished future tasks. Completed and past tasks stay unchanged. Review the preview before applying.</string>
+    <string name="catalog_refresh_count">%1$d learning assignments and %2$d reviews will be generated.</string>
+    <string name="catalog_refresh_first_change">First change on %1$s: %2$s → %3$s</string>
+    <string name="catalog_refresh_same_assignments">The future assignments match the current catalog. The saved catalog version will be updated.</string>
+    <string name="catalog_refresh_unavailable">This schedule cannot be updated automatically. Check that it has unfinished future tasks and no completed future tasks.</string>
+    <string name="catalog_refresh_apply">Apply update</string>
     <string name="preset_catalog_version">Current catalog: %1$s</string>
     <string name="preset_updates_not_configured">This build uses the bundled offline catalog; no update source is configured.</string>
     <string name="automatic_preset_updates">Check automatically</string>

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.veshinantam.data.CustomScheduleDraft
 import app.veshinantam.data.FutureScheduleEditDraft
 import app.veshinantam.data.PendingSchedulePlan
+import app.veshinantam.data.PendingPresetCatalogRefresh
 import app.veshinantam.data.PresetScheduleDraft
 import app.veshinantam.data.ScheduleRepository
 import app.veshinantam.data.local.ScheduleEntity
@@ -60,6 +61,12 @@ class SchedulesViewModel(private val repository: ScheduleRepository) : ViewModel
     fun editFuture(scheduleId: String, draft: FutureScheduleEditDraft) {
         viewModelScope.launch { repository.editFutureSchedule(scheduleId, draft) }
     }
+
+    suspend fun previewPresetCatalogRefresh(scheduleId: String): PendingPresetCatalogRefresh =
+        repository.previewPresetCatalogRefresh(scheduleId)
+
+    suspend fun applyPresetCatalogRefresh(scheduleId: String, expectedRevision: Int, expectedVersion: String) =
+        repository.applyPresetCatalogRefresh(scheduleId, expectedRevision, expectedVersion)
 
     fun delete(scheduleId: String) {
         viewModelScope.launch { repository.deleteSchedule(scheduleId) }

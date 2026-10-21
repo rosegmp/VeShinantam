@@ -137,6 +137,7 @@ import app.veshinantam.VeShinantamApplication
 import app.veshinantam.data.CustomScheduleDraft
 import app.veshinantam.data.FutureScheduleEditDraft
 import app.veshinantam.data.PendingSchedulePlan
+import app.veshinantam.data.PendingPresetCatalogRefresh
 import app.veshinantam.data.OnboardingSettings
 import app.veshinantam.data.PresetScheduleDraft
 import app.veshinantam.data.ScheduleUnitInput
@@ -1823,6 +1824,8 @@ private fun SchedulesRoute(modifier: Modifier = Modifier, openWizardRequest: Int
             onStateChange = schedulesViewModel::setState,
             onRename = schedulesViewModel::rename,
             onEditFuture = schedulesViewModel::editFuture,
+            onPreviewCatalogRefresh = schedulesViewModel::previewPresetCatalogRefresh,
+            onApplyCatalogRefresh = schedulesViewModel::applyPresetCatalogRefresh,
             onCompletePastLearning = schedulesViewModel::completePastLearning,
             onCompletePastChazarah = schedulesViewModel::completePastChazarah,
             onAddExclusion = schedulesViewModel::addExclusion,
@@ -1846,6 +1849,8 @@ private fun ScheduleList(
     onStateChange: (String, ScheduleState) -> Unit,
     onRename: (String, String) -> Unit,
     onEditFuture: (String, FutureScheduleEditDraft) -> Unit,
+    onPreviewCatalogRefresh: suspend (String) -> PendingPresetCatalogRefresh,
+    onApplyCatalogRefresh: suspend (String, Int, String) -> Unit,
     onCompletePastLearning: (String) -> Unit,
     onCompletePastChazarah: (String) -> Unit,
     onAddExclusion: (String, LocalDate) -> Unit,
@@ -1862,6 +1867,11 @@ private fun ScheduleList(
     var pendingCompletePast by remember { mutableStateOf<Pair<ScheduleEntity, PastCompletionKind>?>(null) }
     var selectedDetails by remember { mutableStateOf<ScheduleEntity?>(null) }
     var selectedEditing by remember { mutableStateOf<ScheduleEntity?>(null) }
+    var pendingCatalogRefresh by remember { mutableStateOf<ScheduleEntity?>(null) }
+    var catalogPreview by remember { mutableStateOf<PendingPresetCatalogRefresh?>(null) }
+    var catalogError by remember { mutableStateOf(false) }
+    var catalogApplying by remember { mutableStateOf(false) }
+    val catalogScope = rememberCoroutineScope()
     var selectedRenaming by remember { mutableStateOf<ScheduleEntity?>(null) }
     var selectedLearningId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedLearning = schedules.firstOrNull { it.id == selectedLearningId }
@@ -1874,6 +1884,55 @@ private fun ScheduleList(
                 selectedEditing = null
             },
             onDismiss = { selectedEditing = null },
+        )
+    }
+    pendingCatalogRefresh?.let { schedule ->
+        LaunchedEffect(schedule.id, PresetCatalog.VERSION) {
+            catalogPreview = null
+            catalogError = false
+            runCatching { onPreviewCatalogRefresh(schedule.id) }
+                .onSuccess { catalogPreview = it }
+                .onFailure { catalogError = true }
+        }
+        AlertDialog(
+            onDismissRequest = { if (!catalogApplying) pendingCatalogRefresh = null },
+            title = { Text(stringResource(R.string.catalog_refresh_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.catalog_refresh_explanation))
+                    when {
+                        catalogError -> Text(stringResource(R.string.catalog_refresh_unavailable), color = MaterialTheme.colorScheme.error)
+                        catalogPreview == null -> Text(stringResource(R.string.checking_for_updates))
+                        else -> {
+                            val preview = requireNotNull(catalogPreview)
+                            Text(stringResource(R.string.catalog_refresh_count, preview.learningCount, preview.reviewCount))
+                            preview.firstChangedDate?.let { date ->
+                                Text(stringResource(R.string.catalog_refresh_first_change,
+                                    displayDate(date, primaryCalendar, locale),
+                                    preview.previousReference.orEmpty(), preview.updatedReference.orEmpty()))
+                            } ?: Text(stringResource(R.string.catalog_refresh_same_assignments))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = catalogPreview != null && !catalogApplying, onClick = {
+                    val preview = requireNotNull(catalogPreview)
+                    catalogApplying = true
+                    catalogScope.launch {
+                        runCatching { onApplyCatalogRefresh(schedule.id,
+                            preview.edit.schedule.generationRevision - 1, preview.catalogVersion) }
+                            .onSuccess { pendingCatalogRefresh = null }
+                            .onFailure { catalogError = true; catalogPreview = null }
+                        catalogApplying = false
+                    }
+                }) { Text(stringResource(R.string.catalog_refresh_apply)) }
+            },
+            dismissButton = {
+                TextButton(enabled = !catalogApplying, onClick = { pendingCatalogRefresh = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
     selectedRenaming?.let { schedule ->
@@ -2052,6 +2111,13 @@ private fun ScheduleList(
                             if (schedule.presetId != MonthlyTehillim.PRESET_ID) {
                                 TextButton(onClick = { selectedEditing = schedule }) {
                                     Text(stringResource(R.string.edit_schedule))
+                                }
+                            }
+                            val savedSequence = schedule.sourceType.removePrefix("PRESET:").substringAfterLast('-').toLongOrNull()
+                            if (schedule.presetId != null && schedule.presetId != MonthlyTehillim.PRESET_ID &&
+                                savedSequence != null && PresetCatalog.activeSequence > savedSequence) {
+                                TextButton(onClick = { pendingCatalogRefresh = schedule }) {
+                                    Text(stringResource(R.string.catalog_refresh_action))
                                 }
                             }
                             TextButton(onClick = { pendingCompletePast = schedule to PastCompletionKind.LEARNING }) {

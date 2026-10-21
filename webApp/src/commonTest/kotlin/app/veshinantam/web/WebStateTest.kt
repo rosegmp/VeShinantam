@@ -12,6 +12,46 @@ class WebStateTest {
     private val now = "2026-09-14T12:00:00Z"
 
     @Test
+    fun catalogRefreshPreservesHistoryAndReplacesFuturePresetWork() {
+        val refreshDate = "2026-10-21"
+        val program = app.veshinantam.shared.preset.SharedPresetProgram(
+            id = "oraysa", nameEnglish = "Oraysa", nameHebrew = "אורייתא",
+            materialType = app.veshinantam.shared.CanonicalMaterialType.AMUD,
+            dailyQuantity = 1, selectedWeekdays = (0..6).toSet(),
+            units = listOf("Yevamot 119a", "Yevamot 119b", "Yevamot 120a", "Kiddushin 2a", "Ketubot 2a")
+                .map { app.veshinantam.shared.preset.UnitReference(it, it) }, currentIndex = 1,
+        )
+        val schedule = StoredSchedule("plan", "Oraysa", "AMUD", 1,
+            chazarahOffsets = emptyList(), presetId = "oraysa", sourceType = "PRESET:2026.09.24-14",
+            materialType = "AMUD", officialOraysaChazarah = true)
+        val history = StoredTask("past", "plan", "Yevamos 119a", "Yevamos 119a", "2026-10-20", "LEARNING")
+        val future = listOf(
+            StoredTask("one", "plan", "Yevamos 119b", "Yevamos 119b", refreshDate, "LEARNING", stableKey = "learning:one"),
+            StoredTask("two", "plan", "Yevamos 120a", "Yevamos 120a", "2026-10-22", "LEARNING", stableKey = "learning:two"),
+            StoredTask("three", "plan", "Kesubos 2a", "Kesubos 2a", "2026-10-23", "LEARNING", stableKey = "learning:three"),
+            StoredTask("review", "plan", "Yevamos 119b", "Yevamos 119b", "2026-10-22", "CHAZARAH",
+                stableKey = "review:learning:one:day:1", originalLearningDate = refreshDate),
+        )
+        val state = WebAppState(schedules = listOf(schedule), tasks = listOf(history) + future)
+
+        val preview = previewPresetCatalogRefresh(state, "plan", refreshDate, now, program, "2026.10.21-15")
+
+        assertEquals("2026-10-23", preview.firstChangedDate)
+        assertEquals("Kesubos 2a", preview.previousReference)
+        assertEquals("Kiddushin 2a", preview.updatedReference)
+        assertEquals("PRESET:2026.10.21-15", preview.state.schedules.single().sourceType)
+        assertTrue(preview.state.tasks.any { it.id == "past" })
+        assertTrue(preview.state.tasks.none { it.id == "one" || it.id == "two" || it.id == "three" || it.id == "review" })
+        assertEquals(listOf("Yevamot 119b", "Yevamot 120a", "Kiddushin 2a", "Ketubot 2a"),
+            preview.state.tasks.filter { it.type == "LEARNING" && it.id != "past" }.map { it.referenceEnglish })
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            previewPresetCatalogRefresh(state.copy(tasks = listOf(history) + future.map {
+                if (it.id == "one") it.copy(completed = true) else it
+            }), "plan", refreshDate, now, program, "2026.10.21-15")
+        }
+    }
+
+    @Test
     fun mishnahBerurahScanAlignmentFollowsAndroidPageOrdinals() {
         val first = app.veshinantam.shared.text.MishnahBerurahPageReference.parse("Mishnah Berurah, chelek 1 page 4a")
         val next = app.veshinantam.shared.text.MishnahBerurahPageReference.parse("Mishnah Berurah, chelek 1 page 5b")

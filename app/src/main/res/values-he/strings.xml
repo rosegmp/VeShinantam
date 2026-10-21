@@ -303,6 +303,14 @@
     <string name="print_page_number">עמוד %1$d</string>
     <string name="print_no_tasks">אין משימות לימוד או חזרה פעילות בטווח תאריכים זה.</string>
     <string name="preset_catalog_updates">עדכוני לוח סדרים מוכנים</string>
+    <string name="catalog_refresh_action">עדכון מהקטלוג</string>
+    <string name="catalog_refresh_title">לעדכן את התוכנית השמורה?</string>
+    <string name="catalog_refresh_explanation">רצף הלימוד העדכני יוחל על משימות עתידיות שלא הושלמו. משימות שהושלמו ומשימות עבר יישארו ללא שינוי. יש לבדוק את התצוגה המקדימה לפני העדכון.</string>
+    <string name="catalog_refresh_count">ייווצרו %1$d משימות לימוד ו־%2$d משימות חזרה.</string>
+    <string name="catalog_refresh_first_change">השינוי הראשון ב־%1$s: %2$s ← %3$s</string>
+    <string name="catalog_refresh_same_assignments">המשימות העתידיות תואמות לקטלוג העדכני. גרסת הקטלוג השמורה תעודכן.</string>
+    <string name="catalog_refresh_unavailable">לא ניתן לעדכן תוכנית זו אוטומטית. יש לוודא שקיימות משימות עתידיות שלא הושלמו ושאין משימות עתידיות שהושלמו.</string>
+    <string name="catalog_refresh_apply">החל עדכון</string>
     <string name="preset_catalog_version">הלוח הנוכחי: %1$s</string>
     <string name="preset_updates_not_configured">גרסה זו משתמשת בלוח המובנה ללא חיבור; לא הוגדר מקור עדכונים.</string>
     <string name="automatic_preset_updates">בדיקה אוטומטית</string>
