@@ -50,6 +50,7 @@ class ScheduleRepositoryTest {
         assertEquals(33_000, refresh.edit.taskIdsToDelete.size)
         assertEquals(33_000, refresh.edit.taskIdsToDelete.toSet().size)
         assertEquals(1_000, refresh.edit.replacementTasks.count { it.type == TaskType.LEARNING })
+        assertEquals(refresh.edit.replacementTasks.size, refresh.edit.replacementTasks.map { it.stableKey }.toSet().size)
     }
 
     @Test

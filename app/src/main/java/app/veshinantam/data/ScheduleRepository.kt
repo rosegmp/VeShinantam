@@ -434,11 +434,18 @@ class ScheduleRepository(
                 )
         }
         val removedIds = (futureLearning + reviewsToReplace).mapTo(mutableSetOf()) { it.id }
-        val preservedKeys = tasks.filter { it.id !in removedIds }.mapTo(mutableSetOf()) { it.stableKey }
+        val usedKeys = tasks.filter { it.id !in removedIds }.mapTo(mutableSetOf()) { it.stableKey }
         val replacements = (learning + daily + weekend + additional).distinctBy {
             listOf(it.type, it.originalLearningDate, it.plannedDate, it.material.label.english, it.material.label.hebrew, it.reviewIdentity)
         }.map { planned ->
-            val key = planned.stableKey.let { if (it in preservedKeys) "$it:revision:$revision" else it }
+            var key = planned.stableKey
+            if (!usedKeys.add(key)) {
+                key = "${planned.stableKey}:revision:$revision"
+                var duplicate = 1
+                while (!usedKeys.add(key)) {
+                    key = "${planned.stableKey}:revision:$revision:${duplicate++}"
+                }
+            }
             TaskEntity(UUID.randomUUID().toString(), key, schedule.id, planned.type,
                 planned.material.label.english, planned.material.label.hebrew, schedule.materialType,
                 planned.material.quantity, planned.plannedDate, planned.originalLearningDate,
