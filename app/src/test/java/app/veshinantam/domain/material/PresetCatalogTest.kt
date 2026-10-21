@@ -60,6 +60,8 @@ class PresetCatalogTest {
         assertTrue(units.indexOf("Beitzah 40a") < units.indexOf("Megillah 2a"))
         assertTrue(units.indexOf("Megillah 32a") < units.indexOf("Taanis 2a"))
         assertTrue(units.indexOf("Chagigah 27a") < units.indexOf("Yevamos 2a"))
+        assertTrue(units.indexOf("Yevamos 122b") < units.indexOf("Kiddushin 2a"))
+        assertTrue(units.indexOf("Kiddushin 82b") < units.indexOf("Kesubos 2a"))
     }
 
     @Test

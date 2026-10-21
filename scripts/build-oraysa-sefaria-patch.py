@@ -48,7 +48,9 @@ def main() -> None:
     catalog = [entry.split("|") for entry in catalog_match.group(1).strip().split(";")]
     final_on_a = set(re.findall(r'"([^"]+)"', final_match.group(1)))
     ordered = [next(entry for entry in catalog if entry[0].strip() == name) for name in OPENING]
-    ordered += [entry for entry in catalog if entry[0].strip() not in OPENING and entry[0].strip() != "Shekalim"]
+    remainder = [entry for entry in catalog if entry[0].strip() not in OPENING and entry[0].strip() != "Shekalim"]
+    ordered += [next(entry for entry in remainder if entry[0].strip() == name) for name in ("Yevamos", "Kiddushin")]
+    ordered += [entry for entry in remainder if entry[0].strip() not in ("Yevamos", "Kiddushin")]
 
     units = []
     original_to_canonical = {}

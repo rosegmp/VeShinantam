@@ -72,6 +72,10 @@ class SharedPresetCatalogTest {
         assertEquals("Yevamos 2a", oraysa.units[masechtaStart].english)
         assertEquals(IsoDate(2025, 11, 26), SharedPresetCatalog.scheduledDate(oraysa, masechtaStart))
         assertEquals(SharedPresetCatalog.positionAsOf, SharedPresetCatalog.scheduledDate(oraysa, oraysa.currentIndex))
+        val yevamosEnd = oraysa.units.indexOfFirst { it.english == "Yevamos 122b" }
+        val kiddushinEnd = oraysa.units.indexOfFirst { it.english == "Kiddushin 82b" }
+        assertEquals("Kiddushin 2a", oraysa.units[yevamosEnd + 1].english)
+        assertEquals("Kesubos 2a", oraysa.units[kiddushinEnd + 1].english)
     }
 
     @Test

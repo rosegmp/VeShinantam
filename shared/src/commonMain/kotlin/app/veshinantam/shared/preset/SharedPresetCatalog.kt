@@ -45,7 +45,12 @@ object SharedPresetCatalog {
         )
         val opening = openingOrder.map { name -> MaterialCatalog.gemara.first { it.english == name } }
         val remainder = MaterialCatalog.gemara.filter { it.english !in openingOrder && it.english != "Shekalim" }
-        (opening + remainder).flatMap(::amudUnitsFor)
+        // Oraysa's Nov 2026 calendar places Kiddushin after Yevamos, then resumes with Kesubos.
+        // https://oraysa-media.s3.us-east-1.amazonaws.com/oraysa_calendar_printable.pdf
+        val yevamos = remainder.first { it.english == "Yevamos" }
+        val kiddushin = remainder.first { it.english == "Kiddushin" }
+        val afterYevamos = remainder.filter { it != yevamos && it != kiddushin }
+        (opening + yevamos + kiddushin + afterYevamos).flatMap(::amudUnitsFor)
     }
     private val mishnahUnits by lazy {
         MaterialCatalog.mishnah.flatMap { MaterialCatalog.mishnahUnits(it, MishnahUnit.MISHNAH) }
