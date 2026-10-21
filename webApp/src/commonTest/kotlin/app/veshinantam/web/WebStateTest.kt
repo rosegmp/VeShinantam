@@ -29,8 +29,8 @@ class WebStateTest {
             StoredTask("one", "plan", "Yevamos 119b", "Yevamos 119b", refreshDate, "LEARNING", stableKey = "learning:one"),
             StoredTask("two", "plan", "Yevamos 120a", "Yevamos 120a", "2026-10-22", "LEARNING", stableKey = "learning:two"),
             StoredTask("three", "plan", "Kesubos 2a", "Kesubos 2a", "2026-10-23", "LEARNING", stableKey = "learning:three"),
-            StoredTask("review", "plan", "Yevamos 119b", "Yevamos 119b", "2026-10-22", "CHAZARAH",
-                stableKey = "review:learning:one:day:1", originalLearningDate = refreshDate),
+            StoredTask("review", "plan", "Legacy Yevamos spelling", "Yevamos 119b", "2026-10-22", "CHAZARAH",
+                stableKey = "legacy-review-key", originalLearningDate = refreshDate),
         )
         val state = WebAppState(schedules = listOf(schedule), tasks = listOf(history) + future)
 

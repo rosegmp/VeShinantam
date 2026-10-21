@@ -308,6 +308,8 @@
     <string name="catalog_refresh_same_assignments">The future assignments match the current catalog. The saved catalog version will be updated.</string>
     <string name="catalog_refresh_unavailable">This schedule cannot be updated automatically. Check that it has unfinished future tasks and no completed future tasks.</string>
     <string name="catalog_refresh_apply">Apply update</string>
+    <string name="catalog_refresh_applying">Applying update…</string>
+    <string name="catalog_refresh_apply_failed">The update could not be applied. Please try again.</string>
     <string name="preset_catalog_version">Current catalog: %1$s</string>
     <string name="preset_updates_not_configured">This build uses the bundled offline catalog; no update source is configured.</string>
     <string name="automatic_preset_updates">Check automatically</string>

@@ -311,6 +311,8 @@
     <string name="catalog_refresh_same_assignments">המשימות העתידיות תואמות לקטלוג העדכני. גרסת הקטלוג השמורה תעודכן.</string>
     <string name="catalog_refresh_unavailable">לא ניתן לעדכן תוכנית זו אוטומטית. יש לוודא שקיימות משימות עתידיות שלא הושלמו ושאין משימות עתידיות שהושלמו.</string>
     <string name="catalog_refresh_apply">החל עדכון</string>
+    <string name="catalog_refresh_applying">מחיל את העדכון…</string>
+    <string name="catalog_refresh_apply_failed">לא ניתן להחיל את העדכון. כדאי לנסות שוב.</string>
     <string name="preset_catalog_version">הלוח הנוכחי: %1$s</string>
     <string name="preset_updates_not_configured">גרסה זו משתמשת בלוח המובנה ללא חיבור; לא הוגדר מקור עדכונים.</string>
     <string name="automatic_preset_updates">בדיקה אוטומטית</string>

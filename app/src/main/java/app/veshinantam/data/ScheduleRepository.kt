@@ -27,6 +27,8 @@ import app.veshinantam.domain.scheduling.LearningRollover
 import app.veshinantam.shared.text.SefariaReferenceMapper
 import app.veshinantam.shared.text.SefariaTextLookup
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -335,8 +337,10 @@ class ScheduleRepository(
         val program = requireNotNull(PresetCatalog.programs.firstOrNull { it.id == schedule.presetId }) {
             "This schedule has no available preset"
         }
-        return buildPresetCatalogRefresh(schedule, tasks, exclusions + program.excludedDates, program,
-            LocalDate.now(clock.withZone(zoneProvider())), PresetCatalog.VERSION)
+        return withContext(Dispatchers.Default) {
+            buildPresetCatalogRefresh(schedule, tasks, exclusions + program.excludedDates, program,
+                LocalDate.now(clock.withZone(zoneProvider())), PresetCatalog.VERSION)
+        }
     }
 
     suspend fun applyPresetCatalogRefresh(scheduleId: String, expectedRevision: Int, expectedVersion: String) {
@@ -420,18 +424,16 @@ class ScheduleRepository(
         val affectedWeeks = futureLearning.mapTo(mutableSetOf()) {
             it.originalLearningDate.minusDays((it.originalLearningDate.dayOfWeek.value % 7).toLong())
         }
-        val oldKeys = futureLearning.mapTo(mutableSetOf()) { it.stableKey }
-        val replacedLearning = futureLearning.mapTo(mutableSetOf()) { it.originalLearningDate to it.labelEnglish }
+        val futureLearningDates = futureLearning.mapTo(mutableSetOf()) { it.originalLearningDate }
         val reviewsToReplace = tasks.filter { task ->
             task.type == TaskType.CHAZARAH && task.completedAt == null && task.plannedDate >= today && (
                 ((task.reviewIdentity?.startsWith("weekend:weekly") == true ||
                     task.reviewIdentity?.startsWith("oraysa:weekly") == true) &&
                     task.originalLearningDate.minusDays((task.originalLearningDate.dayOfWeek.value % 7).toLong()) in affectedWeeks) ||
-                    (task.originalLearningDate to task.labelEnglish) in replacedLearning ||
-                    oldKeys.any { task.stableKey.startsWith("review:$it:") }
+                    task.originalLearningDate in futureLearningDates
                 )
         }
-        val removedIds = (futureLearning + reviewsToReplace).map { it.id }
+        val removedIds = (futureLearning + reviewsToReplace).mapTo(mutableSetOf()) { it.id }
         val preservedKeys = tasks.filter { it.id !in removedIds }.mapTo(mutableSetOf()) { it.stableKey }
         val replacements = (learning + daily + weekend + additional).distinctBy {
             listOf(it.type, it.originalLearningDate, it.plannedDate, it.material.label.english, it.material.label.hebrew, it.reviewIdentity)
@@ -456,7 +458,7 @@ class ScheduleRepository(
         val updatedSchedule = schedule.copy(sourceType = "PRESET:$catalogVersion", targetDate = targetDate,
             generationRevision = revision)
         return PendingPresetCatalogRefresh(
-            edit = PendingFutureScheduleEdit(updatedSchedule, removedIds, replacements),
+            edit = PendingFutureScheduleEdit(updatedSchedule, removedIds.toList(), replacements),
             catalogVersion = catalogVersion,
             previousVersion = schedule.sourceType.removePrefix("PRESET:"),
             firstChangedDate = changedDate,

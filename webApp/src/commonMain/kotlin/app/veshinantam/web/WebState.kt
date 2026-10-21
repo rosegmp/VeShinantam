@@ -1004,15 +1004,13 @@ fun previewPresetCatalogRefresh(
         }
     } else emptyList()
     val affectedWeeks = futureLearning.mapNotNullTo(mutableSetOf()) { IsoDate.parse(it.originalLearningDate)?.let(::week) }
-    val oldKeys = futureLearning.mapTo(mutableSetOf()) { it.stableKey }
-    val replacedLearning = futureLearning.mapTo(mutableSetOf()) { it.originalLearningDate to it.referenceEnglish }
+    val futureLearningDates = futureLearning.mapTo(mutableSetOf()) { it.originalLearningDate }
     val reviewsToReplace = scheduleTasks.filter { task ->
         task.type == LearningTaskType.CHAZARAH.name && !task.completed && task.dueDate >= today && (
             ((task.reviewIdentity?.startsWith("weekend:weekly") == true ||
                 task.reviewIdentity?.startsWith("oraysa:weekly") == true) &&
                 IsoDate.parse(task.originalLearningDate)?.let(::week) in affectedWeeks) ||
-                (task.originalLearningDate to task.referenceEnglish) in replacedLearning ||
-                oldKeys.any { task.stableKey.startsWith("review:$it:") }
+                task.originalLearningDate in futureLearningDates
             )
     }
     val removedIds = (futureLearning + reviewsToReplace).mapTo(mutableSetOf()) { it.id }

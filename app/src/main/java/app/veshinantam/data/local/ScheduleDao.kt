@@ -278,7 +278,9 @@ interface ScheduleDao {
         replacementTasks: List<TaskEntity>,
     ) {
         updateSchedule(schedule)
-        if (taskIdsToDelete.isNotEmpty()) deleteTasks(taskIdsToDelete)
+        // SQLite limits the number of bound variables in one statement. A full preset
+        // can have tens of thousands of learning and review tasks to replace.
+        taskIdsToDelete.chunked(900).forEach { deleteTasks(it) }
         if (replacementTasks.isNotEmpty()) insertTasks(replacementTasks)
     }
 

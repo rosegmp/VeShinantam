@@ -23,6 +23,36 @@ import kotlinx.coroutines.runBlocking
 
 class ScheduleRepositoryTest {
     @Test
+    fun `catalog refresh handles more tasks than one SQLite statement can bind`() {
+        val unusedDao = Proxy.newProxyInstance(ScheduleDao::class.java.classLoader,
+            arrayOf(ScheduleDao::class.java)) { _, method, _ -> error("Unexpected ${method.name}") } as ScheduleDao
+        val repository = ScheduleRepository(unusedDao)
+        val today = LocalDate.of(2026, 10, 21)
+        val program = PresetCatalog.programs.first { it.id == "oraysa" }.let { source ->
+            source.copy(units = source.units.take(1_000), currentIndex = 0)
+        }
+        val schedule = scheduleEntity().copy(kind = ScheduleKind.PRESET, presetId = "oraysa",
+            sourceType = "PRESET:2026.09.24-14", materialType = MaterialType.AMUD,
+            dailyQuantity = 1, selectedWeekdays = DayOfWeek.entries.joinToString(",") { it.name },
+            chazarahDayOffsets = "")
+        val learning = program.units.mapIndexed { index, unit ->
+            task("learning-$index", "learning:old:$index", TaskType.LEARNING, today.plusDays(index.toLong()))
+                .copy(labelEnglish = unit.english)
+        }
+        val reviews = (0 until 32_000).map { index ->
+            task("review-$index", "legacy-review-$index", TaskType.CHAZARAH, today.plusDays((index % 1_000 + 1).toLong()))
+                .copy(originalLearningDate = today.plusDays((index % 1_000).toLong()))
+        }
+
+        val refresh = repository.buildPresetCatalogRefresh(schedule, learning + reviews, emptySet(),
+            program, today, "2026.10.21-15")
+
+        assertEquals(33_000, refresh.edit.taskIdsToDelete.size)
+        assertEquals(33_000, refresh.edit.taskIdsToDelete.toSet().size)
+        assertEquals(1_000, refresh.edit.replacementTasks.count { it.type == TaskType.LEARNING })
+    }
+
+    @Test
     fun `catalog refresh preserves history and replaces future Oraysa sequence and reviews`() {
         val unusedDao = Proxy.newProxyInstance(ScheduleDao::class.java.classLoader,
             arrayOf(ScheduleDao::class.java)) { _, method, _ -> error("Unexpected ${method.name}") } as ScheduleDao
@@ -44,8 +74,8 @@ class ScheduleRepositoryTest {
         )
         val oldReview = task("old-review", "review:learning:history:day:1", TaskType.CHAZARAH, today)
             .copy(originalLearningDate = today.minusDays(1))
-        val futureReview = task("new-review", "review:learning:one:day:1", TaskType.CHAZARAH, today.plusDays(1))
-            .copy(originalLearningDate = today)
+        val futureReview = task("new-review", "legacy-review-key", TaskType.CHAZARAH, today.plusDays(1))
+            .copy(originalLearningDate = today, labelEnglish = "Legacy Yevamos spelling")
         val refresh = repository.buildPresetCatalogRefresh(schedule, listOf(history) + future + oldReview + futureReview,
             emptySet(), program, today, "2026.10.21-15")
 

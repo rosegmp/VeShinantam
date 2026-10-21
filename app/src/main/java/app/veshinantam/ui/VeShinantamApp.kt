@@ -241,6 +241,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.util.Log
 
 private enum class Destination(@param:StringRes val label: Int, val icon: ImageVector) {
     TODAY(R.string.today, Icons.Default.Today),
@@ -1870,6 +1871,7 @@ private fun ScheduleList(
     var pendingCatalogRefresh by remember { mutableStateOf<ScheduleEntity?>(null) }
     var catalogPreview by remember { mutableStateOf<PendingPresetCatalogRefresh?>(null) }
     var catalogError by remember { mutableStateOf(false) }
+    var catalogApplyError by remember { mutableStateOf(false) }
     var catalogApplying by remember { mutableStateOf(false) }
     val catalogScope = rememberCoroutineScope()
     var selectedRenaming by remember { mutableStateOf<ScheduleEntity?>(null) }
@@ -1890,9 +1892,10 @@ private fun ScheduleList(
         LaunchedEffect(schedule.id, PresetCatalog.VERSION) {
             catalogPreview = null
             catalogError = false
+            catalogApplyError = false
             runCatching { onPreviewCatalogRefresh(schedule.id) }
                 .onSuccess { catalogPreview = it }
-                .onFailure { catalogError = true }
+                .onFailure { Log.e("VeShinantam", "Catalog refresh preview failed", it); catalogError = true }
         }
         AlertDialog(
             onDismissRequest = { if (!catalogApplying) pendingCatalogRefresh = null },
@@ -1900,7 +1903,14 @@ private fun ScheduleList(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.catalog_refresh_explanation))
+                    if (catalogApplying) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator(Modifier.width(20.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.catalog_refresh_applying))
+                        }
+                    }
                     when {
+                        catalogApplyError -> Text(stringResource(R.string.catalog_refresh_apply_failed), color = MaterialTheme.colorScheme.error)
                         catalogError -> Text(stringResource(R.string.catalog_refresh_unavailable), color = MaterialTheme.colorScheme.error)
                         catalogPreview == null -> Text(stringResource(R.string.checking_for_updates))
                         else -> {
@@ -1923,7 +1933,11 @@ private fun ScheduleList(
                         runCatching { onApplyCatalogRefresh(schedule.id,
                             preview.edit.schedule.generationRevision - 1, preview.catalogVersion) }
                             .onSuccess { pendingCatalogRefresh = null }
-                            .onFailure { catalogError = true; catalogPreview = null }
+                            .onFailure {
+                                Log.e("VeShinantam", "Catalog refresh apply failed", it)
+                                catalogApplyError = true
+                                catalogPreview = null
+                            }
                         catalogApplying = false
                     }
                 }) { Text(stringResource(R.string.catalog_refresh_apply)) }
