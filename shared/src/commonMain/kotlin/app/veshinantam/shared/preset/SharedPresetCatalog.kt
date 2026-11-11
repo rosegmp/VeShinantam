@@ -23,6 +23,8 @@ object SharedPresetCatalog {
     const val VERSION = "2026.10.05-11"
     const val SEQUENCE = 11L
     val positionAsOf = IsoDate(2026, 9, 10)
+    val kitzurCycleStart = IsoDate(2026, 10, 5)
+    private val kitzurAdarBreak = (0 until 30).mapTo(mutableSetOf()) { IsoDate(2027, 2, 8).plusDays(it) }
 
     private val everyDay = (0..6).toSet()
     private val sundayThroughThursday = (0..4).toSet()
@@ -138,7 +140,7 @@ object SharedPresetCatalog {
             ),
             program(
                 "kitzur-yomi", "Kitzur Shulchan Aruch Yomi", "קיצור שולחן ערוך יומי", CanonicalMaterialType.CUSTOM_UNIT, 1,
-                everyDay, MaterialCatalog.kitzurYomiUnits, "Kitzur Shulchan Aruch 133:1-8",
+                everyDay, MaterialCatalog.kitzurYomiUnits, "Kitzur Shulchan Aruch 133:1-8", kitzurAdarBreak,
             ),
             program(
                 "nach-yomi", "Nach Yomi", "נ״ך יומי", CanonicalMaterialType.PEREK, 1,
@@ -157,9 +159,12 @@ object SharedPresetCatalog {
 
     fun positionIndexOn(program: SharedPresetProgram, date: IsoDate): Int {
         require(date >= positionAsOf) { "Preset positions before $positionAsOf use scheduledDate" }
-        var index = program.currentIndex
-        var cursor = positionAsOf
-        while (cursor < date && index < program.units.lastIndex) {
+        val newKitzurCycle = program.id == "kitzur-yomi" && date >= kitzurCycleStart
+        var targetDate = date
+        if (newKitzurCycle) while (targetDate in program.excludedDates) targetDate = targetDate.plusDays(1)
+        var index = if (newKitzurCycle) 0 else program.currentIndex
+        var cursor = if (newKitzurCycle) kitzurCycleStart else positionAsOf
+        while (cursor < targetDate && index < program.units.lastIndex) {
             cursor = cursor.plusDays(1)
             val weekday = app.veshinantam.shared.GregorianCalendar.dayOfWeek(cursor.year, cursor.month, cursor.day)
             if (weekday in program.selectedWeekdays && cursor !in program.excludedDates) {
@@ -171,6 +176,16 @@ object SharedPresetCatalog {
 
     fun scheduledDate(program: SharedPresetProgram, unitIndex: Int, anchorDate: IsoDate = positionAsOf): IsoDate {
         require(unitIndex in 0..program.currentIndex)
+        if (program.id == "kitzur-yomi" && anchorDate >= kitzurCycleStart) {
+            var date = kitzurCycleStart
+            var index = 0
+            while (index < unitIndex) {
+                date = date.plusDays(1)
+                val weekday = app.veshinantam.shared.GregorianCalendar.dayOfWeek(date.year, date.month, date.day)
+                if (weekday in program.selectedWeekdays && date !in program.excludedDates) index++
+            }
+            return date
+        }
         var learningDaysBack = (program.currentIndex - unitIndex + program.dailyQuantity - 1) / program.dailyQuantity
         var date = anchorDate
         while (learningDaysBack > 0) {

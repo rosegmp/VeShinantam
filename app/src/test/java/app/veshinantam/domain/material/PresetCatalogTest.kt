@@ -182,11 +182,18 @@ class PresetCatalogTest {
         assertTrue(java.time.DayOfWeek.SATURDAY !in peleYoetz.selectedWeekdays)
         assertTrue(java.time.LocalDate.of(2025, 9, 23) in peleYoetz.excludedDates)
         assertTrue(java.time.LocalDate.of(2026, 9, 21) in peleYoetz.excludedDates)
-        assertEquals(354, kitzurYomi.units.size)
+        assertEquals(355, kitzurYomi.units.size)
         assertEquals("Kitzur Shulchan Aruch 1:1-4", kitzurYomi.units.first().english)
         assertEquals("קיצור שולחן ערוך קלג:א-ח", kitzurYomi.currentReference.hebrew)
-        assertEquals("Kitzur Shulchan Aruch 100:17-E", kitzurYomi.units.last().english)
-        assertEquals(java.time.LocalDate.of(2025, 10, 16), PresetCatalog.scheduledDate(kitzurYomi, 0))
+        assertEquals("Kitzur Shulchan Aruch 100:17-End", kitzurYomi.units.last().english)
+        assertEquals("Kitzur Shulchan Aruch 19:14-20:7", PresetCatalog.programAtDate(
+            kitzurYomi, java.time.LocalDate.of(2026, 11, 11)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:1-6", PresetCatalog.programAtDate(
+            kitzurYomi, java.time.LocalDate.of(2027, 2, 7)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:7-10", PresetCatalog.programAtDate(
+            kitzurYomi, java.time.LocalDate.of(2027, 3, 9)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:7-10", PresetCatalog.programAtDate(
+            kitzurYomi, java.time.LocalDate.of(2027, 3, 10)).currentReference.english)
         assertEquals(java.time.LocalDate.of(2026, 9, 10), PresetCatalog.scheduledDate(kitzurYomi, kitzurYomi.currentIndex))
     }
 }

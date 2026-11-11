@@ -372,7 +372,11 @@ class ScheduleRepository(
         }
         val oldLearning = tasks.filter { it.type == TaskType.LEARNING }.sortedWith(compareBy({ it.plannedDate }, { it.stableKey }))
         val futureLearning = oldLearning.filter { it.plannedDate >= today }
-        require(futureLearning.isNotEmpty()) { "This schedule has no unfinished future learning" }
+        val startingNewKitzurCycle = futureLearning.isEmpty() && schedule.presetId == "kitzur-yomi" &&
+            today >= LocalDate.of(2026, 10, 5)
+        require(futureLearning.isNotEmpty() || startingNewKitzurCycle) {
+            "This schedule has no unfinished future learning"
+        }
         val lastHistorical = oldLearning.lastOrNull { it.plannedDate < today }
         fun catalogIndex(reference: String): Int {
             val exact = program.units.indexOfFirst { it.english == reference }
@@ -381,12 +385,16 @@ class ScheduleRepository(
                 as? SefariaTextLookup.Available)?.request?.reference
             return program.units.indexOfFirst { it.english == mapped }
         }
-        val anchorIndex = catalogIndex(lastHistorical?.labelEnglish ?: futureLearning.first().labelEnglish)
-        require(anchorIndex >= 0) { "The saved position cannot be matched to the current catalog" }
-        val startIndex = anchorIndex + if (lastHistorical == null) 0 else 1
+        val startIndex = if (startingNewKitzurCycle) {
+            PresetCatalog.positionIndexOn(program, today)
+        } else {
+            val anchorIndex = catalogIndex(lastHistorical?.labelEnglish ?: futureLearning.first().labelEnglish)
+            require(anchorIndex >= 0) { "The saved position cannot be matched to the current catalog" }
+            anchorIndex + if (lastHistorical == null) 0 else 1
+        }
         require(startIndex in program.units.indices) { "The saved position cannot be matched to the current catalog" }
         val revision = schedule.generationRevision + 1
-        val startDate = futureLearning.first().plannedDate
+        val startDate = futureLearning.firstOrNull()?.plannedDate ?: today
         val weekdays = schedule.selectedWeekdays.split(',').mapNotNull { runCatching { DayOfWeek.valueOf(it.trim()) }.getOrNull() }.toSet()
         val rules = ScheduleRules(weekdays, excludedDates)
         val material = program.units.subList(startIndex, program.units.size).mapIndexed { index, reference ->

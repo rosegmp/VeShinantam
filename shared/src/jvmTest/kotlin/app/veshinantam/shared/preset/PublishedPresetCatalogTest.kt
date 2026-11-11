@@ -17,12 +17,19 @@ class PublishedPresetCatalogTest {
 
         val mishnah = programs.single { it.id == "mishnah-yomis" }
         val oraysa = programs.single { it.id == "oraysa" }
+        val kitzur = programs.single { it.id == "kitzur-yomi" }
         assertEquals(4192, mishnah.units.size)
         assertEquals(5365, oraysa.units.size)
         assertEquals("Berakhot 2a", oraysa.units.first().english)
         assertEquals("2026-10-21", update.positionAsOf)
         assertEquals("Oholot 11:6", mishnah.currentReference.english)
         assertEquals("Yevamot 119b", oraysa.currentReference.english)
+        assertEquals(355, kitzur.units.size)
+        assertEquals(SharedPresetCatalog.programs.single { it.id == "kitzur-yomi" }.units, kitzur.units)
+        assertEquals("Kitzur Shulchan Aruch 10:4-12", kitzur.currentReference.english)
+        assertEquals(30, kitzur.excludedDates.size)
+        assertEquals("Kitzur Shulchan Aruch 1:1-4", kitzur.units.first().english)
+        assertEquals("Kitzur Shulchan Aruch 100:17-End", kitzur.units.last().english)
         fun assignmentOn(date: LocalDate): String {
             val anchor = LocalDate.parse(update.positionAsOf)
             val learningDays = (1..java.time.temporal.ChronoUnit.DAYS.between(anchor, date).toInt())

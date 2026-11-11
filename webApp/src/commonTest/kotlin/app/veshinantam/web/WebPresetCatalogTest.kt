@@ -14,6 +14,19 @@ class WebPresetCatalogTest {
     fun clearUpdate() = WebPresetCatalog.clearVerifiedUpdate()
 
     @Test
+    fun kitzurCycleFollowsTheCalendarAndAdarBreak() {
+        val kitzur = WebPresetCatalog.programs.single { it.id == "kitzur-yomi" }
+        assertEquals("Kitzur Shulchan Aruch 19:14-20:7", WebPresetCatalog.programAtDate(
+            kitzur, IsoDate(2026, 11, 11)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:1-6", WebPresetCatalog.programAtDate(
+            kitzur, IsoDate(2027, 2, 7)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:7-10", WebPresetCatalog.programAtDate(
+            kitzur, IsoDate(2027, 3, 9)).currentReference.english)
+        assertEquals("Kitzur Shulchan Aruch 66:7-10", WebPresetCatalog.programAtDate(
+            kitzur, IsoDate(2027, 3, 10)).currentReference.english)
+    }
+
+    @Test
     fun appliesACompleteValidatedCatalogUpdate() {
         val positions = SharedPresetCatalog.programs.associate { program ->
             program.id to program.units[(program.currentIndex + program.dailyQuantity).coerceAtMost(program.units.lastIndex)].english

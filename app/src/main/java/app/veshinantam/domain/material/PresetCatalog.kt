@@ -103,9 +103,13 @@ object PresetCatalog {
 
     fun positionIndexOn(program: PresetProgram, date: LocalDate): Int {
         require(date >= positionAsOf) { "Preset positions before $positionAsOf use scheduledDate" }
-        var index = program.currentIndex
-        var cursor = positionAsOf
-        while (cursor < date && index < program.units.lastIndex) {
+        val cycleStart = SharedPresetCatalog.kitzurCycleStart.let { LocalDate.of(it.year, it.month, it.day) }
+        val newKitzurCycle = program.id == "kitzur-yomi" && date >= cycleStart
+        var targetDate = date
+        if (newKitzurCycle) while (targetDate in program.excludedDates) targetDate = targetDate.plusDays(1)
+        var index = if (newKitzurCycle) 0 else program.currentIndex
+        var cursor = if (newKitzurCycle) cycleStart else positionAsOf
+        while (cursor < targetDate && index < program.units.lastIndex) {
             cursor = cursor.plusDays(1)
             if (cursor.dayOfWeek in program.selectedWeekdays && cursor !in program.excludedDates) {
                 index = (index + program.dailyQuantity).coerceAtMost(program.units.lastIndex)
@@ -116,6 +120,16 @@ object PresetCatalog {
 
     fun scheduledDate(program: PresetProgram, unitIndex: Int, anchorDate: LocalDate = positionAsOf): LocalDate {
         require(unitIndex in 0..program.currentIndex)
+        val cycleStart = SharedPresetCatalog.kitzurCycleStart.let { LocalDate.of(it.year, it.month, it.day) }
+        if (program.id == "kitzur-yomi" && anchorDate >= cycleStart) {
+            var date = cycleStart
+            var index = 0
+            while (index < unitIndex) {
+                date = date.plusDays(1)
+                if (date.dayOfWeek in program.selectedWeekdays && date !in program.excludedDates) index++
+            }
+            return date
+        }
         var learningDaysBack = (program.currentIndex - unitIndex + program.dailyQuantity - 1) / program.dailyQuantity
         var date = anchorDate
         while (learningDaysBack > 0) {

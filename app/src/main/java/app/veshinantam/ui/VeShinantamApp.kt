@@ -1917,9 +1917,14 @@ private fun ScheduleList(
                             val preview = requireNotNull(catalogPreview)
                             Text(stringResource(R.string.catalog_refresh_count, preview.learningCount, preview.reviewCount))
                             preview.firstChangedDate?.let { date ->
-                                Text(stringResource(R.string.catalog_refresh_first_change,
-                                    displayDate(date, primaryCalendar, locale),
-                                    preview.previousReference.orEmpty(), preview.updatedReference.orEmpty()))
+                                if (preview.previousReference == null) {
+                                    Text(stringResource(R.string.catalog_refresh_first_assignment,
+                                        displayDate(date, primaryCalendar, locale), preview.updatedReference.orEmpty()))
+                                } else {
+                                    Text(stringResource(R.string.catalog_refresh_first_change,
+                                        displayDate(date, primaryCalendar, locale),
+                                        preview.previousReference, preview.updatedReference.orEmpty()))
+                                }
                             } ?: Text(stringResource(R.string.catalog_refresh_same_assignments))
                         }
                     }

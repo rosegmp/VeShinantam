@@ -308,6 +308,7 @@
     <string name="catalog_refresh_explanation">רצף הלימוד העדכני יוחל על משימות עתידיות שלא הושלמו. משימות שהושלמו ומשימות עבר יישארו ללא שינוי. יש לבדוק את התצוגה המקדימה לפני העדכון.</string>
     <string name="catalog_refresh_count">ייווצרו %1$d משימות לימוד ו־%2$d משימות חזרה.</string>
     <string name="catalog_refresh_first_change">השינוי הראשון ב־%1$s: %2$s ← %3$s</string>
+    <string name="catalog_refresh_first_assignment">הלימוד החדש הראשון ב־%1$s: %2$s</string>
     <string name="catalog_refresh_same_assignments">המשימות העתידיות תואמות לקטלוג העדכני. גרסת הקטלוג השמורה תעודכן.</string>
     <string name="catalog_refresh_unavailable">לא ניתן לעדכן תוכנית זו אוטומטית. יש לוודא שקיימות משימות עתידיות שלא הושלמו ושאין משימות עתידיות שהושלמו.</string>
     <string name="catalog_refresh_apply">החל עדכון</string>

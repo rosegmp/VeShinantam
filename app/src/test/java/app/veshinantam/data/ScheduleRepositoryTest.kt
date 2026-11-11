@@ -23,6 +23,31 @@ import kotlinx.coroutines.runBlocking
 
 class ScheduleRepositoryTest {
     @Test
+    fun `catalog refresh extends a finished Kitzur schedule into the new cycle`() {
+        val unusedDao = Proxy.newProxyInstance(ScheduleDao::class.java.classLoader,
+            arrayOf(ScheduleDao::class.java)) { _, method, _ -> error("Unexpected ${method.name}") } as ScheduleDao
+        val repository = ScheduleRepository(unusedDao)
+        val program = PresetCatalog.programs.first { it.id == "kitzur-yomi" }
+        val today = LocalDate.of(2026, 11, 11)
+        val schedule = scheduleEntity().copy(kind = ScheduleKind.PRESET, presetId = "kitzur-yomi",
+            sourceType = "PRESET:2026.10.21-15", materialType = MaterialType.CUSTOM_UNIT,
+            dailyQuantity = 1, selectedWeekdays = DayOfWeek.entries.joinToString(",") { it.name },
+            chazarahDayOffsets = "", repeatsAnnually = false)
+        val history = task("finished", "learning:finished", TaskType.LEARNING, LocalDate.of(2026, 10, 4))
+            .copy(labelEnglish = "Kitzur Shulchan Aruch 100:17-E")
+
+        val refresh = repository.buildPresetCatalogRefresh(schedule, listOf(history), program.excludedDates,
+            program, today, "2026.11.11-16")
+
+        assertEquals(emptyList<String>(), refresh.edit.taskIdsToDelete)
+        assertEquals(today, refresh.firstChangedDate)
+        assertEquals(null, refresh.previousReference)
+        assertEquals("Kitzur Shulchan Aruch 19:14-20:7", refresh.updatedReference)
+        assertEquals(318, refresh.edit.replacementTasks.count { it.type == TaskType.LEARNING })
+        assertEquals(LocalDate.of(2027, 10, 24), refresh.edit.schedule.targetDate)
+    }
+
+    @Test
     fun `catalog refresh handles more tasks than one SQLite statement can bind`() {
         val unusedDao = Proxy.newProxyInstance(ScheduleDao::class.java.classLoader,
             arrayOf(ScheduleDao::class.java)) { _, method, _ -> error("Unexpected ${method.name}") } as ScheduleDao

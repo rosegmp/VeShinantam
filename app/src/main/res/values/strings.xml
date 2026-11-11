@@ -305,6 +305,7 @@
     <string name="catalog_refresh_explanation">This applies the current preset sequence to unfinished future tasks. Completed and past tasks stay unchanged. Review the preview before applying.</string>
     <string name="catalog_refresh_count">%1$d learning assignments and %2$d reviews will be generated.</string>
     <string name="catalog_refresh_first_change">First change on %1$s: %2$s → %3$s</string>
+    <string name="catalog_refresh_first_assignment">First new assignment on %1$s: %2$s</string>
     <string name="catalog_refresh_same_assignments">The future assignments match the current catalog. The saved catalog version will be updated.</string>
     <string name="catalog_refresh_unavailable">This schedule cannot be updated automatically. Check that it has unfinished future tasks and no completed future tasks.</string>
     <string name="catalog_refresh_apply">Apply update</string>
