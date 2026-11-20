@@ -12,6 +12,7 @@ import app.veshinantam.data.ScheduleUnitInput
 import app.veshinantam.data.backup.BackupJson
 import app.veshinantam.data.backup.BackupPayload
 import app.veshinantam.data.backup.BackupPreferences
+import app.veshinantam.data.sync.AndroidEntitySync
 import app.veshinantam.domain.model.ChazarahPattern
 import app.veshinantam.domain.model.MaterialType
 import app.veshinantam.localization.AppLanguage
@@ -27,6 +28,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -47,10 +49,12 @@ class MigrationTestInstrumentation : Instrumentation() {
             everyExportedSchemaMigratesToCurrentVersion()
             versionOneRowsSurviveWithSafeDefaults()
             endToEndScheduleTodayCompletionAndBackupSmoke()
+            orphanedCloudChildrenDoNotBreakUploadConflicts()
             results.putString(
                 REPORT_KEY_STREAMRESULT,
                 "VeShinantam database migrations 1-8 passed.\n" +
-                    "VeShinantam end-to-end schedule, Today, completion, and backup smoke passed.\n",
+                    "VeShinantam end-to-end schedule, Today, completion, and backup smoke passed.\n" +
+                    "VeShinantam orphaned cloud child upload conflicts passed.\n",
             )
             finish(Activity.RESULT_OK, results)
         } catch (error: Throwable) {
@@ -213,6 +217,67 @@ class MigrationTestInstrumentation : Instrumentation() {
             check(dao.getAllTasks() == payload.tasks)
             check(dao.getAllProgressGoals() == payload.goals)
             check(dataChangeCount == 5) { "Expected five repository change notifications, got $dataChangeCount." }
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun orphanedCloudChildrenDoNotBreakUploadConflicts() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(targetContext, VeShinantamDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.scheduleDao()
+            val taskId = "orphan-task"
+            val exclusionId = "missing-schedule:2026-11-20"
+            listOf("TASK" to taskId, "EXCLUSION" to exclusionId).forEach { (type, id) ->
+                dao.upsertSyncOutbox(
+                    SyncOutboxEntity(type, id, "mutation-$type", 0, null, true, "2026-11-20T00:00:00Z"),
+                )
+            }
+            val taskPayload = JSONObject().apply {
+                put("id", taskId)
+                put("stableKey", "learning:1")
+                put("scheduleId", "missing-schedule")
+                put("type", "LEARNING")
+                put("labelEnglish", "Orphan task")
+                put("labelHebrew", "")
+                put("plannedDate", "2026-11-20")
+                put("originalLearningDate", "2026-11-20")
+                put("updatedAt", "2026-11-20T00:00:00Z")
+            }
+            val exclusionPayload = JSONObject().apply {
+                put("scheduleId", "missing-schedule")
+                put("date", "2026-11-20")
+                put("updatedAt", "2026-11-20T00:00:00Z")
+            }
+            val sync = AndroidEntitySync(targetContext, dao) { path, _, body ->
+                if (path.contains("apply_learning_mutations")) {
+                    val mutations = JSONObject(checkNotNull(body)).getJSONArray("p_mutations")
+                    JSONArray().apply {
+                        for (index in 0 until mutations.length()) {
+                            val mutation = mutations.getJSONObject(index)
+                            val payload = if (mutation.getString("entity_type") == "TASK") taskPayload else exclusionPayload
+                            put(JSONObject().apply {
+                                put("mutation_id", mutation.getString("mutation_id"))
+                                put("revision", index + 1)
+                                put("conflict", true)
+                                put("remote_payload", payload)
+                                put("remote_deleted", false)
+                            })
+                        }
+                    }.toString()
+                } else {
+                    "[]"
+                }
+            }
+
+            val result = sync.synchronize(captureDeviceChanges = false)
+            check(result.conflicts == 2)
+            check(dao.getAllTasks().isEmpty() && dao.getAllExclusions().isEmpty())
+            check(dao.getSyncOutbox().isEmpty())
+            check(dao.getSyncShadow("TASK", taskId)?.payload == taskPayload.toString())
+            check(dao.getSyncShadow("EXCLUSION", exclusionId)?.payload == exclusionPayload.toString())
         } finally {
             database.close()
         }

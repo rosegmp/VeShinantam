@@ -180,7 +180,9 @@ internal class AndroidEntitySync(
                         revision = revision,
                     )
                     if (current?.mutationId == mutation.mutationId) {
-                        applyRemote(remote)
+                        // A conflict can return an old cloud child whose schedule was removed locally.
+                        // Keep its revision without inserting a row that violates the device FK.
+                        if (hasMissingParent(remote)) updateShadow(remote) else applyRemote(remote)
                         dao.deleteSyncOutbox(mutation.entityType, mutation.entityId, mutation.mutationId)
                     } else {
                         updateShadow(remote)
